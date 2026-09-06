@@ -2,15 +2,17 @@
   "name": "@teamflow/web",
   "version": "0.0.0",
   "private": true,
-  "description": "TeamFlow web frontend (Phase 0: minimal placeholder page)",
+  "description": "TeamFlow web frontend",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run"
   },
   "dependencies": {
+    "better-auth": "^1.7.2",
     "next": "^15.5.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
@@ -18,10 +20,15 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.0",
     "@teamflow/config": "workspace:*",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.7",
     "@types/node": "^24.0.0",
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",
+    "jsdom": "^30.0.1",
     "tailwindcss": "^4.1.0",
-    "typescript": "^5.9.2"
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.7"
   }
 }

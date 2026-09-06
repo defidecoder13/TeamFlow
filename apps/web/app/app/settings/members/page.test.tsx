@@ -1,0 +1,227 @@
+import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { SessionState } from '../../../../lib/use-session-user';
+import type { PendingInvitationsState } from '../../../../lib/use-pending-invitations';
+import type { WorkspacesState } from '../../../../lib/use-workspaces';
+import type { WorkspaceMembersState } from '../../../../lib/use-workspace-members';
+import MembersPage from './page';
+
+const {
+  addWorkspaceMock,
+  pendingState,
+  replaceMock,
+  retryMembersMock,
+  retryMock,
+  retryPendingMock,
+  sessionState,
+  signOutMock,
+  workspacesState,
+  membersState,
+} = vi.hoisted(() => ({
+  addWorkspaceMock: vi.fn(),
+  pendingState: { value: { status: 'idle' } as PendingInvitationsState },
+  replaceMock: vi.fn(),
+  retryMembersMock: vi.fn(),
+  retryMock: vi.fn(),
+  retryPendingMock: vi.fn(),
+  sessionState: { value: { status: 'loading' } as SessionState },
+  signOutMock: vi.fn(),
+  workspacesState: { value: { status: 'idle' } as WorkspacesState },
+  membersState: { value: { status: 'idle' } as WorkspaceMembersState },
+}));
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ replace: replaceMock, refresh: vi.fn() }),
+  usePathname: () => '/app/settings/members',
+}));
+
+vi.mock('../../../../lib/use-session-user', () => ({
+  useSessionUser: () => sessionState.value,
+}));
+
+vi.mock('../../../../lib/use-workspaces', () => ({
+  useWorkspaces: () => ({
+    state: workspacesState.value,
+    retry: retryMock,
+    addWorkspace: addWorkspaceMock,
+  }),
+}));
+
+vi.mock('../../../../lib/use-workspace-members', () => ({
+  useWorkspaceMembers: () => ({ state: membersState.value, retry: retryMembersMock }),
+}));
+
+vi.mock('../../../../lib/use-pending-invitations', () => ({
+  usePendingInvitations: () => ({
+    state: pendingState.value,
+    retry: retryPendingMock,
+    addInvitation: vi.fn(),
+  }),
+}));
+
+vi.mock('../../../../lib/use-workspace-channels', () => ({
+  useWorkspaceChannels: () => ({
+    state: { status: 'ready', channels: [] },
+    retry: vi.fn(),
+    addChannel: vi.fn(),
+    updateChannelState: vi.fn(),
+  }),
+}));
+
+vi.mock('../../../../lib/auth-client', () => ({
+  getAuthClient: () => ({ signOut: signOutMock }),
+}));
+
+const USER = {
+  id: 'u-1',
+  name: 'Ada Lovelace',
+  email: 'ada@example.com',
+  image: null,
+  emailVerified: true,
+};
+
+const WORKSPACE = {
+  id: 'ws-1',
+  name: 'Real Workspace',
+  slug: 'real-workspace',
+  role: 'OWNER' as const,
+  createdAt: '2026-09-06T00:00:00.000Z',
+  updatedAt: '2026-09-06T00:00:00.000Z',
+};
+
+const MEMBERS = [
+  {
+    id: 'm-1',
+    role: 'OWNER' as const,
+    createdAt: '2026-09-06T00:00:00.000Z',
+    user: { id: 'u-1', name: 'Ada Lovelace', email: 'ada@example.com', image: null },
+  },
+  {
+    id: 'm-2',
+    role: 'MEMBER' as const,
+    createdAt: '2026-09-06T00:00:00.000Z',
+    user: { id: 'u-9', name: 'Grace Hopper', email: 'grace@example.com', image: null },
+  },
+];
+
+function authenticateWithMembers() {
+  sessionState.value = { status: 'authenticated', user: USER };
+  workspacesState.value = { status: 'ready', workspaces: [WORKSPACE], current: WORKSPACE };
+  membersState.value = { status: 'ready', members: MEMBERS };
+  pendingState.value = { status: 'ready', invitations: [] };
+}
+
+beforeEach(() => {
+  replaceMock.mockReset();
+  retryMock.mockReset();
+  retryMembersMock.mockReset();
+  retryPendingMock.mockReset();
+  signOutMock.mockReset();
+  addWorkspaceMock.mockReset();
+  sessionState.value = { status: 'loading' };
+  workspacesState.value = { status: 'idle' };
+  membersState.value = { status: 'idle' };
+  pendingState.value = { status: 'idle' };
+});
+
+describe('/app/settings/members', () => {
+  it('renders a loading state while resolving', () => {
+    render(<MembersPage />);
+
+    expect(screen.getByRole('status', { name: 'Loading TeamFlow' })).toBeInTheDocument();
+  });
+
+  it('redirects unauthenticated visitors to sign-in', () => {
+    sessionState.value = { status: 'unauthenticated' };
+    render(<MembersPage />);
+
+    expect(replaceMock).toHaveBeenCalledWith('/sign-in');
+  });
+
+  it('renders real members with roles, count, and the current user marked', () => {
+    authenticateWithMembers();
+    render(<MembersPage />);
+
+    expect(screen.getByRole('heading', { name: /members/i })).toBeInTheDocument();
+    expect(screen.getByText('2 members')).toBeInTheDocument();
+    expect(screen.getByText('Grace Hopper')).toBeInTheDocument();
+    expect(screen.getByText('OWNER')).toBeInTheDocument();
+    expect(screen.getByText('You')).toBeInTheDocument();
+    expect(screen.queryByText(/john smith|acme studio/i)).not.toBeInTheDocument();
+  });
+
+  it('searches members and reports no matches honestly', async () => {
+    const user = userEvent.setup();
+    authenticateWithMembers();
+    render(<MembersPage />);
+
+    await user.type(screen.getByLabelText(/search members/i), 'grace');
+    expect(screen.getByText('Grace Hopper')).toBeInTheDocument();
+    expect(screen.queryByText('Ada Lovelace')).not.toBeInTheDocument();
+
+    await user.clear(screen.getByLabelText(/search members/i));
+    await user.type(screen.getByLabelText(/search members/i), 'nobody-here');
+    expect(screen.getByText(/no members match your search/i)).toBeInTheDocument();
+  });
+
+  it('shows a retryable error state on members failure', async () => {
+    const user = userEvent.setup();
+    sessionState.value = { status: 'authenticated', user: USER };
+    workspacesState.value = { status: 'ready', workspaces: [WORKSPACE], current: WORKSPACE };
+    membersState.value = { status: 'error', message: 'Could not load workspace members.' };
+    render(<MembersPage />);
+
+    expect(screen.getByRole('alert')).toHaveTextContent(/couldn't load teamflow/i);
+    await user.click(screen.getByRole('button', { name: /try again/i }));
+    expect(retryMembersMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows the workspace creation UI when there is no workspace', () => {
+    sessionState.value = { status: 'authenticated', user: USER };
+    workspacesState.value = { status: 'ready', workspaces: [], current: null };
+    render(<MembersPage />);
+
+    expect(
+      screen.getByRole('heading', { name: /create your first workspace/i }),
+    ).toBeInTheDocument();
+  });
+
+  it('shows the invite action for owners and hides it for members', () => {
+    authenticateWithMembers();
+    const { unmount } = render(<MembersPage />);
+    expect(screen.getByRole('button', { name: /invite member/i })).toBeInTheDocument();
+    unmount();
+
+    sessionState.value = { status: 'authenticated', user: USER };
+    workspacesState.value = {
+      status: 'ready',
+      workspaces: [{ ...WORKSPACE, role: 'MEMBER' as const }],
+      current: { ...WORKSPACE, role: 'MEMBER' as const },
+    };
+    membersState.value = { status: 'ready', members: MEMBERS };
+    render(<MembersPage />);
+    expect(screen.queryByRole('button', { name: /invite member/i })).not.toBeInTheDocument();
+  });
+
+  it('renders real pending invitations without token material', () => {
+    authenticateWithMembers();
+    pendingState.value = {
+      status: 'ready',
+      invitations: [
+        {
+          id: 'inv-1',
+          email: 'newbie@example.com',
+          expiresAt: '2026-09-13T00:00:00.000Z',
+          createdAt: '2026-09-06T00:00:00.000Z',
+          invitedBy: { id: 'u-1', name: 'Ada Lovelace', email: 'ada@example.com' },
+        },
+      ],
+    };
+    render(<MembersPage />);
+
+    expect(screen.getByText('newbie@example.com')).toBeInTheDocument();
+    expect(screen.getByText(/invited by ada lovelace/i)).toBeInTheDocument();
+    expect(document.body.innerHTML.toLowerCase()).not.toContain('tokenhash');
+  });
+});

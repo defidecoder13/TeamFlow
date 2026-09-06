@@ -1,0 +1,223 @@
+/**
+ * Workspace HTTP boundary (Phase 2A).
+ *
+ * All routes sit behind `requireAuth` — identity comes exclusively from the
+ * session (`req.authUser`). Membership/role checks use `authorization.ts`;
+ * the unique-constraint-safe creation lives in `service.ts`.
+ */
+
+import { Router, type NextFunction, type Request, type Response } from 'express';
+import type { AuthContext } from '../auth/index';
+import { getPrisma } from '../auth/prisma';
+import { requireAuth } from '../auth/session';
+import { canDeleteWorkspace, canEditMetadata, getMembershipRole } from './authorization';
+import {
+  createWorkspace,
+  deleteWorkspace,
+  getWorkspaceForMember,
+  listWorkspaceMembers,
+  listWorkspaces,
+  renameWorkspace,
+  WorkspaceNotFoundError,
+  WorkspaceSlugConflictError,
+} from './service';
+import { createWorkspaceSchema, firstValidationMessage, updateWorkspaceSchema } from './validation';
+
+function validationError(res: Response, message: string): void {
+  res.status(400).json({ error: { code: 'VALIDATION_ERROR', message } });
+}
+
+function notFound(res: Response): void {
+  res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Workspace not found.' } });
+}
+
+function forbidden(res: Response): void {
+  res.status(403).json({ error: { code: 'FORBIDDEN', message: 'You do not have permission.' } });
+}
+
+function asyncRoute(handler: (req: Request, res: Response) => Promise<void>) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    void handler(req, res).catch(next);
+  };
+}
+
+export function createWorkspacesRouter(resolveAuth: () => AuthContext): Router {
+  const router = Router();
+  router.use(requireAuth(resolveAuth));
+
+  router.post(
+    '/',
+    asyncRoute(async (req, res) => {
+      const parsed = createWorkspaceSchema.safeParse(req.body);
+      if (!parsed.success) {
+        validationError(res, firstValidationMessage(parsed.error));
+        return;
+      }
+      const authUser = req.authUser;
+      if (!authUser) {
+        res
+          .status(401)
+          .json({ error: { code: 'UNAUTHENTICATED', message: 'Authentication required.' } });
+        return;
+      }
+      try {
+        const workspace = await createWorkspace(getPrisma(), {
+          userId: authUser.id,
+          name: parsed.data.name,
+        });
+        res.status(201).json({ workspace });
+      } catch (error) {
+        if (error instanceof WorkspaceSlugConflictError) {
+          res.status(409).json({ error: { code: 'CONFLICT', message: error.message } });
+          return;
+        }
+        throw error;
+      }
+    }),
+  );
+
+  router.get(
+    '/',
+    asyncRoute(async (req, res) => {
+      const authUser = req.authUser;
+      if (!authUser) {
+        res
+          .status(401)
+          .json({ error: { code: 'UNAUTHENTICATED', message: 'Authentication required.' } });
+        return;
+      }
+      const workspaces = await listWorkspaces(getPrisma(), { userId: authUser.id });
+      res.status(200).json({ workspaces });
+    }),
+  );
+
+  router.get(
+    '/:workspaceId/members',
+    asyncRoute(async (req, res) => {
+      const authUser = req.authUser;
+      if (!authUser) {
+        res
+          .status(401)
+          .json({ error: { code: 'UNAUTHENTICATED', message: 'Authentication required.' } });
+        return;
+      }
+      const prisma = getPrisma();
+      const role = await getMembershipRole(prisma, req.params.workspaceId, authUser.id);
+      if (!role) {
+        notFound(res);
+        return;
+      }
+      const members = await listWorkspaceMembers(prisma, {
+        workspaceId: req.params.workspaceId,
+      });
+      res.status(200).json({ members });
+    }),
+  );
+
+  router.get(
+    '/:workspaceId',
+    asyncRoute(async (req, res) => {
+      const authUser = req.authUser;
+      if (!authUser) {
+        res
+          .status(401)
+          .json({ error: { code: 'UNAUTHENTICATED', message: 'Authentication required.' } });
+        return;
+      }
+      const workspace = await getWorkspaceForMember(getPrisma(), {
+        userId: authUser.id,
+        workspaceId: req.params.workspaceId,
+      });
+      if (!workspace) {
+        notFound(res);
+        return;
+      }
+      res.status(200).json({ workspace });
+    }),
+  );
+
+  router.patch(
+    '/:workspaceId',
+    asyncRoute(async (req, res) => {
+      const parsed = updateWorkspaceSchema.safeParse(req.body);
+      if (!parsed.success) {
+        validationError(res, firstValidationMessage(parsed.error));
+        return;
+      }
+      const authUser = req.authUser;
+      if (!authUser) {
+        res
+          .status(401)
+          .json({ error: { code: 'UNAUTHENTICATED', message: 'Authentication required.' } });
+        return;
+      }
+      const prisma = getPrisma();
+      const role = await getMembershipRole(prisma, req.params.workspaceId, authUser.id);
+      if (!role) {
+        notFound(res);
+        return;
+      }
+      if (!canEditMetadata(role)) {
+        forbidden(res);
+        return;
+      }
+      try {
+        const updated = await renameWorkspace(prisma, {
+          workspaceId: req.params.workspaceId,
+          name: parsed.data.name,
+        });
+        res.status(200).json({
+          workspace: {
+            id: updated.id,
+            name: updated.name,
+            slug: updated.slug,
+            role,
+            createdAt: updated.createdAt,
+            updatedAt: updated.updatedAt,
+          },
+        });
+      } catch (error) {
+        if (error instanceof WorkspaceNotFoundError) {
+          notFound(res);
+          return;
+        }
+        throw error;
+      }
+    }),
+  );
+
+  router.delete(
+    '/:workspaceId',
+    asyncRoute(async (req, res) => {
+      const authUser = req.authUser;
+      if (!authUser) {
+        res
+          .status(401)
+          .json({ error: { code: 'UNAUTHENTICATED', message: 'Authentication required.' } });
+        return;
+      }
+      const prisma = getPrisma();
+      const role = await getMembershipRole(prisma, req.params.workspaceId, authUser.id);
+      if (!role) {
+        notFound(res);
+        return;
+      }
+      if (!canDeleteWorkspace(role)) {
+        forbidden(res);
+        return;
+      }
+      try {
+        await deleteWorkspace(prisma, { workspaceId: req.params.workspaceId });
+        res.status(204).end();
+      } catch (error) {
+        if (error instanceof WorkspaceNotFoundError) {
+          notFound(res);
+          return;
+        }
+        throw error;
+      }
+    }),
+  );
+
+  return router;
+}

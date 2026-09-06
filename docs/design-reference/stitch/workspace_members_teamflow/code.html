@@ -1,0 +1,410 @@
+<!DOCTYPE html><html lang="en" style=""><head><meta charset="utf-8"><meta content="width=device-width, initial-scale=1.0" name="viewport"><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&amp;display=swap" rel="stylesheet"><style>@layer base{html,body{margin:0;padding:0;}body{overscroll-behavior:none;}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config = {
+    darkMode: "class",
+    theme: {
+      extend: {
+        "colors": {
+          "surface-container": "#eeedf7",
+          "inverse-on-surface": "#f1effa",
+          "outline-variant": "#c8c5cb",
+          "on-surface-variant": "#47464b",
+          "on-tertiary-container": "#88837c",
+          "surface-container-lowest": "#ffffff",
+          "outline": "#77767b",
+          "on-background": "#1a1b22",
+          "secondary-fixed": "#dee0ff",
+          "on-surface": "#1a1b22",
+          "primary-container": "#1b1b1e",
+          "on-secondary-fixed-variant": "#0030c8",
+          "on-tertiary-fixed": "#1d1b16",
+          "surface-tint": "#5f5e61",
+          "secondary": "#1f44e4",
+          "on-primary-fixed-variant": "#47464a",
+          "on-error-container": "#93000a",
+          "error": "#ba1a1a",
+          "on-primary-fixed": "#1b1b1e",
+          "surface": "#fbf8ff",
+          "surface-dim": "#dad9e3",
+          "surface-bright": "#fbf8ff",
+          "primary-fixed-dim": "#c8c5ca",
+          "surface-container-highest": "#e3e1ec",
+          "on-primary": "#ffffff",
+          "on-tertiary": "#ffffff",
+          "secondary-fixed-dim": "#bac3ff",
+          "tertiary": "#000000",
+          "inverse-surface": "#2f3038",
+          "on-secondary": "#ffffff",
+          "on-secondary-container": "#faf7ff",
+          "on-primary-container": "#858387",
+          "surface-container-high": "#e8e7f1",
+          "surface-container-low": "#f4f2fd",
+          "tertiary-fixed-dim": "#cbc6bd",
+          "primary-fixed": "#e4e1e6",
+          "on-error": "#ffffff",
+          "surface-variant": "#e3e1ec",
+          "secondary-container": "#4261fe",
+          "error-container": "#ffdad6",
+          "on-tertiary-fixed-variant": "#494640",
+          "primary": "#000000",
+          "on-secondary-fixed": "#00105a",
+          "background": "#fbf8ff",
+          "inverse-primary": "#c8c5ca",
+          "tertiary-fixed": "#e8e2d9",
+          "tertiary-container": "#1d1b16"
+        },
+        "borderRadius": {
+          "DEFAULT": "0.25rem",
+          "lg": "0.5rem",
+          "xl": "0.75rem",
+          "full": "9999px"
+        },
+        "spacing": {
+          "space-2xl": "3rem",
+          "space-3xl": "4rem",
+          "space-md": "1rem",
+          "space-lg": "1.5rem",
+          "space-2xs": "0.25rem",
+          "space-xs": "0.5rem",
+          "sidebar-width": "16rem",
+          "app-max-width": "80rem",
+          "space-sm": "0.75rem",
+          "space-xl": "2rem",
+          "window-frame-padding": "1.5rem"
+        },
+        "fontFamily": {
+          "body-lg": ["Inter"],
+          "headline-xl": ["Inter"],
+          "display-lg": ["Inter"],
+          "body-sm": ["Inter"],
+          "headline-md": ["Inter"],
+          "headline-lg": ["Inter"],
+          "body-md": ["Inter"],
+          "caption": ["Inter"],
+          "label-sm": ["Inter"],
+          "label-md": ["Inter"]
+        },
+        "fontSize": {
+          "body-lg": ["16px", {"lineHeight": "24px", "letterSpacing": "-0.005em", "fontWeight": "400"}],
+          "headline-xl": ["32px", {"lineHeight": "38px", "letterSpacing": "-0.02em", "fontWeight": "600"}],
+          "display-lg": ["40px", {"lineHeight": "48px", "letterSpacing": "-0.025em", "fontWeight": "600"}],
+          "body-sm": ["13px", {"lineHeight": "18px", "letterSpacing": "0em", "fontWeight": "400"}],
+          "headline-md": ["18px", {"lineHeight": "24px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+          "headline-lg": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.015em", "fontWeight": "600"}],
+          "body-md": ["14px", {"lineHeight": "20px", "letterSpacing": "0em", "fontWeight": "400"}],
+          "caption": ["12px", {"lineHeight": "16px", "letterSpacing": "0em", "fontWeight": "400"}],
+          "label-sm": ["11px", {"lineHeight": "16px", "letterSpacing": "0.06em", "fontWeight": "600"}],
+          "label-md": ["13px", {"lineHeight": "18px", "letterSpacing": "0em", "fontWeight": "500"}]
+        }
+      }
+    }
+  }</script></head><body class="bg-background font-body-md text-on-surface antialiased"><aside class="fixed left-0 top-0 h-full w-16 bg-surface-container-high z-50 flex flex-col items-center justify-between py-space-md shadow-[0_1px_8px_rgba(0,0,0,0.04)]"><div class="flex flex-col items-center gap-space-sm w-full"><div class="w-10 h-10 rounded-xl bg-primary text-on-primary flex items-center justify-center font-headline-md font-bold shadow-[0_1px_2px_rgba(24,24,27,0.04)]"><span class="material-symbols-outlined text-[22px]">token</span></div><div class="w-8 h-[1px] bg-outline-variant/30 my-space-2xs"></div><div class="flex flex-col items-center gap-space-xs"><button class="relative w-10 h-10 rounded-xl bg-surface-container-lowest shadow-[0_1px_2px_rgba(24,24,27,0.04)] flex items-center justify-center text-primary hover:bg-surface-container transition-colors" title="Acme Studio"><span class="material-symbols-outlined text-[20px]">corporate_fare</span><span class="absolute -left-1 top-2.5 w-1 h-5 bg-primary rounded-r-full"></span></button><button class="w-10 h-10 rounded-xl bg-surface-container flex items-center justify-center text-on-surface-variant hover:bg-surface-container-highest hover:text-on-surface transition-colors" title="Home Feed"><span class="material-symbols-outlined text-[20px]">dashboard</span></button><button class="w-10 h-10 rounded-xl bg-surface-container flex items-center justify-center text-on-surface-variant hover:bg-surface-container-highest hover:text-on-surface transition-colors" title="Direct Chat"><span class="material-symbols-outlined text-[20px]">forum</span></button><button class="w-10 h-10 rounded-xl bg-secondary-fixed text-on-secondary-fixed flex items-center justify-center hover:bg-secondary-container hover:text-on-secondary transition-colors" title="AI Assistant"><span class="material-symbols-outlined text-[20px]">smart_toy</span></button></div></div><div class="flex flex-col items-center gap-space-sm"><div class="relative flex items-center justify-center"><img alt="John Smith" class="w-8 h-8 rounded-full object-cover" src="https://lh3.googleusercontent.com/aida/AEtjO1V7v5NbSBLOS1N_-xve2V6n9M1JxRks9T0Sk2RNspE09q2A7J1hza4QMD93qVqARGi7Vh7XIo-sppMU7wZMfXYqFSSBAJtTX-sVfqRA8tHlNtBJTyf5vJuV-EoktOOJSKqMtNsssl8s2mlVxn4Qni0AVX2olECgYGbo_lHzIrzmiwbkTqBW7aAvbHuXZOvpV8NcXRgmelgqRgeydRrQp2iFf8ukCGBrMDB02p211TB5UxTNRmtwPM8F1yM"><span class="absolute bottom-0 right-0 w-2.5 h-2.5 bg-secondary rounded-full ring-2 ring-surface-container-high"></span></div></div></aside><aside class="fixed left-16 top-0 h-full w-60 bg-surface-container-low z-40 flex flex-col justify-between shadow-[0_1px_8px_rgba(0,0,0,0.04)]"><div class="flex flex-col flex-1 min-h-0"><div class="h-14 px-space-md flex items-center justify-between"><button class="flex items-center gap-space-xs font-headline-md text-on-surface hover:text-primary transition-colors text-left"><span class="truncate font-semibold">Acme Studio</span><span class="material-symbols-outlined text-on-surface-variant text-[18px]">unfold_more</span></button><button class="w-7 h-7 rounded-lg flex items-center justify-center text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors"><span class="material-symbols-outlined text-[18px]">edit_square</span></button></div><div class="overflow-y-auto px-space-xs py-space-xs space-y-space-md"><nav class="space-y-0.5" data-active-classes="bg-surface-container-lowest text-on-surface font-label-md shadow-[0_1px_2px_rgba(24,24,27,0.04)]"><a class="flex items-center px-space-xs py-1.5 rounded-lg text-on-surface-variant font-label-md hover:bg-surface-container hover:text-on-surface transition-colors" data-path="home" href="#">Home</a><a class="flex items-center px-space-xs py-1.5 rounded-lg text-on-surface-variant font-label-md hover:bg-surface-container hover:text-on-surface transition-colors" data-path="threads" href="#">Threads</a><a class="flex items-center px-space-xs py-1.5 rounded-lg text-on-surface-variant font-label-md hover:bg-surface-container hover:text-on-surface transition-colors" data-path="mentions" href="#">Mentions</a><a class="flex items-center px-space-xs py-1.5 rounded-lg text-on-surface-variant font-label-md hover:bg-surface-container hover:text-on-surface transition-colors" data-path="saved" href="#">Saved</a><a class="flex items-center px-space-xs py-1.5 rounded-lg text-on-surface-variant font-label-md hover:bg-surface-container hover:text-on-surface transition-colors" data-path="ai-assistant" href="#">AI Assistant</a></nav><div><div class="flex items-center justify-between px-space-xs py-1"><span class="font-label-sm text-on-surface-variant uppercase tracking-wider">Spaces</span><button class="w-5 h-5 flex items-center justify-center text-on-surface-variant hover:text-on-surface"><span class="material-symbols-outlined text-[14px]">add</span></button></div><nav class="space-y-0.5 mt-0.5" data-active-classes="bg-surface-container-lowest text-on-surface font-label-md shadow-[0_1px_2px_rgba(24,24,27,0.04)]"><a class="flex items-center px-space-xs py-1.5 rounded-lg text-on-surface-variant font-label-md hover:bg-surface-container hover:text-on-surface transition-colors" data-path="general" href="#"># general</a><a class="flex items-center px-space-xs py-1.5 rounded-lg text-on-surface-variant font-label-md hover:bg-surface-container hover:text-on-surface transition-colors" data-path="engineering" href="#"># engineering</a><a class="flex items-center px-space-xs py-1.5 rounded-lg text-on-surface-variant font-label-md hover:bg-surface-container hover:text-on-surface transition-colors" data-path="design" href="#"># design</a><a class="flex items-center px-space-xs py-1.5 rounded-lg text-on-surface-variant font-label-md hover:bg-surface-container hover:text-on-surface transition-colors" data-path="product" href="#"># product</a><a class="flex items-center px-space-xs py-1.5 rounded-lg text-on-surface-variant font-label-md hover:bg-surface-container hover:text-on-surface transition-colors" data-path="random" href="#"># random</a></nav></div><div><div class="flex items-center justify-between px-space-xs py-1"><span class="font-label-sm text-on-surface-variant uppercase tracking-wider">Direct Messages</span><button class="w-5 h-5 flex items-center justify-center text-on-surface-variant hover:text-on-surface"><span class="material-symbols-outlined text-[14px]">add</span></button></div><nav class="space-y-0.5 mt-0.5" data-active-classes="bg-surface-container-lowest text-on-surface font-label-md shadow-[0_1px_2px_rgba(24,24,27,0.04)]"><a class="flex items-center px-space-xs py-1.5 rounded-lg text-on-surface-variant font-label-md hover:bg-surface-container hover:text-on-surface transition-colors" data-path="dm-alex-morgan" href="#">Alex Morgan</a><a class="flex items-center px-space-xs py-1.5 rounded-lg text-on-surface-variant font-label-md hover:bg-surface-container hover:text-on-surface transition-colors" data-path="dm-sarah-chen" href="#">Sarah Chen</a><a class="flex items-center px-space-xs py-1.5 rounded-lg text-on-surface-variant font-label-md hover:bg-surface-container hover:text-on-surface transition-colors" data-path="dm-david-kim" href="#">David Kim</a><a class="flex items-center px-space-xs py-1.5 rounded-lg text-on-surface-variant font-label-md hover:bg-surface-container hover:text-on-surface transition-colors" data-path="dm-maya-patel" href="#">Maya Patel</a></nav></div></div></div><div class="p-space-xs"><nav class="space-y-0.5" data-active-classes="bg-surface-container-lowest text-on-surface font-label-md shadow-[0_1px_2px_rgba(24,24,27,0.04)]"><a class="flex items-center px-space-xs py-1.5 rounded-lg text-on-surface-variant font-label-md hover:bg-surface-container hover:text-on-surface transition-colors" data-path="settings" href="#">Settings</a><a aria-current="page" class="flex items-center px-space-xs py-1.5 rounded-lg transition-colors bg-surface-container-lowest text-on-surface font-label-md shadow-[0_1px_2px_rgba(24,24,27,0.04)]" data-path="members" href="#">Members</a><a class="flex items-center px-space-xs py-1.5 rounded-lg text-on-surface-variant font-label-md hover:bg-surface-container hover:text-on-surface transition-colors" data-path="help-support" href="#">Help &amp; Support</a></nav></div></aside><div class="pl-76"><header class="fixed top-0 left-76 right-0 h-14 bg-surface/80 backdrop-blur-xl z-30 shadow-[0_1px_8px_rgba(0,0,0,0.04)] flex items-center justify-between px-space-lg"><div class="flex items-center gap-space-sm"><span class="material-symbols-outlined text-on-surface-variant text-[18px]">tag</span><span class="font-headline-md font-semibold text-on-surface">Acme Studio</span><span class="text-outline-variant">/</span><span class="font-body-md text-on-surface-variant">Workspace</span><span class="text-outline-variant">/</span><span class="font-body-md text-on-surface font-semibold">Members</span></div><div class="flex items-center gap-space-md"><div class="relative flex items-center"><span class="material-symbols-outlined absolute left-3 text-on-surface-variant text-[18px]">search</span><input class="h-9 w-64 pl-9 pr-12 rounded-lg bg-surface-container-lowest text-on-surface font-body-sm placeholder:text-on-surface-variant/60 focus:outline-none focus:ring-2 focus:ring-secondary/20 shadow-[0_1px_2px_rgba(24,24,27,0.04)]" placeholder="Search TeamFlow..." type="text"><span class="absolute right-2.5 px-1.5 py-0.5 rounded bg-surface-container font-label-sm text-on-surface-variant">⌘K</span></div><button class="relative w-9 h-9 rounded-lg flex items-center justify-center text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors"><span class="material-symbols-outlined text-[20px]">notifications</span><span class="absolute top-2 right-2 w-2 h-2 rounded-full bg-secondary"></span></button><div class="flex items-center gap-space-2xs"><span class="w-2 h-2 rounded-full bg-secondary"></span><span class="font-caption text-on-surface-variant">Active</span></div><div class="w-[1px] h-5 bg-outline-variant/30"></div><button class="flex items-center gap-space-xs pl-space-2xs hover:bg-surface-container rounded-lg py-1 px-1.5 transition-colors cursor-pointer text-left"><div class="w-7 h-7 rounded-full bg-secondary text-on-secondary font-label-sm text-[11px] font-semibold flex items-center justify-center">JS</div><span class="font-label-md text-on-surface hidden xl:inline-block">John Smith</span><svg class="w-4 h-4 text-on-surface-variant" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg></button></div></header><main class="w-full pt-14 bg-background px-space-lg"><div class="flex flex-col w-full pb-space-3xl"><!-- Page Header -->
+<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-space-md pt-space-lg pb-space-md border-b border-surface-container-high mb-space-lg">
+<div>
+<h1 class="font-headline-lg font-semibold text-on-surface tracking-tight">Members</h1>
+<p class="font-body-sm text-on-surface-variant mt-0.5">Manage who has access to Acme Studio.</p>
+</div>
+<div class="flex items-center gap-space-xs">
+<button class="h-9 px-space-sm rounded-lg bg-surface-container-lowest ring-1 ring-surface-container-high text-on-surface font-label-md hover:bg-surface-container transition-colors shadow-sm flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[16px] text-on-surface-variant">file_download</span>
+<span class="">Export CSV</span>
+</button>
+<button class="h-9 px-space-md rounded-lg bg-primary text-on-primary font-label-md hover:bg-primary/90 transition-colors shadow-sm flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[16px]">add</span>
+<span class="">Invite people</span>
+</button>
+</div>
+</div>
+<!-- Summary & Capacity Metadata Bar (Subtle, no large cards) -->
+<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-space-xs py-space-xs px-space-xs text-caption font-caption text-on-surface-variant mb-space-md">
+<div class="flex items-center gap-1.5 flex-wrap">
+<span class="font-semibold text-on-surface">5 members</span>
+<span class="">·</span>
+<span class="">1 owner</span>
+<span class="">·</span>
+<span class="">1 admin</span>
+<span class="">·</span>
+<span class="">3 members</span>
+<span class="">·</span>
+<span class="text-secondary font-medium">2 pending invitations</span>
+</div>
+<div class="flex items-center gap-space-xs">
+<span class="">5 of 10 seats used</span>
+<div class="w-20 h-1.5 rounded-full bg-surface-container overflow-hidden ring-1 ring-surface-container-high">
+<div class="w-1/2 h-full bg-primary rounded-full"></div>
+</div>
+</div>
+</div>
+<!-- Filter & Utility Controls Bar -->
+<div class="p-space-xs rounded-lg bg-surface-container-lowest ring-1 ring-surface-container-high shadow-sm flex flex-col md:flex-row items-stretch md:items-center justify-between gap-space-xs mb-space-md">
+<div class="relative flex-1">
+<span class="material-symbols-outlined absolute left-2.5 top-2.5 text-on-surface-variant text-[16px]">search</span>
+<input class="w-full h-8 pl-8 pr-space-md rounded bg-surface font-body-sm text-body-sm text-on-surface placeholder:text-on-surface-variant/60 focus:outline-none focus:bg-surface-container-low transition-colors" id="directory-search" placeholder="Search members..." type="text">
+</div>
+<div class="flex items-center gap-space-xs">
+<div class="relative">
+<select class="h-8 pl-space-xs pr-7 rounded bg-surface text-on-surface font-label-md text-[12px] appearance-none cursor-pointer focus:outline-none focus:bg-surface-container-low border-0">
+<option>All roles</option>
+<option>Owner</option>
+<option>Admin</option>
+<option>Member</option>
+</select>
+<span class="material-symbols-outlined absolute right-1.5 top-2 text-on-surface-variant text-[14px] pointer-events-none">expand_more</span>
+</div>
+<div class="relative">
+<select class="h-8 pl-space-xs pr-7 rounded bg-surface text-on-surface font-label-md text-[12px] appearance-none cursor-pointer focus:outline-none focus:bg-surface-container-low border-0">
+<option>All status</option>
+<option>Active</option>
+<option>Invited</option>
+</select>
+<span class="material-symbols-outlined absolute right-1.5 top-2 text-on-surface-variant text-[14px] pointer-events-none">expand_more</span>
+</div>
+<button class="w-8 h-8 rounded bg-surface text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low flex items-center justify-center transition-colors" title="Filter options">
+<span class="material-symbols-outlined text-[16px]">tune</span>
+</button>
+</div>
+</div>
+<!-- Members Table -->
+<div class="rounded-lg bg-surface-container-lowest ring-1 ring-surface-container-high shadow-sm overflow-hidden mb-space-2xl">
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-surface-container-low/60 border-b border-surface-container-high text-on-surface-variant font-label-sm text-[11px] uppercase tracking-wider">
+<th class="py-2.5 px-space-md font-semibold">Member</th>
+<th class="py-2.5 px-space-md font-semibold">Role</th>
+<th class="py-2.5 px-space-md font-semibold">Status</th>
+<th class="py-2.5 px-space-md font-semibold">Joined</th>
+<th class="py-2.5 px-space-md font-semibold text-right">Actions</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-surface-container-high/60 font-body-sm text-body-sm text-on-surface">
+<!-- Row 1: John Smith -->
+<tr class="hover:bg-surface-container-low/40 transition-colors">
+<td class="py-2.5 px-space-md">
+<div class="flex items-center gap-space-sm">
+<img alt="John Smith" class="w-8 h-8 rounded-full object-cover ring-1 ring-surface-container-high" src="https://lh3.googleusercontent.com/aida/AEtjO1V7v5NbSBLOS1N_-xve2V6n9M1JxRks9T0Sk2RNspE09q2A7J1hza4QMD93qVqARGi7Vh7XIo-sppMU7wZMfXYqFSSBAJtTX-sVfqRA8tHlNtBJTyf5vJuV-EoktOOJSKqMtNsssl8s2mlVxn4Qni0AVX2olECgYGbo_lHzIrzmiwbkTqBW7aAvbHuXZOvpV8NcXRgmelgqRgeydRrQp2iFf8ukCGBrMDB02p211TB5UxTNRmtwPM8F1yM">
+<div class="flex flex-col min-w-0">
+<div class="flex items-center gap-1.5">
+<span class="font-label-md text-[13px] font-semibold text-on-surface">John Smith</span>
+<span class="px-1.5 py-0.2 rounded text-[10px] font-medium bg-surface-container text-on-surface-variant">You</span>
+</div>
+<span class="font-caption text-[11px] text-on-surface-variant truncate">john@teamflow.com</span>
+</div>
+</div>
+</td>
+<td class="py-2.5 px-space-md">
+<span class="inline-flex items-center px-2 py-0.5 rounded-full bg-primary text-on-primary font-label-sm text-[11px]">
+              Owner
+            </span>
+</td>
+<td class="py-2.5 px-space-md">
+<div class="inline-flex items-center gap-1.5 font-label-sm text-[12px] text-on-surface">
+<span class="w-2 h-2 rounded-full bg-secondary"></span>
+<span class="">Active</span>
+</div>
+</td>
+<td class="py-2.5 px-space-md text-on-surface-variant font-caption text-[12px]">Jan 12, 2024</td>
+<td class="py-2.5 px-space-md text-right">
+<div class="inline-flex items-center gap-1">
+<button class="h-7 px-2 rounded text-on-surface-variant hover:bg-surface-container hover:text-on-surface font-label-md text-[12px] transition-colors inline-flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">edit</span>
+<span class="">Edit</span>
+</button>
+<button class="w-7 h-7 rounded text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors inline-flex items-center justify-center">
+<span class="material-symbols-outlined text-[16px]">more_horiz</span>
+</button>
+</div>
+</td>
+</tr>
+<!-- Row 2: Alex Morgan -->
+<tr class="hover:bg-surface-container-low/40 transition-colors">
+<td class="py-2.5 px-space-md">
+<div class="flex items-center gap-space-sm">
+<div class="w-8 h-8 rounded-full bg-surface-container text-primary font-label-md font-semibold flex items-center justify-center ring-1 ring-surface-container-high text-[12px]">AM</div>
+<div class="flex flex-col min-w-0">
+<span class="font-label-md text-[13px] font-semibold text-on-surface">Alex Morgan</span>
+<span class="font-caption text-[11px] text-on-surface-variant truncate">alex@teamflow.com</span>
+</div>
+</div>
+</td>
+<td class="py-2.5 px-space-md">
+<span class="inline-flex items-center px-2 py-0.5 rounded-full bg-secondary-fixed text-on-secondary-fixed font-label-sm text-[11px]">
+              Admin
+            </span>
+</td>
+<td class="py-2.5 px-space-md">
+<div class="inline-flex items-center gap-1.5 font-label-sm text-[12px] text-on-surface">
+<span class="w-2 h-2 rounded-full bg-secondary"></span>
+<span class="">Active</span>
+</div>
+</td>
+<td class="py-2.5 px-space-md text-on-surface-variant font-caption text-[12px]">Feb 03, 2024</td>
+<td class="py-2.5 px-space-md text-right">
+<button class="w-7 h-7 rounded text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors inline-flex items-center justify-center">
+<span class="material-symbols-outlined text-[16px]">more_horiz</span>
+</button>
+</td>
+</tr>
+<!-- Row 3: Sarah Chen -->
+<tr class="hover:bg-surface-container-low/40 transition-colors">
+<td class="py-2.5 px-space-md">
+<div class="flex items-center gap-space-sm">
+<div class="w-8 h-8 rounded-full bg-surface-container text-primary font-label-md font-semibold flex items-center justify-center ring-1 ring-surface-container-high text-[12px]">SC</div>
+<div class="flex flex-col min-w-0">
+<span class="font-label-md text-[13px] font-semibold text-on-surface">Sarah Chen</span>
+<span class="font-caption text-[11px] text-on-surface-variant truncate">sarah@teamflow.com</span>
+</div>
+</div>
+</td>
+<td class="py-2.5 px-space-md">
+<span class="inline-flex items-center px-2 py-0.5 rounded-full bg-surface-container text-on-surface-variant font-label-sm text-[11px]">
+              Member
+            </span>
+</td>
+<td class="py-2.5 px-space-md">
+<div class="inline-flex items-center gap-1.5 font-label-sm text-[12px] text-on-surface">
+<span class="w-2 h-2 rounded-full bg-secondary"></span>
+<span class="">Active</span>
+</div>
+</td>
+<td class="py-2.5 px-space-md text-on-surface-variant font-caption text-[12px]">Feb 18, 2024</td>
+<td class="py-2.5 px-space-md text-right">
+<button class="w-7 h-7 rounded text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors inline-flex items-center justify-center">
+<span class="material-symbols-outlined text-[16px]">more_horiz</span>
+</button>
+</td>
+</tr>
+<!-- Row 4: David Kim -->
+<tr class="hover:bg-surface-container-low/40 transition-colors">
+<td class="py-2.5 px-space-md">
+<div class="flex items-center gap-space-sm">
+<div class="w-8 h-8 rounded-full bg-surface-container text-primary font-label-md font-semibold flex items-center justify-center ring-1 ring-surface-container-high text-[12px]">DK</div>
+<div class="flex flex-col min-w-0">
+<span class="font-label-md text-[13px] font-semibold text-on-surface">David Kim</span>
+<span class="font-caption text-[11px] text-on-surface-variant truncate">david@teamflow.com</span>
+</div>
+</div>
+</td>
+<td class="py-2.5 px-space-md">
+<span class="inline-flex items-center px-2 py-0.5 rounded-full bg-surface-container text-on-surface-variant font-label-sm text-[11px]">
+              Member
+            </span>
+</td>
+<td class="py-2.5 px-space-md">
+<div class="inline-flex items-center gap-1.5 font-label-sm text-[12px] text-on-surface">
+<span class="w-2 h-2 rounded-full bg-secondary"></span>
+<span class="">Active</span>
+</div>
+</td>
+<td class="py-2.5 px-space-md text-on-surface-variant font-caption text-[12px]">Mar 02, 2024</td>
+<td class="py-2.5 px-space-md text-right">
+<button class="w-7 h-7 rounded text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors inline-flex items-center justify-center">
+<span class="material-symbols-outlined text-[16px]">more_horiz</span>
+</button>
+</td>
+</tr>
+<!-- Row 5: Maya Patel -->
+<tr class="hover:bg-surface-container-low/40 transition-colors">
+<td class="py-2.5 px-space-md">
+<div class="flex items-center gap-space-sm">
+<div class="w-8 h-8 rounded-full bg-surface-container text-primary font-label-md font-semibold flex items-center justify-center ring-1 ring-surface-container-high text-[12px]">MP</div>
+<div class="flex flex-col min-w-0">
+<span class="font-label-md text-[13px] font-semibold text-on-surface">Maya Patel</span>
+<span class="font-caption text-[11px] text-on-surface-variant truncate">maya@teamflow.com</span>
+</div>
+</div>
+</td>
+<td class="py-2.5 px-space-md">
+<span class="inline-flex items-center px-2 py-0.5 rounded-full bg-surface-container text-on-surface-variant font-label-sm text-[11px]">
+              Member
+            </span>
+</td>
+<td class="py-2.5 px-space-md">
+<div class="inline-flex items-center gap-1.5 font-label-sm text-[12px] text-on-surface">
+<span class="w-2 h-2 rounded-full bg-secondary"></span>
+<span class="">Active</span>
+</div>
+</td>
+<td class="py-2.5 px-space-md text-on-surface-variant font-caption text-[12px]">Apr 10, 2024</td>
+<td class="py-2.5 px-space-md text-right">
+<button class="w-7 h-7 rounded text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors inline-flex items-center justify-center">
+<span class="material-symbols-outlined text-[16px]">more_horiz</span>
+</button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<!-- Pending Invitations Section (Clean subordinated list) -->
+<div class="flex flex-col gap-space-xs">
+<div class="flex items-center justify-between pb-space-2xs border-b border-surface-container-high">
+<div class="flex items-center gap-space-xs">
+<h2 class="font-headline-md text-body-md font-semibold text-on-surface">Pending invitations</h2>
+<span class="px-1.5 py-0.5 rounded-full bg-surface-container font-label-sm text-[11px] text-on-surface-variant">2</span>
+</div>
+<span class="font-caption text-[11px] text-on-surface-variant">Links expire automatically after 7 days</span>
+</div>
+<div class="rounded-lg bg-surface-container-lowest ring-1 ring-surface-container-high shadow-sm divide-y divide-surface-container-high/60 overflow-hidden">
+<!-- Row 1 -->
+<div class="py-2.5 px-space-md flex flex-col sm:flex-row sm:items-center justify-between gap-space-xs hover:bg-surface-container-low/40 transition-colors">
+<div class="flex items-center gap-space-sm min-w-0">
+<div class="w-7 h-7 rounded-full bg-surface-container flex items-center justify-center text-on-surface-variant font-label-sm text-[11px] font-semibold">
+          ER
+        </div>
+<div class="flex flex-col min-w-0 sm:flex-row sm:items-center sm:gap-space-xs">
+<span class="font-label-md text-[13px] font-medium text-on-surface truncate">elena.rostova@design.co</span>
+<span class="hidden sm:inline text-on-surface-variant/40">·</span>
+<span class="font-caption text-[12px] text-on-surface-variant">Invited as Member · Expires in 5 days</span>
+</div>
+</div>
+<div class="flex items-center gap-space-xs self-end sm:self-auto">
+<button class="h-7 px-2 rounded text-on-surface-variant hover:text-on-surface hover:bg-surface-container font-label-md text-[12px] transition-colors">
+          Resend invite
+        </button>
+<button class="h-7 px-2 rounded text-error hover:bg-error-container/30 font-label-md text-[12px] transition-colors">
+          Revoke
+        </button>
+</div>
+</div>
+<!-- Row 2 -->
+<div class="py-2.5 px-space-md flex flex-col sm:flex-row sm:items-center justify-between gap-space-xs hover:bg-surface-container-low/40 transition-colors">
+<div class="flex items-center gap-space-sm min-w-0">
+<div class="w-7 h-7 rounded-full bg-surface-container flex items-center justify-center text-on-surface-variant font-label-sm text-[11px] font-semibold">
+          MV
+        </div>
+<div class="flex flex-col min-w-0 sm:flex-row sm:items-center sm:gap-space-xs">
+<span class="font-label-md text-[13px] font-medium text-on-surface truncate">marcus.vance@eng.team</span>
+<span class="hidden sm:inline text-on-surface-variant/40">·</span>
+<span class="font-caption text-[12px] text-on-surface-variant">Invited as Member · Expires in 7 days</span>
+</div>
+</div>
+<div class="flex items-center gap-space-xs self-end sm:self-auto">
+<button class="h-7 px-2 rounded text-on-surface-variant hover:text-on-surface hover:bg-surface-container font-label-md text-[12px] transition-colors">
+          Resend invite
+        </button>
+<button class="h-7 px-2 rounded text-error hover:bg-error-container/30 font-label-md text-[12px] transition-colors">
+          Revoke
+        </button>
+</div>
+</div>
+</div>
+</div></div>
+<script>
+  // Simple micro-interaction for client filtering demonstration
+  const searchInput = document.getElementById('directory-search');
+  if (searchInput) {
+    searchInput.addEventListener('input', (e) => {
+      const query = e.target.value.toLowerCase();
+      const rows = document.querySelectorAll('tbody tr');
+      rows.forEach(row => {
+        const text = row.textContent.toLowerCase();
+        row.style.display = text.includes(query) ? '' : 'none';
+      });
+    });
+  }
+</script></main></div>
+
+
+
+</body></html>

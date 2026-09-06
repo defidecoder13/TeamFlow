@@ -1,6 +1,11 @@
-// Phase 0: Prisma infrastructure only.
+// TeamFlow database schema (PostgreSQL).
 // The connection string MUST come from DATABASE_URL — never hardcode credentials.
-// Domain models (users, workspaces, channels, messages, …) arrive in later phases.
+// Phase 1A: Better Auth models (User, Session, Account, Verification) generated
+// by the official Better Auth CLI (`pnpm dlx auth@latest generate`) for the
+// installed better-auth version. Do NOT hand-edit these models; regenerate.
+// Phase 2A: Workspace + WorkspaceMembership (tenant boundary) with an explicit
+// WorkspaceRole enum. Ownership derives from the OWNER membership — there is
+// no owner_id column.
 
 generator client {
   provider = "prisma-client-js"
@@ -9,4 +14,192 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id
+  name          String
+  email         String
+  emailVerified Boolean   @default(false)
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  sessions      Session[]
+  accounts      Account[]
+  memberships   WorkspaceMembership[]
+  channelMemberships ChannelMembership[]
+  createdChannels Channel[] @relation("CreatedChannels")
+  messages      Message[]
+  sentInvitations Invitation[]          @relation("InvitedBy")
+
+  @@unique([email])
+  @@map("user")
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([token])
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  issuer                String
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@unique([issuer, accountId], map: "account_issuer_accountId_uidx")
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
+}
+
+enum WorkspaceRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+model Workspace {
+  id        String   @id
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  memberships WorkspaceMembership[]
+  invitations Invitation[]
+  channels    Channel[]
+
+  @@index([slug])
+  @@map("workspace")
+}
+
+model WorkspaceMembership {
+  id          String        @id
+  workspaceId String
+  userId      String
+  role        WorkspaceRole @default(MEMBER)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@index([userId])
+  @@index([workspaceId])
+  @@map("workspace_membership")
+}
+
+model Invitation {
+  id          String    @id
+  workspaceId String
+  email       String
+  tokenHash   String    @unique
+  invitedById String
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  invitedBy User      @relation("InvitedBy", fields: [invitedById], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([workspaceId, email])
+  @@index([expiresAt])
+  @@map("invitation")
+}
+
+enum ChannelType {
+  PUBLIC
+  PRIVATE
+}
+
+model Channel {
+  id          String      @id
+  workspaceId String
+  name        String
+  slug        String
+  description String?
+  type        ChannelType @default(PUBLIC)
+  createdById String
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  workspace   Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy   User                  @relation("CreatedChannels", fields: [createdById], references: [id], onDelete: Cascade)
+  memberships ChannelMembership[]
+  messages    Message[]
+
+  @@unique([workspaceId, slug])
+  @@index([workspaceId])
+  @@map("channel")
+}
+
+model ChannelMembership {
+  id        String   @id
+  channelId String
+  userId    String
+  createdAt DateTime @default(now())
+
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([channelId, userId])
+  @@index([channelId])
+  @@index([userId])
+  @@map("channel_membership")
+}
+
+model Message {
+  id        String    @id
+  channelId String
+  authorId  String
+  body      String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  editedAt  DateTime?
+  deletedAt DateTime?
+
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  author  User    @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([channelId, createdAt, id])
+  @@index([authorId])
+  @@map("message")
 }

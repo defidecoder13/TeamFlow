@@ -43,15 +43,28 @@ id, name, slug, owner_id, created_at
 ### workspace_members
 workspace_id, user_id, role, joined_at
 
+### invitations
+id, workspace_id, email (normalized), token_hash (unique, raw token never stored), invited_by, expires_at (default 7 days), accepted_at, revoked_at, created_at
+
+An invitation is pending only when accepted_at/revoked_at are NULL and expiresAt is in the future. The active-pending invariant (one pending invitation per workspace + email) is enforced transactionally; role on acceptance is always MEMBER.
+
 ### channels
-id, workspace_id, name, description, visibility, archived_at, created_at
+id, workspace_id, name, slug (unique per workspace), description, type (PUBLIC/PRIVATE), created_by, created_at
+
+### channel_members
+channel_id, user_id, created_at
+
+Private channels are visible only to channel members; the creator is added atomically at creation. Channel membership carries no role.
 
 ### messages
-id, workspace_id, channel_id, author_id, body, parent_message_id, client_mutation_id, created_at, updated_at, deleted_at
+id, channel_id, author_id, body, created_at, updated_at, edited_at, deleted_at
+
+Messages resolve their workspace through their channel (no workspace_id column). Edits set editedAt; deletes set deletedAt and null the exposed body while keeping the row. `parent_message_id` (threads) and `client_mutation_id` (offline idempotency) arrive in their respective phases.
 
 ## Indexes
 
 - messages(channel_id, created_at, id)
+- messages(author_id)
 - messages(workspace_id, created_at)
 - workspace_members(workspace_id, user_id) unique
 - channel_members(channel_id, user_id) unique

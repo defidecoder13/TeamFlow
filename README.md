@@ -74,5 +74,20 @@ pnpm dev
 
 ## Current phase
 
-Phase 0 (foundation) only: repository + tooling + minimal frontend + minimal API + database infrastructure. No product features yet.
+Completed:
+
+- Phase 0 — Foundation: repository + tooling + minimal frontend + minimal API + database infrastructure
+- Phase 1 — Authentication: Better Auth sign-up/sign-in/sign-out, sessions, `GET /api/me`
+- Phase 2A — Workspace backend: workspace CRUD, membership, roles (OWNER/ADMIN/MEMBER)
+- Phase 2B — Workspace UI + real data: workspace list, creation, shell layout
+- Phase 2C — Authentication visual redesign: Stitch-aligned sign-in/sign-up pages
+- Phase 2D — Workspace creation + UI polish: empty states, onboarding cards
+- Phase 2E — Workspace members: members list, roles, search
+- Phase 2F-A — Invitation backend: create/list/accept, token hashing, concurrency safety
+- Phase 2F-B — Invitation UI: invite dialog, pending list, accept flow
+- Phase 3A — Channel backend: channel CRUD, PUBLIC/PRIVATE, memberships, authorization
+- Phase 3B — Channel UI + navigation: channel detail, sidebar channels, create/edit dialogs
+- Phase 4A — Message REST API: persistence, cursor pagination, edit, soft delete, authorization
+
+Next: frontend messaging UI (message list, composer, message rows) — backend is ready.
 ```

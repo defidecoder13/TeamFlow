@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Sign In — TeamFlow</title>
+<!-- Tailwind CSS v3 with Plugins -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Tailwind Configuration -->
+<script data-purpose="tailwind-config">
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', 'sans-serif'],
+          },
+          colors: {
+            brand: {
+              canvas: '#f6f5fa',
+              lavender: '#f3f0f9',
+              dark: '#0e0f12',
+              muted: '#6b7280',
+              border: '#e7e5ec',
+            }
+          },
+          boxShadow: {
+            'window': '0 25px 60px -15px rgba(22, 19, 43, 0.08), 0 0 1px 1px rgba(0, 0, 0, 0.04)',
+          }
+        }
+      }
+    }
+  </script>
+<!-- Google Fonts: Inter -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<style data-purpose="custom-decorations">
+    /* Subtle 3D-like geometric shapes */
+    .hero-sphere {
+      background: radial-gradient(circle at 35% 30%, #ffffff 0%, #e2e1e9 45%, #b9b6c4 90%);
+      box-shadow: -8px 12px 24px -4px rgba(60, 50, 80, 0.15);
+    }
+  </style>
+</head>
+<body class="bg-brand-canvas text-gray-900 font-sans min-h-screen flex items-center justify-center p-4 md:p-8 antialiased selection:bg-gray-200 selection:text-black">
+<!-- BEGIN: WindowFrame -->
+<div class="w-full max-w-[1080px] bg-white rounded-2xl shadow-window border border-gray-100/80 overflow-hidden flex flex-col" data-purpose="desktop-window-container">
+<!-- BEGIN: WindowHeader -->
+<header class="h-10 px-5 flex items-center justify-between border-b border-gray-50 select-none bg-white">
+<!-- Traffic light window controls -->
+<div class="flex items-center space-x-2">
+<span class="w-3 h-3 rounded-full bg-[#ff5f57] inline-block"></span>
+<span class="w-3 h-3 rounded-full bg-[#febc2e] inline-block"></span>
+<span class="w-3 h-3 rounded-full bg-[#28c840] inline-block"></span>
+</div>
+<!-- Window Title -->
+<div class="text-xs tracking-tight text-gray-400 font-medium">
+        TeamFlow — Sign In
+      </div>
+</header>
+<!-- END: WindowHeader -->
+<!-- BEGIN: MainContentGrid -->
+<main class="grid grid-cols-1 lg:grid-cols-12 min-h-[640px]">
+<!-- BEGIN: LeftBrandedHeroPanel -->
+<section class="lg:col-span-5 bg-brand-lavender p-8 sm:p-12 flex flex-col justify-between relative overflow-hidden" data-purpose="hero-panel">
+<!-- Top branding -->
+<div class="z-10">
+<div class="flex items-center space-x-2.5">
+<!-- TeamFlow Logo Mark -->
+<div class="w-8 h-8 rounded-lg bg-black flex items-center justify-center text-white shadow-sm">
+<svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" viewbox="0 0 24 24">
+<path d="M18.178 8c5.096 0 5.096 8 0 8-5.095 0-7.133-8-12.228-8-5.096 0-5.096 8 0 8 5.095 0 7.133-8 12.228-8z"></path>
+</svg>
+</div>
+<span class="text-lg font-bold tracking-tight text-gray-900">TeamFlow</span>
+</div>
+<!-- Hero Headline & Subtext -->
+<div class="mt-14 max-w-sm">
+<span class="text-[11px] font-bold uppercase tracking-widest text-gray-500 block mb-3">
+              A calmer way to work together
+            </span>
+<h1 class="text-3xl font-bold tracking-tight text-gray-950 leading-[1.18] mb-4">
+              Ideas, discussions and progress. All in one place.
+            </h1>
+<p class="text-sm leading-relaxed text-gray-600 font-normal">
+              TeamFlow helps modern teams stay focused, aligned and moving forward without the noise.
+            </p>
+</div>
+</div>
+<!-- 3D Geometric Minimal Artwork (Bottom) -->
+<div class="relative mt-8 h-48 w-full flex items-end justify-center pointer-events-none select-none" data-purpose="decorative-illustration">
+<!-- Ambient Light Blob -->
+<div class="absolute bottom-4 left-1/3 w-40 h-32 bg-white/60 rounded-full blur-2xl"></div>
+<!-- Mountain Polygons -->
+<svg class="w-full max-w-[340px] h-36 relative -bottom-1" fill="none" viewbox="0 0 340 144" xmlns="http://www.w3.org/2000/svg">
+<polygon fill="#e5e2ee" fill-opacity="0.85" points="40,144 140,56 220,144"></polygon>
+<polygon fill="#dedbe8" fill-opacity="0.95" points="120,144 210,34 320,144"></polygon>
+<polygon fill="#cfccd9" fill-opacity="0.5" points="210,34 320,144 265,144"></polygon>
+<polygon fill="#e8e5f1" fill-opacity="0.75" points="175,144 250,75 340,144"></polygon>
+</svg>
+<!-- 3D Matte Sphere -->
+<div class="hero-sphere w-12 h-12 rounded-full absolute bottom-10 left-10 z-10"></div>
+</div>
+<!-- Hero Footer Caption -->
+<div class="z-10 pt-2">
+<p class="text-xs text-gray-500 font-medium">
+            Built for teams who care about great work.
+          </p>
+</div>
+</section>
+<!-- END: LeftBrandedHeroPanel -->
+<!-- BEGIN: RightAuthFormPanel -->
+<section class="lg:col-span-7 bg-white p-8 sm:p-12 lg:px-16 flex flex-col justify-between" data-purpose="auth-form-panel">
+<!-- Header Switch Link -->
+<div class="text-right text-xs text-gray-500 font-normal">
+          New to TeamFlow? 
+          <a class="font-semibold text-gray-900 underline underline-offset-2 hover:text-black transition-colors" href="#">Create an account</a>
+</div>
+<!-- Central Form Container -->
+<div class="max-w-[380px] w-full mx-auto my-auto py-6">
+<!-- Heading Group -->
+<div class="mb-7">
+<h2 class="text-2xl font-bold tracking-tight text-gray-950">Welcome back</h2>
+<p class="text-sm text-gray-500 mt-1 font-normal">Sign in to your TeamFlow account</p>
+</div>
+<!-- Sign In Form -->
+<form class="space-y-4" onsubmit="event.preventDefault();">
+<!-- Email Field -->
+<div>
+<label class="block text-xs font-semibold text-gray-800 mb-1.5" for="email">Email</label>
+<div class="relative">
+<div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400">
+<!-- Mail Icon -->
+<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" viewbox="0 0 24 24">
+<rect height="16" rx="2" width="20" x="2" y="4"></rect>
+<path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"></path>
+</svg>
+</div>
+<input class="block w-full pl-10 pr-3.5 py-2.5 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-black/10 focus:border-black transition-all" id="email" name="email" placeholder="you@teamflow.com" required="" type="email"/>
+</div>
+</div>
+<!-- Password Field -->
+<div>
+<label class="block text-xs font-semibold text-gray-800 mb-1.5" for="password">Password</label>
+<div class="relative">
+<div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400">
+<!-- Lock Icon -->
+<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" viewbox="0 0 24 24">
+<rect height="11" rx="2" ry="2" width="18" x="3" y="11"></rect>
+<path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+</svg>
+</div>
+<input class="block w-full pl-10 pr-10 py-2.5 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-black/10 focus:border-black transition-all" id="password" name="password" placeholder="Your password" required="" type="password"/>
+<!-- Visibility Toggle -->
+<button aria-label="Toggle password visibility" class="absolute inset-y-0 right-0 pr-3.5 flex items-center text-gray-400 hover:text-gray-600 focus:outline-none transition-colors" type="button">
+<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" viewbox="0 0 24 24">
+<path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path>
+<circle cx="12" cy="12" r="3"></circle>
+</svg>
+</button>
+</div>
+</div>
+<!-- Remember Me & Forgot Password Row -->
+<div class="flex items-center justify-between pt-0.5">
+<label class="flex items-center cursor-pointer select-none">
+<input checked="" class="w-4 h-4 rounded border-gray-300 text-black focus:ring-0 focus:ring-offset-0 cursor-pointer" type="checkbox"/>
+<span class="ml-2 text-xs font-medium text-gray-600">Keep me signed in</span>
+</label>
+<a class="text-xs font-medium text-gray-500 hover:text-gray-900 transition-colors" href="#">Forgot password?</a>
+</div>
+<!-- Submit Button -->
+<div class="pt-1.5">
+<button class="w-full flex items-center justify-center py-2.5 px-4 bg-black hover:bg-gray-800 active:scale-[0.99] text-white font-medium text-sm rounded-lg shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-black focus:ring-offset-2" type="submit">
+<span>Sign in</span>
+<svg class="w-4 h-4 ml-2" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewbox="0 0 24 24">
+<path d="M5 12h14"></path>
+<path d="m12 5 7 7-7 7"></path>
+</svg>
+</button>
+</div>
+</form>
+<!-- Divider -->
+<div class="relative my-6 text-center">
+<div aria-hidden="true" class="absolute inset-0 flex items-center">
+<div class="w-full border-t border-gray-100"></div>
+</div>
+<span class="relative px-3 bg-white text-[11px] text-gray-400 uppercase tracking-wider font-medium">
+              or continue with
+            </span>
+</div>
+<!-- Social Authentication Buttons -->
+<div class="grid grid-cols-3 gap-3">
+<!-- Apple -->
+<button aria-label="Sign in with Apple" class="flex items-center justify-center py-2.5 px-4 border border-gray-200 rounded-lg hover:bg-gray-50 active:bg-gray-100 transition-colors focus:outline-none focus:ring-1 focus:ring-gray-300" type="button">
+<svg class="w-4 h-4 text-black" fill="currentColor" viewbox="0 0 24 24">
+<path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M15.97 6.38c.62-.75 1.04-1.8 0.92-2.85-.9.04-1.99.6-2.63 1.35-.57.65-1.06 1.71-.93 2.73 1 .08 2.03-.49 2.64-1.23z"></path>
+</svg>
+</button>
+<!-- Google -->
+<button aria-label="Sign in with Google" class="flex items-center justify-center py-2.5 px-4 border border-gray-200 rounded-lg hover:bg-gray-50 active:bg-gray-100 transition-colors focus:outline-none focus:ring-1 focus:ring-gray-300" type="button">
+<svg class="w-4 h-4" viewbox="0 0 24 24">
+<path d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.8-2.4 3.65v3h3.88c2.27-2.09 3.66-5.17 3.66-9.09z" fill="#4285F4"></path>
+<path d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.1C3.27 21.43 7.35 24 12 24z" fill="#34A853"></path>
+<path d="M5.28 14.32c-.25-.72-.38-1.49-.38-2.32s.13-1.6.38-2.32V6.58H1.25C.45 8.18 0 9.98 0 12s.45 3.82 1.25 5.42l4.03-3.1z" fill="#FBBC05"></path>
+<path d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.35 0 3.27 2.57 1.25 6.58l4.03 3.1c.95-2.83 3.6-4.93 6.72-4.93z" fill="#EA4335"></path>
+</svg>
+</button>
+<!-- GitHub -->
+<button aria-label="Sign in with GitHub" class="flex items-center justify-center py-2.5 px-4 border border-gray-200 rounded-lg hover:bg-gray-50 active:bg-gray-100 transition-colors focus:outline-none focus:ring-1 focus:ring-gray-300" type="button">
+<svg class="w-4 h-4 text-black" fill="currentColor" viewbox="0 0 24 24">
+<path clip-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" fill-rule="evenodd"></path>
+</svg>
+</button>
+</div>
+</div>
+<!-- Security & Compliance Footer -->
+<div class="pt-4 text-center">
+<p class="text-[11px] text-gray-400 font-normal leading-relaxed">
+            Protected by enterprise grade encryption and SSO protocols.
+          </p>
+</div>
+</section>
+<!-- END: RightAuthFormPanel -->
+</main>
+<!-- END: MainContentGrid -->
+</div>
+<!-- END: WindowFrame -->
+</body></html>

@@ -5,7 +5,7 @@
   "description": "TeamFlow — modular monolith team collaboration platform (Phase 0: foundation)",
   "packageManager": "pnpm@11.8.0",
   "engines": {
-    "node": ">=20.9.0"
+    "node": ">=20.19.0"
   },
   "scripts": {
     "dev": "pnpm --filter @teamflow/api --filter @teamflow/web --parallel dev",
