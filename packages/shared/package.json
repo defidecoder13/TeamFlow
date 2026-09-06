@@ -1,0 +1,22 @@
+{
+  "name": "@teamflow/shared",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Genuinely shared TeamFlow types, constants, and utilities",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "eslint .",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@teamflow/config": "workspace:*",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  }
+}

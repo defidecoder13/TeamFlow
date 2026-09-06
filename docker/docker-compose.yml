@@ -1,0 +1,30 @@
+# Local PostgreSQL for TeamFlow development.
+#
+# Usage:
+#   docker compose -f docker/docker-compose.yml up -d
+#   DATABASE_URL=postgresql://teamflow:teamflow@localhost:5432/teamflow
+#
+# Phase 0 intentionally provides PostgreSQL only.
+# Do NOT add Redis/Kafka/production infrastructure here yet.
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: teamflow-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: teamflow
+      POSTGRES_PASSWORD: teamflow
+      POSTGRES_DB: teamflow
+    ports:
+      - '5432:5432'
+    volumes:
+      - teamflow-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U teamflow -d teamflow']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  teamflow-pgdata:

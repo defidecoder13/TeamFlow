@@ -1,0 +1,30 @@
+{
+  "name": "teamflow",
+  "version": "0.0.0",
+  "private": true,
+  "description": "TeamFlow — modular monolith team collaboration platform (Phase 0: foundation)",
+  "packageManager": "pnpm@11.8.0",
+  "engines": {
+    "node": ">=20.9.0"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @teamflow/api --filter @teamflow/web --parallel dev",
+    "dev:api": "pnpm --filter @teamflow/api dev",
+    "dev:web": "pnpm --filter @teamflow/web dev",
+    "build": "pnpm -r --if-present build",
+    "lint": "pnpm -r --if-present lint",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "test": "pnpm -r --if-present test",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "db:generate": "pnpm --filter @teamflow/db exec prisma generate",
+    "db:validate": "pnpm --filter @teamflow/db exec prisma validate"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.34.0",
+    "eslint": "^9.34.0",
+    "prettier": "^3.6.2",
+    "typescript": "^5.9.2",
+    "typescript-eslint": "^8.44.0"
+  }
+}

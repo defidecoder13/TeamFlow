@@ -1,0 +1,12 @@
+// Phase 0: Prisma infrastructure only.
+// The connection string MUST come from DATABASE_URL — never hardcode credentials.
+// Domain models (users, workspaces, channels, messages, …) arrive in later phases.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
