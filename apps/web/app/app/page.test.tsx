@@ -52,6 +52,14 @@ vi.mock('../../lib/use-workspace-channels', () => ({
   }),
 }));
 
+vi.mock('../../lib/use-direct-conversations', () => ({
+  useDirectConversations: () => ({
+    state: { status: 'ready', conversations: [] },
+    retry: vi.fn(),
+    addConversation: vi.fn(),
+  }),
+}));
+
 vi.mock('../../lib/workspaces', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../lib/workspaces')>()),
   createWorkspace: createWorkspaceMock,

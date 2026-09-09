@@ -27,7 +27,16 @@ export function useWorkspaceChannel(
   slug: string,
 ): { state: WorkspaceChannelState; retry: () => void; setChannel: (channel: Channel) => void } {
   const [attempt, setAttempt] = useState(0);
-  const [state, setState] = useState<WorkspaceChannelState>({ status: 'idle' });
+  const [state, setState] = useState<WorkspaceChannelState>(() =>
+    workspaceId ? { status: 'loading' } : { status: 'idle' },
+  );
+  const [prevKey, setPrevKey] = useState(() => `${workspaceId}:${slug}`);
+
+  const currentKey = `${workspaceId}:${slug}`;
+  if (prevKey !== currentKey) {
+    setPrevKey(currentKey);
+    setState(workspaceId ? { status: 'loading' } : { status: 'idle' });
+  }
 
   const retry = useCallback(() => {
     setAttempt((count) => count + 1);

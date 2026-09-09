@@ -7,37 +7,46 @@ import {
   fetchSessionUser,
   getSafeReturnTo,
 } from './auth-guard';
+import type { SessionUser } from './use-session-user';
+
+const mockUser: SessionUser = {
+  id: 'user-1',
+  name: 'Ada Lovelace',
+  email: 'ada@example.com',
+  image: null,
+  emailVerified: true,
+};
 
 describe('decideRouteAccess', () => {
   it('redirects unauthenticated /app visitors to sign-in', () => {
-    expect(decideRouteAccess('/app', false)).toEqual({ kind: 'redirect', to: SIGN_IN_PATH });
+    expect(decideRouteAccess('/app', null)).toEqual({ kind: 'redirect', to: SIGN_IN_PATH });
   });
 
   it('redirects unauthenticated nested /app routes to sign-in', () => {
-    expect(decideRouteAccess('/app/threads', false)).toEqual({
+    expect(decideRouteAccess('/app/threads', null)).toEqual({
       kind: 'redirect',
       to: SIGN_IN_PATH,
     });
   });
 
   it('allows authenticated /app visitors', () => {
-    expect(decideRouteAccess('/app', true)).toEqual({ kind: 'allow' });
-    expect(decideRouteAccess('/app/threads', true)).toEqual({ kind: 'allow' });
+    expect(decideRouteAccess('/app', mockUser)).toEqual({ kind: 'allow' });
+    expect(decideRouteAccess('/app/threads', mockUser)).toEqual({ kind: 'allow' });
   });
 
   it('allows unauthenticated sign-in and sign-up', () => {
-    expect(decideRouteAccess('/sign-in', false)).toEqual({ kind: 'allow' });
-    expect(decideRouteAccess('/sign-up', false)).toEqual({ kind: 'allow' });
+    expect(decideRouteAccess('/sign-in', null)).toEqual({ kind: 'allow' });
+    expect(decideRouteAccess('/sign-up', null)).toEqual({ kind: 'allow' });
   });
 
   it('bounces authenticated auth-page visitors to /app', () => {
-    expect(decideRouteAccess('/sign-in', true)).toEqual({ kind: 'redirect', to: APP_PATH });
-    expect(decideRouteAccess('/sign-up', true)).toEqual({ kind: 'redirect', to: APP_PATH });
+    expect(decideRouteAccess('/sign-in', mockUser)).toEqual({ kind: 'redirect', to: APP_PATH });
+    expect(decideRouteAccess('/sign-up', mockUser)).toEqual({ kind: 'redirect', to: APP_PATH });
   });
 
   it('leaves unrelated routes alone', () => {
-    expect(decideRouteAccess('/', false)).toEqual({ kind: 'allow' });
-    expect(decideRouteAccess('/', true)).toEqual({ kind: 'allow' });
+    expect(decideRouteAccess('/', null)).toEqual({ kind: 'allow' });
+    expect(decideRouteAccess('/', mockUser)).toEqual({ kind: 'allow' });
   });
 });
 

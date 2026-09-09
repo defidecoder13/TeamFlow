@@ -165,3 +165,40 @@ export function SignOutIcon({ className }: { className?: string }) {
     </Icon>
   );
 }
+
+export function PencilIcon({ className }: { className?: string }) {
+  return (
+    <Icon className={className}>
+      <path d="M11.5 2.5a1.4 1.4 0 0 1 2 2L4.5 13.5H2.5v-2L11.5 2.5z" />
+    </Icon>
+  );
+}
+
+export function TrashIcon({ className }: { className?: string }) {
+  return (
+    <Icon className={className}>
+      <path d="M3 4.5h10" />
+      <path d="M5.5 4.5V3a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v1.5" />
+      <path d="M12 4.5v8a1.5 1.5 0 0 1-1.5 1.5h-5A1.5 1.5 0 0 1 4 12.5v-8" />
+    </Icon>
+  );
+}
+
+export function CloseIcon({ className }: { className?: string }) {
+  return (
+    <Icon className={className}>
+      <path d="M4 4l8 8" />
+      <path d="M12 4L4 12" />
+    </Icon>
+  );
+}
+
+export function SmileyIcon({ className }: { className?: string }) {
+  return (
+    <Icon className={className}>
+      <circle cx="8" cy="8" r="6" />
+      <path d="M6 6.5h.01M10 6.5h.01" />
+      <path d="M5.5 9.5a3.5 3.5 0 0 0 5 0" />
+    </Icon>
+  );
+}

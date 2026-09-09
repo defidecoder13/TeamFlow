@@ -5,6 +5,10 @@ import { createMeRouter, getAuth, getTrustedOrigins, type AuthContext } from './
 import { createChannelsRouter } from './modules/channels/index';
 import { createChannelMessagesRouter, createMessagesRouter } from './modules/messages/index';
 import {
+  createDirectMessagesRouter,
+  createWorkspaceDirectMessagesRouter,
+} from './modules/direct-messages/index';
+import {
   createInvitationAcceptRouter,
   createWorkspaceInvitationsRouter,
 } from './modules/invitations/index';
@@ -53,6 +57,11 @@ export function createApp(deps: AppDeps = {}): Express {
   app.use('/api/workspaces/:workspaceId/channels', createChannelsRouter(resolveAuth));
   app.use('/api/channels/:channelId/messages', createChannelMessagesRouter(resolveAuth));
   app.use('/api/messages', createMessagesRouter(resolveAuth));
+  app.use(
+    '/api/workspaces/:workspaceId/direct-messages',
+    createWorkspaceDirectMessagesRouter(resolveAuth),
+  );
+  app.use('/api/direct-messages', createDirectMessagesRouter(resolveAuth));
   app.use(
     '/api/workspaces/:workspaceId/invitations',
     createWorkspaceInvitationsRouter(resolveAuth),

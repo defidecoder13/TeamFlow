@@ -29,7 +29,7 @@ export default async function SignInPage({
         />
       }
     >
-      <SignInForm notice={notice} returnTo={getSafeReturnTo(next) ?? undefined} />
+      <SignInForm notice={notice} returnTo={getSafeReturnTo(next ?? null) ?? undefined} />
     </AuthLayout>
   );
 }

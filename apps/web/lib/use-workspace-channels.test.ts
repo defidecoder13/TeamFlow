@@ -97,4 +97,28 @@ describe('useWorkspaceChannel', () => {
       expect(result.current.state).toEqual({ status: 'notFound' });
     });
   });
+
+  it('starts in loading when workspaceId is present and resets to loading on slug change', async () => {
+    fetchChannelMock.mockResolvedValue({ ok: true, channel: ENGINEERING });
+    const { result, rerender } = renderHook(
+      ({ slug }: { slug: string }) => useWorkspaceChannel('ws-1', slug),
+      { initialProps: { slug: 'engineering' } },
+    );
+
+    // Initial state must be loading, never idle or notFound
+    expect(result.current.state).toEqual({ status: 'loading' });
+
+    await waitFor(() => {
+      expect(result.current.state).toEqual({ status: 'ready', channel: ENGINEERING });
+    });
+
+    // When slug changes to another channel (e.g. private demo), immediately transitions to loading
+    fetchChannelMock.mockResolvedValue({ ok: true, channel: DESIGN });
+    rerender({ slug: 'demo' });
+    expect(result.current.state).toEqual({ status: 'loading' });
+
+    await waitFor(() => {
+      expect(result.current.state).toEqual({ status: 'ready', channel: DESIGN });
+    });
+  });
 });

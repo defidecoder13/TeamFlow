@@ -30,7 +30,12 @@ model User {
   channelMemberships ChannelMembership[]
   createdChannels Channel[] @relation("CreatedChannels")
   messages      Message[]
+  reactions     MessageReaction[]
   sentInvitations Invitation[]          @relation("InvitedBy")
+  conversationsAsParticipantA DirectMessageConversation[] @relation("ConversationParticipantA")
+  conversationsAsParticipantB DirectMessageConversation[] @relation("ConversationParticipantB")
+  directMessageParticipants   DirectMessageParticipant[]
+  directMessageReadStates     DirectMessageReadState[]
 
   @@unique([email])
   @@map("user")
@@ -102,6 +107,7 @@ model Workspace {
   memberships WorkspaceMembership[]
   invitations Invitation[]
   channels    Channel[]
+  directMessageConversations DirectMessageConversation[]
 
   @@index([slug])
   @@map("workspace")
@@ -187,19 +193,119 @@ model ChannelMembership {
 }
 
 model Message {
-  id        String    @id
-  channelId String
-  authorId  String
-  body      String
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  editedAt  DateTime?
-  deletedAt DateTime?
+  id                          String                     @id
+  channelId                   String?
+  directMessageConversationId String?
+  authorId                    String
+  parentMessageId             String?
+  body                        String
+  replyCount                  Int                        @default(0)
+  latestReplyAt               DateTime?
+  createdAt                   DateTime                   @default(now())
+  updatedAt                   DateTime                   @updatedAt
+  editedAt                    DateTime?
+  deletedAt                   DateTime?
 
-  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
-  author  User    @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  channel                     Channel?                   @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  directMessageConversation   DirectMessageConversation? @relation(fields: [directMessageConversationId], references: [id], onDelete: Cascade)
+  author                      User                       @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  parent                      Message?                   @relation("ThreadReplies", fields: [parentMessageId], references: [id], onDelete: Cascade)
+  replies                     Message[]                  @relation("ThreadReplies")
+  reactions                   MessageReaction[]
+  readStates                  DirectMessageReadState[]
 
   @@index([channelId, createdAt, id])
+  @@index([directMessageConversationId, createdAt, id])
+  @@index([parentMessageId, createdAt, id])
   @@index([authorId])
   @@map("message")
 }
+
+model MessageReaction {
+  id        String   @id
+  messageId String
+  userId    String
+  emoji     String
+  createdAt DateTime @default(now())
+
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId, emoji])
+  @@index([messageId])
+  @@index([userId])
+  @@index([messageId, emoji])
+  @@map("message_reaction")
+}
+
+enum DirectMessageRole {
+  ADMIN
+  MEMBER
+}
+
+enum DirectMessageConversationType {
+  DIRECT
+  GROUP
+}
+
+model DirectMessageConversation {
+  id             String                        @id
+  workspaceId    String
+  type           DirectMessageConversationType @default(DIRECT)
+  name           String?
+  participantAId String?
+  participantBId String?
+  createdAt      DateTime                      @default(now())
+  updatedAt      DateTime                      @updatedAt
+
+  workspace      Workspace                     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  participantA   User?                         @relation("ConversationParticipantA", fields: [participantAId], references: [id], onDelete: Cascade)
+  participantB   User?                         @relation("ConversationParticipantB", fields: [participantBId], references: [id], onDelete: Cascade)
+  participants   DirectMessageParticipant[]
+  messages       Message[]
+  readStates     DirectMessageReadState[]
+
+  @@unique([workspaceId, type, participantAId, participantBId])
+  @@index([workspaceId])
+  @@index([participantAId])
+  @@index([participantBId])
+  @@map("direct_message_conversation")
+}
+
+model DirectMessageParticipant {
+  id             String                    @id
+  conversationId String
+  userId         String
+  role           DirectMessageRole         @default(MEMBER)
+  joinedAt       DateTime                  @default(now())
+
+  conversation   DirectMessageConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user           User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, userId])
+  @@index([conversationId])
+  @@index([userId])
+  @@map("direct_message_participant")
+}
+
+model DirectMessageReadState {
+  id                String                    @id
+  conversationId    String
+  userId            String
+  lastReadMessageId String?
+  lastReadAt        DateTime                  @default(now())
+  createdAt         DateTime                  @default(now())
+  updatedAt         DateTime                  @updatedAt
+
+  conversation      DirectMessageConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user              User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lastReadMessage   Message?                  @relation(fields: [lastReadMessageId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, conversationId])
+  @@index([userId])
+  @@index([conversationId])
+  @@index([lastReadMessageId])
+  @@map("direct_message_read_state")
+}
+
+

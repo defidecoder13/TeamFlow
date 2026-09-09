@@ -1,18 +1,15 @@
-/**
- * Client-side session state for the authenticated app (Phase 1D).
- *
- * The Express `GET /api/me` endpoint is the single source of truth; this
- * hook only reflects it (loading → authenticated | unauthenticated | error).
- * Route protection itself happens server-side in `middleware.ts` — this hook
- * additionally covers loading skeletons, API failures, and sessions that
- * expire while the app is open.
- */
-
 'use client';
 
 import { useEffect, useState } from 'react';
-import type { SessionUser } from './auth-guard';
 import { getApiBaseUrl } from './config';
+
+export interface SessionUser {
+  id: string;
+  name: string;
+  email: string;
+  image: string | null;
+  emailVerified: boolean;
+}
 
 export type SessionState =
   | { status: 'loading' }
@@ -38,35 +35,48 @@ export function useSessionUser(): SessionState {
         }
         return;
       }
+
       try {
         const response = await fetch(`${apiBase}/api/me`, {
           credentials: 'include',
           cache: 'no-store',
         });
-        if (cancelled) {
-          return;
-        }
+
+        if (cancelled) return;
+
         if (response.status === 401) {
           setState({ status: 'unauthenticated' });
           return;
         }
+
         if (!response.ok) {
           setState({ status: 'error', message: LOAD_FAILURE_MESSAGE });
           return;
         }
+
         const body: unknown = await response.json();
         if (!isSessionUserBody(body)) {
           setState({ status: 'error', message: LOAD_FAILURE_MESSAGE });
           return;
         }
+        const session = body as {
+          user: {
+            id: string;
+            name: string;
+            email: string;
+            image?: string | null;
+            emailVerified?: boolean;
+          };
+        };
+        const u = session.user;
         setState({
           status: 'authenticated',
           user: {
-            id: body.user.id,
-            name: body.user.name,
-            email: body.user.email,
-            image: body.user.image ?? null,
-            emailVerified: body.user.emailVerified ?? false,
+            id: u.id,
+            name: u.name,
+            email: u.email,
+            image: u.image ?? null,
+            emailVerified: u.emailVerified ?? false,
           },
         });
       } catch {

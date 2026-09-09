@@ -11,7 +11,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { getApiBaseUrl } from './config';
 import { fetchWorkspaces, selectInitialWorkspace, type WorkspaceSummary } from './workspaces';
-
 export type WorkspacesState =
   | { status: 'idle' }
   | { status: 'loading' }

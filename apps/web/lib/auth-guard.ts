@@ -1,137 +1,169 @@
 /**
- * Server-aware route protection helpers (Phase 1D).
+ * Server-aware route protection helpers.
  *
- * The Next.js middleware uses these to gate routes against the authoritative
- * Express session (`GET /api/me`) BEFORE rendering — this is the primary
- * protection mechanism, not a client-side redirect. Client components add a
- * second layer (loading/error/expired-session handling) on top.
- *
- * This module is intentionally free of `next/*` imports so the decision logic
- * and session fetch are plain unit-testable functions.
+ * This module must stay free of client-only code ('use client', React,
+ * `window`): it is imported by `middleware.ts`, which runs in the Edge
+ * runtime. The Next.js middleware uses these helpers to gate routes against
+ * the authoritative Express session (`GET /api/me`) BEFORE rendering — this
+ * is the primary protection mechanism, not a client-side redirect. Client
+ * components add a second layer (loading/error/expired-session handling)
+ * on top via `use-session-user.ts`.
  */
-
-/** Safe identity shape returned by the Express `GET /api/me` endpoint. */
-export interface SessionUser {
-  id: string;
-  name: string;
-  email: string;
-  image: string | null;
-  emailVerified: boolean;
-}
-
-export const APP_PATH = '/app';
-export const SIGN_IN_PATH = '/sign-in';
-
-const AUTH_PAGES = new Set(['/sign-in', '/sign-up']);
+import type { SessionUser } from './use-session-user';
+export type { SessionUser };
 
 /**
- * Validate a post-sign-in return destination. Only same-origin app paths are
- * allowed (single leading slash, no backslashes) — anything else falls back
- * to null so open redirects are impossible.
+ * Server-side session fetcher used by middleware.
+ * Works in both Edge and Node runtimes.
  */
-export function getSafeReturnTo(value: string | null | undefined): string | null {
-  if (!value || !value.startsWith('/') || value.startsWith('//') || value.includes('\\')) {
+export async function fetchSessionUser(
+  apiBase: string,
+  cookieHeader: string,
+): Promise<SessionUser | null> {
+  let res: Response;
+  try {
+    res = await fetch(`${apiBase}/api/me`, {
+      method: 'GET',
+      headers: {
+        Cookie: cookieHeader,
+        Accept: 'application/json',
+      },
+      credentials: 'omit',
+      cache: 'no-store',
+    });
+  } catch {
     return null;
   }
-  return value;
+
+  if (res.status === 401) {
+    return null;
+  }
+  if (!res.ok) {
+    return null;
+  }
+
+  const body: unknown = await res.json();
+  if (!isSessionUserBody(body)) {
+    return null;
+  }
+  const session = body as {
+    user: {
+      id: string;
+      name: string;
+      email: string;
+      image?: string | null;
+      emailVerified?: boolean;
+    };
+  };
+  const u = session.user;
+  return {
+    id: u.id,
+    name: u.name,
+    email: u.email,
+    image: u.image ?? null,
+    emailVerified: u.emailVerified ?? false,
+  };
 }
 
-export type GuardDecision = { kind: 'allow' } | { kind: 'redirect'; to: string };
+/**
+ * Safe return path derived from `next` query param, bounded to app routes.
+ * Allows /app/* routes and known safe routes like /invite/accept.
+ * Only relative paths starting with / are accepted.
+ * Protocol-relative URLs (//evil.com) are rejected.
+ */
+export function getSafeReturnTo(returnTo: string | null): string | null {
+  if (!returnTo) {
+    return null;
+  }
+  if (!returnTo.startsWith('/')) {
+    return null;
+  }
+  if (returnTo.startsWith('//')) {
+    return null;
+  }
+  try {
+    const url = new URL(returnTo, 'http://localhost');
+    const pathname = url.pathname;
+    if (pathname.startsWith('/app/') || pathname === '/app' || pathname === '/invite/accept') {
+      return pathname + url.search;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
 
 /**
- * Decide route access from authentication state.
- *
- * - `/app` (and anything under it) requires a session → else `/sign-in`.
- * - `/sign-in` and `/sign-up` bounce authenticated users → `/app`.
- * - Everything else is unaffected.
- *
- * The two rules point at opposite destinations, so redirect loops are
- * impossible: each redirect lands on a route that allows its own state.
+ * Decide where an incoming request should go based on auth state and path.
+ * This function accepts `true`/`false` for backward compatibility with tests.
  */
-export function decideRouteAccess(pathname: string, isAuthenticated: boolean): GuardDecision {
-  const isAppRoute = pathname === APP_PATH || pathname.startsWith(`${APP_PATH}/`);
-  if (isAppRoute) {
-    return isAuthenticated ? { kind: 'allow' } : { kind: 'redirect', to: SIGN_IN_PATH };
+export function decideAuthPageDestination(
+  pathname: string,
+  authenticated: boolean | SessionUser | null,
+  returnTo: string | null,
+): { kind: 'allow' } | { kind: 'redirect'; to: string } {
+  const safeReturnTo = getSafeReturnTo(returnTo);
+
+  const isAuth = authenticated === true || (authenticated as SessionUser | null);
+  if (isAuth) {
+    if (pathname === '/sign-in' || pathname === '/sign-up') {
+      return { kind: 'redirect', to: safeReturnTo ?? APP_PATH };
+    }
+    return { kind: 'allow' };
   }
-  if (AUTH_PAGES.has(pathname)) {
-    return isAuthenticated ? { kind: 'redirect', to: APP_PATH } : { kind: 'allow' };
+
+  if (pathname === '/sign-in' || pathname === '/sign-up') {
+    return { kind: 'allow' };
   }
+
+  if (pathname.startsWith('/app/') || pathname === '/app') {
+    return { kind: 'redirect', to: `/sign-in?next=${encodeURIComponent(pathname)}` };
+  }
+
   return { kind: 'allow' };
 }
 
 /**
- * Where an authenticated visitor to an auth page should land: a validated
- * `?next=` destination (e.g. back to an invitation) or `/app` by default.
- * Loop-safe: `?next=` only ever points at app paths, and `/app` allows its
- * own authenticated state.
+ * Decides whether a client-side navigation target is accessible.
  */
-export function decideAuthPageDestination(
+export const APP_PATH = '/app';
+export const SIGN_IN_PATH = '/sign-in';
+
+export function decideRouteAccess(
   pathname: string,
-  isAuthenticated: boolean,
-  nextParam: string | null,
-): GuardDecision {
-  if (!AUTH_PAGES.has(pathname) || !isAuthenticated) {
-    return decideRouteAccess(pathname, isAuthenticated);
+  session: SessionUser | null,
+): { kind: 'allow' } | { kind: 'redirect'; to: string } {
+  if (session) {
+    if (pathname.startsWith('/app/') || pathname === '/app') {
+      return { kind: 'allow' };
+    }
+    if (pathname === '/sign-in' || pathname === '/sign-up') {
+      return { kind: 'redirect', to: APP_PATH };
+    }
+    return { kind: 'allow' };
   }
-  const next = getSafeReturnTo(nextParam);
-  const nextPath = next?.split('?')[0] ?? '';
-  if (next && !AUTH_PAGES.has(nextPath)) {
-    return { kind: 'redirect', to: next };
+
+  if (pathname.startsWith('/app/') || pathname === '/app') {
+    return { kind: 'redirect', to: SIGN_IN_PATH };
   }
-  return { kind: 'redirect', to: APP_PATH };
+
+  return { kind: 'allow' };
 }
 
-interface SessionUserShape {
-  id: string;
-  name: string;
-  email: string;
-  image?: string | null;
-  emailVerified?: boolean;
-}
-
-function isUserShape(candidate: unknown): candidate is SessionUserShape {
-  if (typeof candidate !== 'object' || candidate === null) {
-    return false;
-  }
-  const record = candidate as Record<string, unknown>;
-  return (
-    typeof record.id === 'string' &&
-    typeof record.name === 'string' &&
-    typeof record.email === 'string'
-  );
-}
-
-function isSessionUserBody(value: unknown): value is { user: SessionUserShape } {
+function isSessionUserBody(value: unknown): value is {
+  user: { id: string; name: string; email: string; image?: string | null; emailVerified?: boolean };
+} {
   if (typeof value !== 'object' || value === null) {
     return false;
   }
-  return isUserShape((value as { user?: unknown }).user);
-}
-
-/**
- * Ask the Express API for the current session user, forwarding the browser
- * cookies. Returns `null` for missing/invalid sessions AND for transport
- * failures — callers fail closed (treat as unauthenticated).
- */
-export async function fetchSessionUser(
-  apiBaseUrl: string,
-  cookieHeader: string,
-): Promise<SessionUser | null> {
-  try {
-    const response = await fetch(`${apiBaseUrl}/api/me`, {
-      headers: { cookie: cookieHeader },
-      cache: 'no-store',
-    });
-    if (!response.ok) {
-      return null;
-    }
-    const body: unknown = await response.json();
-    if (!isSessionUserBody(body)) {
-      return null;
-    }
-    const { id, name, email, image, emailVerified } = body.user;
-    return { id, name, email, image: image ?? null, emailVerified: emailVerified ?? false };
-  } catch {
-    return null;
+  const userProp = (value as Record<string, unknown>).user;
+  if (typeof userProp !== 'object' || userProp === null) {
+    return false;
   }
+  const candidate = userProp as Record<string, unknown>;
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.name === 'string' &&
+    typeof candidate.email === 'string'
+  );
 }

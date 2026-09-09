@@ -15,16 +15,35 @@ import { getPrisma } from '../auth/prisma';
 import { requireAuth } from '../auth/session';
 import { authorizeChannelAccess } from './authorization';
 import {
+  emitDirectMessageCreated,
+  emitDirectMessageDeleted,
+  emitDirectMessageUpdated,
+  emitDirectReactionAdded,
+  emitDirectReactionRemoved,
+  emitMessageCreated,
+  emitMessageDeleted,
+  emitMessageUpdated,
+  emitReactionAdded,
+  emitReactionRemoved,
+} from '../realtime/index';
+import {
+  addMessageReaction,
   createMessage,
+  createThreadReply,
   deleteMessage,
+  getMessageReactions,
   listMessages,
+  listThreadReplies,
   MessageConflictError,
   MessageForbiddenError,
   MessageNotFoundError,
+  removeMessageReaction,
   updateMessage,
 } from './service';
 import {
+  addReactionSchema,
   createMessageSchema,
+  emojiSchema,
   firstValidationMessage,
   messageListQuerySchema,
   updateMessageSchema,
@@ -106,6 +125,7 @@ export function createChannelMessagesRouter(resolveAuth: () => AuthContext): Rou
         authorId: authUser.id,
         body: parsed.data.body,
       });
+      emitMessageCreated(channel.id, message);
       res.status(201).json({ message });
     }),
   );
@@ -151,6 +171,67 @@ export function createMessagesRouter(resolveAuth: () => AuthContext): Router {
   const router = Router();
   router.use(requireAuth(resolveAuth));
 
+  router.get(
+    '/:messageId/replies',
+    asyncRoute(async (req, res) => {
+      const parsed = messageListQuerySchema.safeParse(req.query);
+      if (!parsed.success) {
+        validationError(res, firstValidationMessage(parsed.error));
+        return;
+      }
+      const authUser = requireSessionUser(req, res);
+      if (!authUser) {
+        return;
+      }
+      try {
+        const page = await listThreadReplies(getPrisma(), {
+          messageId: req.params.messageId,
+          userId: authUser.id,
+          limit: parsed.data.limit,
+          cursor: parsed.data.cursor,
+        });
+        res.status(200).json(page);
+      } catch (error) {
+        mapMessageError(res, error);
+      }
+    }),
+  );
+
+  router.post(
+    '/:messageId/replies',
+    asyncRoute(async (req, res) => {
+      const parsed = createMessageSchema.safeParse(req.body);
+      if (!parsed.success) {
+        validationError(res, firstValidationMessage(parsed.error));
+        return;
+      }
+      const authUser = requireSessionUser(req, res);
+      if (!authUser) {
+        return;
+      }
+      try {
+        const { reply, parent } = await createThreadReply(getPrisma(), {
+          messageId: req.params.messageId,
+          authorId: authUser.id,
+          body: parsed.data.body,
+        });
+        if (reply.channelId) {
+          emitMessageCreated(reply.channelId, reply);
+        } else if (reply.directMessageConversationId) {
+          emitDirectMessageCreated(reply.directMessageConversationId, reply);
+        }
+        if (parent.channelId) {
+          emitMessageUpdated(parent.channelId, parent);
+        } else if (parent.directMessageConversationId) {
+          emitDirectMessageUpdated(parent.directMessageConversationId, parent);
+        }
+        res.status(201).json({ message: reply });
+      } catch (error) {
+        mapMessageError(res, error);
+      }
+    }),
+  );
+
   router.patch(
     '/:messageId',
     asyncRoute(async (req, res) => {
@@ -169,6 +250,11 @@ export function createMessagesRouter(resolveAuth: () => AuthContext): Router {
           userId: authUser.id,
           body: parsed.data.body,
         });
+        if (message.channelId) {
+          emitMessageUpdated(message.channelId, message);
+        } else if (message.directMessageConversationId) {
+          emitDirectMessageUpdated(message.directMessageConversationId, message);
+        }
         res.status(200).json({ message });
       } catch (error) {
         mapMessageError(res, error);
@@ -188,7 +274,114 @@ export function createMessagesRouter(resolveAuth: () => AuthContext): Router {
           messageId: req.params.messageId,
           userId: authUser.id,
         });
+        if (message.channelId) {
+          emitMessageDeleted(message.channelId, message.id, message.deletedAt ?? new Date());
+        } else if (message.directMessageConversationId) {
+          emitDirectMessageDeleted(
+            message.directMessageConversationId,
+            message.id,
+            message.deletedAt ?? new Date(),
+          );
+        }
         res.status(200).json({ message });
+      } catch (error) {
+        mapMessageError(res, error);
+      }
+    }),
+  );
+
+  router.post(
+    '/:messageId/reactions',
+    asyncRoute(async (req, res) => {
+      const parsed = addReactionSchema.safeParse(req.body);
+      if (!parsed.success) {
+        validationError(res, firstValidationMessage(parsed.error));
+        return;
+      }
+      const authUser = requireSessionUser(req, res);
+      if (!authUser) {
+        return;
+      }
+      try {
+        const reaction = await addMessageReaction(getPrisma(), {
+          messageId: req.params.messageId,
+          userId: authUser.id,
+          emoji: parsed.data.emoji,
+        });
+        if (reaction.channelId) {
+          emitReactionAdded(
+            reaction.channelId,
+            reaction.messageId,
+            reaction.emoji,
+            reaction.userId,
+          );
+        } else if (reaction.directMessageConversationId) {
+          emitDirectReactionAdded(
+            reaction.directMessageConversationId,
+            reaction.messageId,
+            reaction.emoji,
+            reaction.userId,
+          );
+        }
+        res.status(201).json({ reaction });
+      } catch (error) {
+        mapMessageError(res, error);
+      }
+    }),
+  );
+
+  router.delete(
+    '/:messageId/reactions/:emoji',
+    asyncRoute(async (req, res) => {
+      const rawEmoji = decodeURIComponent(req.params.emoji);
+      const parsed = emojiSchema.safeParse(rawEmoji);
+      if (!parsed.success) {
+        validationError(res, firstValidationMessage(parsed.error));
+        return;
+      }
+      const authUser = requireSessionUser(req, res);
+      if (!authUser) {
+        return;
+      }
+      try {
+        const { channelId, directMessageConversationId } = await removeMessageReaction(
+          getPrisma(),
+          {
+            messageId: req.params.messageId,
+            userId: authUser.id,
+            emoji: parsed.data,
+          },
+        );
+        if (channelId) {
+          emitReactionRemoved(channelId, req.params.messageId, parsed.data, authUser.id);
+        } else if (directMessageConversationId) {
+          emitDirectReactionRemoved(
+            directMessageConversationId,
+            req.params.messageId,
+            parsed.data,
+            authUser.id,
+          );
+        }
+        res.status(200).json({ success: true, message: 'Reaction removed.' });
+      } catch (error) {
+        mapMessageError(res, error);
+      }
+    }),
+  );
+
+  router.get(
+    '/:messageId/reactions',
+    asyncRoute(async (req, res) => {
+      const authUser = requireSessionUser(req, res);
+      if (!authUser) {
+        return;
+      }
+      try {
+        const reactions = await getMessageReactions(getPrisma(), {
+          messageId: req.params.messageId,
+          userId: authUser.id,
+        });
+        res.status(200).json(reactions);
       } catch (error) {
         mapMessageError(res, error);
       }

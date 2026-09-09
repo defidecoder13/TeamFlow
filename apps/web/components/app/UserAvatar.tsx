@@ -8,7 +8,7 @@
 interface UserAvatarProps {
   name: string;
   image?: string | null;
-  size?: 'sm' | 'md';
+  size?: 'sm' | 'md' | 'lg';
 }
 
 export function avatarInitials(name: string): string {
@@ -23,7 +23,8 @@ export function avatarInitials(name: string): string {
 }
 
 export function UserAvatar({ name, image, size = 'md' }: UserAvatarProps) {
-  const dimensions = size === 'sm' ? 'h-6 w-6 text-[10px]' : 'h-8 w-8 text-xs';
+  const dimensions =
+    size === 'sm' ? 'h-6 w-6 text-[10px]' : size === 'lg' ? 'h-10 w-10 text-sm' : 'h-8 w-8 text-xs';
   if (image) {
     // Plain img (not next/image): account avatars are tiny remote images that
     // must not require image-optimization configuration.

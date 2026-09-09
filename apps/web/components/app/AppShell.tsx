@@ -18,18 +18,31 @@ interface AppShellProps {
   workspaceId: string | null;
   location: string;
   children: ReactNode;
+  /** 'default' centers content in max-w-3xl with padding; 'full' allows full height/width views like chat. */
+  contentLayout?: 'default' | 'full';
 }
 
-export function AppShell({ user, workspaceName, workspaceId, location, children }: AppShellProps) {
+export function AppShell({
+  user,
+  workspaceName,
+  workspaceId,
+  location,
+  children,
+  contentLayout = 'default',
+}: AppShellProps) {
   return (
     <div className="flex h-screen overflow-hidden bg-[#f4f3f6] text-sm text-stone-900">
       <WorkspaceRail user={user} />
-      <Sidebar workspaceName={workspaceName} workspaceId={workspaceId} />
+      <Sidebar workspaceName={workspaceName} workspaceId={workspaceId} currentUserId={user.id} />
       <div className="flex min-w-0 flex-1 flex-col">
         <TopBar user={user} workspaceName={workspaceName} location={location} />
-        <main className="min-h-0 flex-1 overflow-y-auto">
-          <div className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 lg:px-8">{children}</div>
-        </main>
+        {contentLayout === 'full' ? (
+          <main className="flex min-h-0 flex-1 flex-col bg-white">{children}</main>
+        ) : (
+          <main className="min-h-0 flex-1 overflow-y-auto">
+            <div className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 lg:px-8">{children}</div>
+          </main>
+        )}
       </div>
     </div>
   );

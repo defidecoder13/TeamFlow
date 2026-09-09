@@ -1,5 +1,7 @@
+import http from 'node:http';
 import 'dotenv/config';
 import { createApp } from './app';
+import { initRealtime } from './modules/realtime/index';
 
 const DEFAULT_PORT = 4000;
 
@@ -17,7 +19,10 @@ function resolvePort(): number {
 
 const port = resolvePort();
 const app = createApp();
+const httpServer = http.createServer(app);
 
-app.listen(port, () => {
+initRealtime(httpServer);
+
+httpServer.listen(port, () => {
   console.log(`[api] listening on :${port}`);
 });

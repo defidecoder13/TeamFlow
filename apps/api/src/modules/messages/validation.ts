@@ -35,8 +35,26 @@ export const messageListQuerySchema = z
   })
   .strict();
 
+export const MAX_EMOJI_LENGTH = 16;
+
+export const emojiSchema = z
+  .string({ error: 'Emoji is required.' })
+  .refine((val) => !/[\r\n\t\0]/.test(val), {
+    message: 'Emoji contains invalid characters.',
+  })
+  .transform((val) => val.trim())
+  .pipe(
+    z
+      .string()
+      .min(1, 'Emoji is required.')
+      .max(MAX_EMOJI_LENGTH, `Emoji cannot exceed ${MAX_EMOJI_LENGTH} characters.`),
+  );
+
+export const addReactionSchema = z.object({ emoji: emojiSchema }).strict();
+
 export type CreateMessageInput = z.infer<typeof createMessageSchema>;
 export type UpdateMessageInput = z.infer<typeof updateMessageSchema>;
+export type AddReactionInput = z.infer<typeof addReactionSchema>;
 
 /** First safe, user-facing message from a Zod parse failure. */
 export function firstValidationMessage(error: z.ZodError, fallback = 'Invalid request.'): string {
