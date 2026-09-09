@@ -1,12 +1,15 @@
 'use client';
 
 import { useCallback, useRef, useState } from 'react';
+import { useTyping, type TypingContainer } from '../../lib/use-typing';
 
 interface MessageComposerProps {
   placeholder?: string;
   send: (body: string) => Promise<{ ok: boolean; error?: string | undefined }>;
   disabled?: boolean;
   loading?: boolean;
+  container?: TypingContainer | null;
+  currentUserId?: string | null;
 }
 
 export function MessageComposer({
@@ -14,6 +17,8 @@ export function MessageComposer({
   send,
   disabled = false,
   loading = false,
+  container,
+  currentUserId,
 }: MessageComposerProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const isSubmittingRef = useRef(false);
@@ -24,6 +29,8 @@ export function MessageComposer({
   const [error, setError] = useState<string | null>(null);
   const [showError, setShowError] = useState(false);
   const busy = submitting || loading;
+
+  const { handleInputChange, handleStopTyping } = useTyping(container, { currentUserId });
 
   const adjustSize = useCallback(() => {
     const el = textareaRef.current;
@@ -74,6 +81,7 @@ export function MessageComposer({
         const result = await send(trimmed);
         if (result.ok) {
           setBody('');
+          handleStopTyping();
           setSize(1);
           if (textareaRef.current) {
             textareaRef.current.style.height = 'auto';
@@ -88,7 +96,7 @@ export function MessageComposer({
         setSubmitting(false);
       }
     },
-    [body, submitting, loading, disabled, send, clearError, triggerError],
+    [body, submitting, loading, disabled, send, clearError, triggerError, handleStopTyping],
   );
 
   const handleKeyDown = useCallback(
@@ -107,13 +115,15 @@ export function MessageComposer({
 
   const handleChange = useCallback(
     (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-      setBody(e.target.value);
+      const nextValue = e.target.value;
+      setBody(nextValue);
+      handleInputChange(nextValue);
       if (showError) {
         clearError();
       }
       adjustSize();
     },
-    [adjustSize, showError, clearError],
+    [adjustSize, showError, clearError, handleInputChange],
   );
 
   return (

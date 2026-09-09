@@ -14,6 +14,8 @@ export { MembersContent } from './MembersContent';
 export { InviteMemberDialog } from './InviteMemberDialog';
 export { StartDirectMessageDialog } from './StartDirectMessageDialog';
 export { GroupMembersDialog } from './GroupMembersDialog';
+export { PresenceIndicator } from './PresenceIndicator';
+export { TypingIndicator } from './TypingIndicator';
 export { AppShellSkeleton } from './AppShellSkeleton';
 
 export { MessageRow } from './MessageRow';

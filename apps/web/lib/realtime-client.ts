@@ -117,6 +117,27 @@ export type RealtimeNotificationReadAllEvent = {
   updatedCount: number;
 };
 
+export type RealtimePresenceChangedEvent = {
+  type: 'presence:changed';
+  userId: string;
+  status: 'ONLINE' | 'OFFLINE' | 'AWAY';
+  lastSeenAt: string | null;
+};
+
+export type RealtimeTypingStartedEvent = {
+  type: 'typing:started';
+  userId: string;
+  channelId?: string | null;
+  conversationId?: string | null;
+};
+
+export type RealtimeTypingStoppedEvent = {
+  type: 'typing:stopped';
+  userId: string;
+  channelId?: string | null;
+  conversationId?: string | null;
+};
+
 let socketInstance: Socket | null = null;
 
 export function getRealtimeSocket(): Socket {
@@ -341,5 +362,77 @@ export function onRealtimeNotificationReadAll(
   socket.on('notification:read-all', handler);
   return () => {
     socket.off('notification:read-all', handler);
+  };
+}
+
+/**
+ * Presence realtime subscriber (Phase 4I.3).
+ *
+ * Listens for presence:changed events emitted by the server.
+ */
+export function onRealtimePresenceChanged(
+  handler: (event: RealtimePresenceChangedEvent) => void,
+): () => void {
+  const socket = getRealtimeSocket();
+  socket.on('presence:changed', handler);
+  return () => {
+    socket.off('presence:changed', handler);
+  };
+}
+
+/**
+ * Typing indicator realtime emitters & subscribers (Phase 4I.4, transport only).
+ *
+ * Ephemeral client events for typing start/stop with container targeting.
+ */
+export function emitTypingStart(container: {
+  channelId?: string;
+  conversationId?: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  const socket = getRealtimeSocket();
+  if (!socket.connected) {
+    socket.connect();
+  }
+
+  return new Promise((resolve) => {
+    socket.emit('typing:start', container, (res?: { ok: boolean; error?: string }) => {
+      resolve(res ?? { ok: true });
+    });
+  });
+}
+
+export function emitTypingStop(container: {
+  channelId?: string;
+  conversationId?: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  const socket = getRealtimeSocket();
+  if (!socket.connected) {
+    return Promise.resolve({ ok: true });
+  }
+
+  return new Promise((resolve) => {
+    socket.emit('typing:stop', container, (res?: { ok: boolean; error?: string }) => {
+      resolve(res ?? { ok: true });
+    });
+  });
+}
+
+export function onRealtimeTypingStarted(
+  handler: (event: RealtimeTypingStartedEvent) => void,
+): () => void {
+  const socket = getRealtimeSocket();
+  socket.on('typing:started', handler);
+  return () => {
+    socket.off('typing:started', handler);
+  };
+}
+
+export function onRealtimeTypingStopped(
+  handler: (event: RealtimeTypingStoppedEvent) => void,
+): () => void {
+  const socket = getRealtimeSocket();
+  socket.on('typing:stopped', handler);
+  return () => {
+    socket.off('typing:stopped', handler);
   };
 }

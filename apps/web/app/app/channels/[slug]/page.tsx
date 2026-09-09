@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect;
 import Link from 'next/link';
@@ -31,7 +31,9 @@ import {
   HashIcon,
   LockIcon,
   ThreadPanel,
+  TypingIndicator,
 } from '@/components/app';
+import { useTyping } from '@/lib/use-typing';
 import type { Message } from '@/lib/messages';
 
 type MemberInfo = {
@@ -421,6 +423,15 @@ function ConversationPageInner({ workspace, slug, user }: ConversationPageInnerP
   const channelName = channel?.name ?? '#channel';
   const channelId = channel?.id ?? null;
 
+  const { typingUserIds } = useTyping(channelId ? { channelId } : null, { currentUserId: userId });
+
+  const typingMembers = useMemo(() => {
+    return members.map((m) => ({
+      id: m.user.id,
+      name: m.user.name,
+    }));
+  }, [members]);
+
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingBody, setEditingBody] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -727,11 +738,18 @@ function ConversationPageInner({ workspace, slug, user }: ConversationPageInnerP
 
             {channelId && (
               <div className="border-t border-stone-200 bg-white p-2 px-3 sm:px-6">
+                <TypingIndicator
+                  typingUserIds={typingUserIds}
+                  members={typingMembers}
+                  className="mb-1 px-1"
+                />
                 <MessageComposer
                   placeholder={`Message ${channelName}`}
                   send={handleSend}
                   disabled={messagesState.status !== 'ready'}
                   loading={submitting}
+                  container={channelId ? { channelId } : null}
+                  currentUserId={userId}
                 />
               </div>
             )}

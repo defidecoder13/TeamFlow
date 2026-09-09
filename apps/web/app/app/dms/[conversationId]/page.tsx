@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect;
 import Link from 'next/link';
@@ -26,7 +26,9 @@ import {
   AppShellSkeleton,
   ThreadPanel,
   GroupMembersDialog,
+  TypingIndicator,
 } from '@/components/app';
+import { useTyping } from '@/lib/use-typing';
 import type { Message, DirectConversation } from '@/lib/messages';
 
 function DirectMessageHeader({
@@ -460,6 +462,22 @@ function DirectMessagePageInner({ workspace, conversationId, user }: DirectMessa
   const peer = conversation?.peer ?? conversation?.participant;
   const peerName = isGroup ? groupDisplayName : (peer?.name ?? 'Direct Message');
 
+  const { typingUserIds } = useTyping(conversationId ? { conversationId } : null, {
+    currentUserId: userId,
+  });
+
+  const typingMembers = useMemo(() => {
+    if (!conversation) return [];
+    if (conversation.participants && conversation.participants.length > 0) {
+      return conversation.participants.map((p) => ({ id: p.id, name: p.name }));
+    }
+    const list: { id: string; name: string }[] = [];
+    if (conversation.peer) list.push({ id: conversation.peer.id, name: conversation.peer.name });
+    if (conversation.participant)
+      list.push({ id: conversation.participant.id, name: conversation.participant.name });
+    return list;
+  }, [conversation]);
+
   const [membersDialogOpen, setMembersDialogOpen] = useState(false);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingBody, setEditingBody] = useState<string | null>(null);
@@ -764,11 +782,18 @@ function DirectMessagePageInner({ workspace, conversationId, user }: DirectMessa
             </div>
 
             <div className="border-t border-stone-200 bg-white p-2 px-3 sm:px-6">
+              <TypingIndicator
+                typingUserIds={typingUserIds}
+                members={typingMembers}
+                className="mb-1 px-1"
+              />
               <MessageComposer
                 placeholder={`Message ${peerName}`}
                 send={handleSend}
                 disabled={messagesState.status !== 'ready'}
                 loading={submitting}
+                container={conversationId ? { conversationId } : null}
+                currentUserId={userId}
               />
             </div>
 

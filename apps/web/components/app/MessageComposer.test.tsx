@@ -96,4 +96,25 @@ describe('MessageComposer', () => {
     await screen.findByRole('button', { name: /send/i });
     expect(textarea).toHaveValue('');
   });
+
+  it('triggers typing start on input and typing stop on send or clear', async () => {
+    const user = userEvent.setup();
+    const send = vi.fn().mockResolvedValue({ ok: true });
+
+    render(
+      <MessageComposer
+        send={send}
+        container={{ channelId: 'ch-test' }}
+        currentUserId="user-self"
+      />,
+    );
+
+    const textarea = screen.getByRole('textbox');
+    await user.type(textarea, 'Typing message');
+    expect(textarea).toHaveValue('Typing message');
+
+    await user.type(textarea, '{Enter}');
+    expect(send).toHaveBeenCalledWith('Typing message');
+    expect(textarea).toHaveValue('');
+  });
 });

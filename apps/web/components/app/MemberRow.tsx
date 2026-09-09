@@ -7,6 +7,7 @@
  */
 
 import type { WorkspaceMember } from '../../lib/members';
+import type { PresenceStatus } from '../../lib/presence';
 import { UserAvatar } from './UserAvatar';
 
 const ROLE_STYLES: Record<WorkspaceMember['role'], string> = {
@@ -18,12 +19,18 @@ const ROLE_STYLES: Record<WorkspaceMember['role'], string> = {
 interface MemberRowProps {
   member: WorkspaceMember;
   isCurrentUser: boolean;
+  presenceStatus?: PresenceStatus;
 }
 
-export function MemberRow({ member, isCurrentUser }: MemberRowProps) {
+export function MemberRow({ member, isCurrentUser, presenceStatus }: MemberRowProps) {
   return (
     <li className="flex items-center gap-3 rounded-lg border border-stone-200 bg-white px-3.5 py-3 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
-      <UserAvatar name={member.user.name} image={member.user.image} size="md" />
+      <UserAvatar
+        name={member.user.name}
+        image={member.user.image}
+        size="md"
+        presenceStatus={presenceStatus}
+      />
       <div className="min-w-0 flex-1">
         <p className="flex items-center gap-2 text-sm font-medium text-zinc-900">
           <span className="truncate">{member.user.name}</span>

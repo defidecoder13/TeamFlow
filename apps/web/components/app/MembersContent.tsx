@@ -13,6 +13,7 @@ import { useMemo, useState } from 'react';
 import type { PendingInvitation } from '../../lib/invitations';
 import { formatInvitationDate } from '../../lib/invitations';
 import type { WorkspaceMember } from '../../lib/members';
+import { usePresence } from '../../lib/use-presence';
 import { InviteMemberDialog } from './InviteMemberDialog';
 import { MemberRow } from './MemberRow';
 import { SearchIcon } from './icons';
@@ -55,6 +56,7 @@ export function MembersContent({
 }: MembersContentProps) {
   const [query, setQuery] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
+  const { getPresence } = usePresence(workspace.id);
   const visible = useMemo(() => members.filter((m) => matchesQuery(m, query)), [members, query]);
 
   return (
@@ -118,6 +120,7 @@ export function MembersContent({
               key={member.id}
               member={member}
               isCurrentUser={member.user.id === currentUserId}
+              presenceStatus={getPresence(member.user.id).status}
             />
           ))}
         </ul>

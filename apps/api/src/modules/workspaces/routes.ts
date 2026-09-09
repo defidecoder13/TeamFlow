@@ -10,6 +10,7 @@ import { Router, type NextFunction, type Request, type Response } from 'express'
 import type { AuthContext } from '../auth/index';
 import { getPrisma } from '../auth/prisma';
 import { requireAuth } from '../auth/session';
+import { presenceRegistry } from '../realtime/presence';
 import { canDeleteWorkspace, canEditMetadata, getMembershipRole } from './authorization';
 import {
   createWorkspace,
@@ -111,6 +112,34 @@ export function createWorkspacesRouter(resolveAuth: () => AuthContext): Router {
         workspaceId: req.params.workspaceId,
       });
       res.status(200).json({ members });
+    }),
+  );
+
+  router.get(
+    '/:workspaceId/presence',
+    asyncRoute(async (req, res) => {
+      const authUser = req.authUser;
+      if (!authUser) {
+        res
+          .status(401)
+          .json({ error: { code: 'UNAUTHENTICATED', message: 'Authentication required.' } });
+        return;
+      }
+      const prisma = getPrisma();
+      const role = await getMembershipRole(prisma, req.params.workspaceId, authUser.id);
+      if (!role) {
+        notFound(res);
+        return;
+      }
+
+      const members = await prisma.workspaceMembership.findMany({
+        where: { workspaceId: req.params.workspaceId },
+        select: { userId: true },
+      });
+
+      const userIds = members.map((m) => m.userId);
+      const presences = presenceRegistry.getPresences(userIds);
+      res.status(200).json({ presence: presences });
     }),
   );
 

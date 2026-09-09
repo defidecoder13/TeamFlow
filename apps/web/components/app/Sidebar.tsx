@@ -14,8 +14,10 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { PRIMARY_NAV_ITEMS } from '../../lib/shell-data';
 import { useDirectConversations } from '../../lib/use-direct-conversations';
+import { usePresence } from '../../lib/use-presence';
 import { useWorkspaceChannels } from '../../lib/use-workspace-channels';
 import { CreateChannelDialog } from './CreateChannelDialog';
+import { PresenceIndicator } from './PresenceIndicator';
 import { StartDirectMessageDialog } from './StartDirectMessageDialog';
 import {
   HashIcon,
@@ -80,6 +82,7 @@ export function Sidebar({
     retry: retryDms,
     addConversation,
   } = useDirectConversations(workspaceId, currentUserId);
+  const { getPresence } = usePresence(workspaceId);
 
   const activeSlug = pathname.startsWith('/app/channels/')
     ? decodeURIComponent(pathname.slice('/app/channels/'.length).split('/')[0] ?? '')
@@ -291,9 +294,8 @@ export function Sidebar({
                       .join(', ') || 'Group Message'
                   : 'Group Message');
 
-              const displayName = isGroup
-                ? groupDisplayName
-                : (conv.peer?.name ?? conv.participant?.name ?? 'Direct Message');
+              const peer = conv.peer ?? conv.participant;
+              const displayName = isGroup ? groupDisplayName : (peer?.name ?? 'Direct Message');
               const initial = displayName.trim().charAt(0).toUpperCase() || '?';
               const unreadCount = conv.unreadCount ?? 0;
               const hasUnread = unreadCount > 0 || Boolean(conv.hasUnread);
@@ -324,14 +326,21 @@ export function Sidebar({
                         <MembersIcon className="h-3 w-3" />
                       </span>
                     ) : (
-                      <span
-                        aria-hidden="true"
-                        className={[
-                          'flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-medium',
-                          hasUnread ? 'bg-stone-900 text-white' : 'bg-stone-200 text-stone-700',
-                        ].join(' ')}
-                      >
-                        {initial}
+                      <span className="relative inline-flex shrink-0">
+                        <span
+                          aria-hidden="true"
+                          className={[
+                            'flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-medium',
+                            hasUnread ? 'bg-stone-900 text-white' : 'bg-stone-200 text-stone-700',
+                          ].join(' ')}
+                        >
+                          {initial}
+                        </span>
+                        {peer?.id ? (
+                          <span className="absolute bottom-0 right-0 translate-x-[20%] translate-y-[20%]">
+                            <PresenceIndicator status={getPresence(peer.id).status} size="sm" />
+                          </span>
+                        ) : null}
                       </span>
                     )}
                     <span className="min-w-0 flex-1 truncate">{displayName}</span>

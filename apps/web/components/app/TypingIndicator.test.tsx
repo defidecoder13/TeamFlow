@@ -1,0 +1,92 @@
+/**
+ * TypingIndicator component tests (Phase 4I.5).
+ *
+ * Tests:
+ * - 0 typing users: renders empty invisible space with aria-hidden
+ * - 1 typing user: formats "[Name] is typing…"
+ * - 2 typing users: formats "[Name] and [Name] are typing…"
+ * - 3+ typing users: formats "[Name], [Name], and N others are typing…"
+ * - fallback for unknown/unresolved user IDs to "Someone"
+ * - accessible live region semantics (role="status", aria-live="polite", aria-atomic="true")
+ */
+
+import { render, screen } from '@testing-library/react';
+import { describe, expect, it } from 'vitest';
+import { TypingIndicator, formatTypingNames } from './TypingIndicator';
+
+describe('formatTypingNames helper', () => {
+  it('returns null for empty array', () => {
+    expect(formatTypingNames([])).toBeNull();
+  });
+
+  it('formats single user', () => {
+    expect(formatTypingNames(['Alice'])).toBe('Alice is typing…');
+  });
+
+  it('formats two users', () => {
+    expect(formatTypingNames(['Alice', 'Bob'])).toBe('Alice and Bob are typing…');
+  });
+
+  it('formats three users', () => {
+    expect(formatTypingNames(['Alice', 'Bob', 'Charlie'])).toBe(
+      'Alice, Bob, and 1 other are typing…',
+    );
+  });
+
+  it('formats four users', () => {
+    expect(formatTypingNames(['Alice', 'Bob', 'Charlie', 'Diana'])).toBe(
+      'Alice, Bob, and 2 others are typing…',
+    );
+  });
+});
+
+describe('TypingIndicator component', () => {
+  const members = [
+    { id: 'user-1', name: 'Alice Smith' },
+    { id: 'user-2', name: 'Bob Jones' },
+    { id: 'user-3', name: 'Charlie Brown' },
+    { id: 'user-4', name: 'Diana Prince' },
+  ];
+
+  it('renders nothing visible when typingUserIds is empty', () => {
+    const { container } = render(<TypingIndicator typingUserIds={[]} members={members} />);
+    expect(screen.queryByTestId('typing-indicator')).not.toBeInTheDocument();
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(container.firstChild).toHaveAttribute('aria-hidden', 'true');
+  });
+
+  it('renders single typing user with accessible live region', () => {
+    render(<TypingIndicator typingUserIds={['user-1']} members={members} />);
+
+    const status = screen.getByRole('status');
+    expect(status).toBeInTheDocument();
+    expect(status).toHaveAttribute('aria-live', 'polite');
+    expect(status).toHaveAttribute('aria-atomic', 'true');
+    expect(status).toHaveTextContent('Alice Smith is typing…');
+  });
+
+  it('renders two typing users', () => {
+    render(<TypingIndicator typingUserIds={['user-1', 'user-2']} members={members} />);
+
+    expect(screen.getByRole('status')).toHaveTextContent('Alice Smith and Bob Jones are typing…');
+  });
+
+  it('renders three or more typing users with others count', () => {
+    render(
+      <TypingIndicator
+        typingUserIds={['user-1', 'user-2', 'user-3', 'user-4']}
+        members={members}
+      />,
+    );
+
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Alice Smith, Bob Jones, and 2 others are typing…',
+    );
+  });
+
+  it('falls back to "Someone" for unknown user IDs', () => {
+    render(<TypingIndicator typingUserIds={['unknown-user']} members={members} />);
+
+    expect(screen.getByRole('status')).toHaveTextContent('Someone is typing…');
+  });
+});

@@ -23,8 +23,16 @@ import { getPrisma } from '../auth/prisma';
 import { authorizeChannelAccess } from '../messages/authorization';
 import { authorizeDirectConversationAccess } from '../direct-messages/authorization';
 import type { MessageResponse } from '../messages/service';
+import { presenceRegistry, type PresenceStatus } from './presence';
+import { typingRegistry, type TypingContainerType, type TypingTransition } from './typing';
 
 export interface ServerToClientEvents {
+  'presence:changed': (payload: {
+    type: 'presence:changed';
+    userId: string;
+    status: PresenceStatus;
+    lastSeenAt: string | null;
+  }) => void;
   'message:new': (payload: {
     type: 'message:new';
     channelId?: string | null;
@@ -90,6 +98,18 @@ export interface ServerToClientEvents {
     conversationId: string;
     userId: string;
   }) => void;
+  'typing:started': (payload: {
+    type: 'typing:started';
+    userId: string;
+    channelId?: string | null;
+    conversationId?: string | null;
+  }) => void;
+  'typing:stopped': (payload: {
+    type: 'typing:stopped';
+    userId: string;
+    channelId?: string | null;
+    conversationId?: string | null;
+  }) => void;
   'notification:new': (payload: {
     type: 'notification:new';
     notification: NotificationPayload;
@@ -153,6 +173,14 @@ export interface ClientToServerEvents {
   'direct:leave': (
     data: { conversationId: string },
     callback?: (res: { ok: boolean }) => void,
+  ) => void;
+  'typing:start': (
+    data: { channelId?: string; conversationId?: string },
+    callback?: (res: { ok: boolean; error?: string }) => void,
+  ) => void;
+  'typing:stop': (
+    data: { channelId?: string; conversationId?: string },
+    callback?: (res: { ok: boolean; error?: string }) => void,
   ) => void;
 }
 
@@ -221,6 +249,10 @@ export function initRealtime(
     const connectedUser = socket.data.user;
     if (connectedUser) {
       void socket.join(userRoomName(connectedUser.id));
+      const transition = presenceRegistry.addSocket(connectedUser.id, socket.id);
+      if (transition.changed) {
+        void broadcastPresenceChange(connectedUser.id, 'ONLINE', null);
+      }
     }
     // Channel subscription with server-side authorization check
     socket.on('channel:join', async (data, callback) => {
@@ -319,6 +351,179 @@ export function initRealtime(
     socket.on('direct:join', handleJoinDirectConversation);
     socket.on('leave_direct_conversation', handleLeaveDirectConversation);
     socket.on('direct:leave', handleLeaveDirectConversation);
+
+    // Typing start / stop listeners with server-side authorization
+    socket.on('typing:start', async (data, callback) => {
+      if (!data || typeof data !== 'object') {
+        callback?.({ ok: false, error: 'INVALID_PAYLOAD' });
+        return;
+      }
+
+      const user = socket.data.user;
+      if (!user) {
+        callback?.({ ok: false, error: 'UNAUTHENTICATED' });
+        return;
+      }
+
+      const { channelId, conversationId } = data as {
+        channelId?: unknown;
+        conversationId?: unknown;
+      };
+
+      if (
+        (!channelId && !conversationId) ||
+        (channelId && conversationId) ||
+        (channelId && typeof channelId !== 'string') ||
+        (conversationId && typeof conversationId !== 'string')
+      ) {
+        callback?.({ ok: false, error: 'INVALID_CONTAINER' });
+        return;
+      }
+
+      try {
+        const prisma = getPrisma();
+        let containerType: TypingContainerType;
+        let containerId: string;
+        let roomName: string;
+
+        if (channelId) {
+          const channel = await authorizeChannelAccess(prisma, {
+            channelId: channelId as string,
+            userId: user.id,
+          });
+          if (!channel) {
+            callback?.({ ok: false, error: 'FORBIDDEN' });
+            return;
+          }
+          containerType = 'channel';
+          containerId = channelId as string;
+          roomName = `channel:${containerId}`;
+        } else {
+          const conversation = await authorizeDirectConversationAccess(prisma, {
+            conversationId: conversationId as string,
+            userId: user.id,
+          });
+          if (!conversation) {
+            callback?.({ ok: false, error: 'FORBIDDEN' });
+            return;
+          }
+          containerType = 'direct_message';
+          containerId = conversationId as string;
+          roomName = `direct-message:${containerId}`;
+        }
+
+        const transition = typingRegistry.startTyping(
+          user.id,
+          socket.id,
+          containerType,
+          containerId,
+        );
+
+        if (transition.changed) {
+          socket.to(roomName).emit('typing:started', {
+            type: 'typing:started',
+            userId: user.id,
+            ...(containerType === 'channel'
+              ? { channelId: containerId }
+              : { conversationId: containerId }),
+          });
+        }
+
+        callback?.({ ok: true });
+      } catch {
+        callback?.({ ok: false, error: 'INTERNAL_ERROR' });
+      }
+    });
+
+    socket.on('typing:stop', async (data, callback) => {
+      if (!data || typeof data !== 'object') {
+        callback?.({ ok: false, error: 'INVALID_PAYLOAD' });
+        return;
+      }
+
+      const user = socket.data.user;
+      if (!user) {
+        callback?.({ ok: false, error: 'UNAUTHENTICATED' });
+        return;
+      }
+
+      const { channelId, conversationId } = data as {
+        channelId?: unknown;
+        conversationId?: unknown;
+      };
+
+      if (
+        (!channelId && !conversationId) ||
+        (channelId && conversationId) ||
+        (channelId && typeof channelId !== 'string') ||
+        (conversationId && typeof conversationId !== 'string')
+      ) {
+        callback?.({ ok: false, error: 'INVALID_CONTAINER' });
+        return;
+      }
+
+      const containerType: TypingContainerType = channelId ? 'channel' : 'direct_message';
+      const containerId = (channelId || conversationId) as string;
+      const roomName =
+        containerType === 'channel' ? `channel:${containerId}` : `direct-message:${containerId}`;
+
+      const transition = typingRegistry.stopTyping(user.id, socket.id, containerType, containerId);
+
+      if (transition.changed) {
+        socket.to(roomName).emit('typing:stopped', {
+          type: 'typing:stopped',
+          userId: user.id,
+          ...(containerType === 'channel'
+            ? { channelId: containerId }
+            : { conversationId: containerId }),
+        });
+      }
+
+      callback?.({ ok: true });
+    });
+
+    socket.on('disconnect', () => {
+      // Clean up presence
+      const presenceTransition = presenceRegistry.removeSocket(socket.id);
+      if (presenceTransition && presenceTransition.changed) {
+        void broadcastPresenceChange(
+          presenceTransition.userId,
+          presenceTransition.currentStatus,
+          presenceTransition.lastSeenAt,
+        );
+      }
+
+      // Clean up typing for this socket
+      const typingTransitions = typingRegistry.handleSocketDisconnect(socket.id);
+      for (const t of typingTransitions) {
+        const roomName =
+          t.containerType === 'channel'
+            ? `channel:${t.containerId}`
+            : `direct-message:${t.containerId}`;
+        io.to(roomName).emit('typing:stopped', {
+          type: 'typing:stopped',
+          userId: t.userId,
+          ...(t.containerType === 'channel'
+            ? { channelId: t.containerId }
+            : { conversationId: t.containerId }),
+        });
+      }
+    });
+  });
+
+  // Setup typing timeout callback for broadcast
+  typingRegistry.setOnUserStoppedTyping((transition: TypingTransition) => {
+    const roomName =
+      transition.containerType === 'channel'
+        ? `channel:${transition.containerId}`
+        : `direct-message:${transition.containerId}`;
+    io.to(roomName).emit('typing:stopped', {
+      type: 'typing:stopped',
+      userId: transition.userId,
+      ...(transition.containerType === 'channel'
+        ? { channelId: transition.containerId }
+        : { conversationId: transition.containerId }),
+    });
   });
 
   ioInstance = io;
@@ -642,3 +847,68 @@ export function emitNotificationReadAll(
     updatedCount: payload.updatedCount,
   });
 }
+
+/**
+ * Broadcast presence changes to all users who share at least one workspace
+ * with the target user (workspace-scoped delivery).
+ */
+export async function broadcastPresenceChange(
+  userId: string,
+  status: PresenceStatus,
+  lastSeenAt: string | null,
+): Promise<void> {
+  if (!ioInstance) return;
+
+  try {
+    const prisma = getPrisma();
+    if (!prisma || !prisma.workspaceMembership) {
+      return;
+    }
+    // Find all workspaces this user is a member of
+    const userMemberships = await prisma.workspaceMembership.findMany({
+      where: { userId },
+      select: { workspaceId: true },
+    });
+
+    if (userMemberships.length === 0) {
+      return;
+    }
+
+    const workspaceIds = userMemberships.map((m) => m.workspaceId);
+
+    // Find all peer users across these workspaces
+    const peerMemberships = await prisma.workspaceMembership.findMany({
+      where: { workspaceId: { in: workspaceIds } },
+      select: { userId: true },
+    });
+
+    const peerUserIds = new Set<string>();
+    for (const m of peerMemberships) {
+      if (m.userId !== userId) {
+        peerUserIds.add(m.userId);
+      }
+    }
+
+    const payload = {
+      type: 'presence:changed' as const,
+      userId,
+      status,
+      lastSeenAt,
+    };
+
+    for (const peerId of peerUserIds) {
+      ioInstance.to(userRoomName(peerId)).emit('presence:changed', payload);
+    }
+  } catch (error) {
+    console.error('[realtime] failed to broadcast presence change', { userId, error });
+  }
+}
+
+export { presenceRegistry, type PresenceStatus, type UserPresence } from './presence';
+export {
+  typingRegistry,
+  TYPING_TIMEOUT_MS,
+  type TypingContainerType,
+  type TypingContainerKey,
+  type TypingTransition,
+} from './typing';

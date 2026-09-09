@@ -10,6 +10,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { getApiBaseUrl } from '../../lib/config';
+import { usePresence } from '../../lib/use-presence';
 import { useWorkspaceMembers } from '../../lib/use-workspace-members';
 import {
   addConversationParticipant,
@@ -19,6 +20,7 @@ import {
   type DirectConversation,
 } from '../../lib/messages';
 import { AuthError } from '../auth/AuthError';
+import { PresenceIndicator } from './PresenceIndicator';
 
 export interface GroupMembersDialogProps {
   conversation: DirectConversation;
@@ -48,6 +50,7 @@ export function GroupMembersDialog({
   const [confirmLeave, setConfirmLeave] = useState(false);
 
   const { state: membersState } = useWorkspaceMembers(workspaceId);
+  const { getPresence } = usePresence(workspaceId);
 
   const currentUserParticipant = useMemo(() => {
     return conversation.participants.find((p) => p.id === currentUserId);
@@ -438,11 +441,16 @@ export function GroupMembersDialog({
                 return (
                   <li key={p.id} className="flex items-center justify-between p-2">
                     <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                      <span
-                        aria-hidden="true"
-                        className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-stone-200 text-[10px] font-medium text-stone-700"
-                      >
-                        {initial}
+                      <span className="relative inline-flex shrink-0">
+                        <span
+                          aria-hidden="true"
+                          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-stone-200 text-[10px] font-medium text-stone-700"
+                        >
+                          {initial}
+                        </span>
+                        <span className="absolute bottom-0 right-0 translate-x-[15%] translate-y-[15%]">
+                          <PresenceIndicator status={getPresence(p.id).status} size="sm" />
+                        </span>
                       </span>
                       <div className="min-w-0 flex-1">
                         <p className="text-xs font-medium text-zinc-900 truncate">
