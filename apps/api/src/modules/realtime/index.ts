@@ -90,6 +90,46 @@ export interface ServerToClientEvents {
     conversationId: string;
     userId: string;
   }) => void;
+  'notification:new': (payload: {
+    type: 'notification:new';
+    notification: NotificationPayload;
+  }) => void;
+  'notification:read': (payload: {
+    type: 'notification:read';
+    id: string;
+    workspaceId: string;
+    readAt: string;
+  }) => void;
+  'notification:read-all': (payload: {
+    type: 'notification:read-all';
+    workspaceId: string;
+    readAt: string;
+    updatedCount: number;
+  }) => void;
+}
+
+/** Structured notification payload for realtime delivery (4H.5 shape). */
+export interface NotificationPayload {
+  id: string;
+  type: string;
+  workspaceId: string;
+  recipientUserId: string;
+  actorUserId: string;
+  actorName: string;
+  actorImage: string | null;
+  messageId: string | null;
+  conversationId: string | null;
+  channelId: string | null;
+  threadRootMessageId: string | null;
+  channelName: string | null;
+  conversationName: string | null;
+  createdAt: string;
+  readAt: string | null;
+}
+
+/** Per-user room name. Joined automatically on connect; never client-chosen. */
+export function userRoomName(userId: string): string {
+  return `user:${userId}`;
 }
 
 export interface ClientToServerEvents {
@@ -174,6 +214,14 @@ export function initRealtime(
   );
 
   io.on('connection', (socket) => {
+    // Per-user notification room, joined automatically from the
+    // session-authenticated identity. There is intentionally no client event
+    // to join another user's room. Join is synchronous with the default
+    // in-memory adapter; delivery falls back to REST resync regardless.
+    const connectedUser = socket.data.user;
+    if (connectedUser) {
+      void socket.join(userRoomName(connectedUser.id));
+    }
     // Channel subscription with server-side authorization check
     socket.on('channel:join', async (data, callback) => {
       if (!data || typeof data !== 'object' || typeof data.channelId !== 'string') {
@@ -301,7 +349,9 @@ export function closeRealtime(): Promise<void> {
 
 /**
  * Broadcaster API — decoupled from Socket.IO internals.
- * Routes call these only after database commits succeed.
+ * Routes call these only after database commits succeed. Notification
+ * delivery is the one exception: generation runs inside message services
+ * (not routes), so the notification service emits post-commit itself.
  */
 export function emitMessageCreated(channelId: string, message: MessageResponse): void {
   if (!ioInstance) return;
@@ -539,4 +589,56 @@ export function removeUserFromDirectConversationRoom(conversationId: string, use
       void socket.leave(roomName);
     }
   }
+}
+
+/**
+ * Deliver a persisted notification to its recipient's private user room.
+ * Call only after the notification row has committed. The payload mirrors
+ * the 4H.5 REST shape; no other user can receive it.
+ */
+export function emitNotificationNew(
+  recipientUserId: string,
+  notification: NotificationPayload,
+): void {
+  if (!ioInstance) return;
+  ioInstance.to(userRoomName(recipientUserId)).emit('notification:new', {
+    type: 'notification:new',
+    notification,
+  });
+}
+
+/**
+ * Deliver a persisted read transition to the recipient's private user room.
+ * Call only after the readAt update has committed, and only for actual
+ * unread → read transitions (idempotent re-marks emit nothing).
+ */
+export function emitNotificationRead(
+  recipientUserId: string,
+  payload: { id: string; workspaceId: string; readAt: Date | string },
+): void {
+  if (!ioInstance) return;
+  ioInstance.to(userRoomName(recipientUserId)).emit('notification:read', {
+    type: 'notification:read',
+    id: payload.id,
+    workspaceId: payload.workspaceId,
+    readAt: typeof payload.readAt === 'string' ? payload.readAt : payload.readAt.toISOString(),
+  });
+}
+
+/**
+ * Deliver a persisted read-all transition to the user's private room.
+ * Call only after the update has committed and only when at least one row
+ * changed (updatedCount === 0 emits nothing).
+ */
+export function emitNotificationReadAll(
+  userId: string,
+  payload: { workspaceId: string; readAt: Date | string; updatedCount: number },
+): void {
+  if (!ioInstance) return;
+  ioInstance.to(userRoomName(userId)).emit('notification:read-all', {
+    type: 'notification:read-all',
+    workspaceId: payload.workspaceId,
+    readAt: typeof payload.readAt === 'string' ? payload.readAt : payload.readAt.toISOString(),
+    updatedCount: payload.updatedCount,
+  });
 }

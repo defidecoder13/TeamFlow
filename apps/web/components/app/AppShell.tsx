@@ -35,7 +35,12 @@ export function AppShell({
       <WorkspaceRail user={user} />
       <Sidebar workspaceName={workspaceName} workspaceId={workspaceId} currentUserId={user.id} />
       <div className="flex min-w-0 flex-1 flex-col">
-        <TopBar user={user} workspaceName={workspaceName} location={location} />
+        <TopBar
+          user={user}
+          workspaceName={workspaceName}
+          workspaceId={workspaceId}
+          location={location}
+        />
         {contentLayout === 'full' ? (
           <main className="flex min-h-0 flex-1 flex-col bg-white">{children}</main>
         ) : (

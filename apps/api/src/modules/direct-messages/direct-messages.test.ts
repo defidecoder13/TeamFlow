@@ -79,6 +79,17 @@ const mockPrisma = {
     create: vi.fn(),
     deleteMany: vi.fn(),
   },
+  messageMention: {
+    findMany: vi.fn().mockResolvedValue([]),
+    createMany: vi.fn().mockResolvedValue({ count: 0 }),
+    deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+  },
+  userNotificationPreference: {
+    findMany: vi.fn().mockResolvedValue([]),
+  },
+  notification: {
+    createMany: vi.fn().mockResolvedValue({ count: 0 }),
+  },
   directMessageReadState: {
     findUnique: vi.fn(),
     findMany: vi.fn(),
@@ -94,6 +105,12 @@ const prisma = mockPrisma as unknown as PrismaClient;
 
 vi.mock('../auth/prisma', () => ({
   getPrisma: () => mockPrisma,
+}));
+
+// Notification generation is a separate 4H.4 unit; service tests assert the
+// message write path only.
+vi.mock('../notifications/service', () => ({
+  generateNotificationsForMessageSafely: vi.fn().mockResolvedValue(undefined),
 }));
 
 describe('direct-messages validation & cursor', () => {

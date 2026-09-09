@@ -1,0 +1,151 @@
+/**
+ * NotificationPreferencesPage tests (Phase 4H.8).
+ */
+import { render, screen } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { SessionState } from '../../../../lib/use-session-user';
+import type { WorkspacesState } from '../../../../lib/use-workspaces';
+import type { NotificationPreferencesState } from '../../../../lib/use-notification-preferences';
+import NotificationPreferencesPage from './page';
+
+const {
+  replaceMock,
+  retryMock,
+  retryPrefsMock,
+  updatePreferenceMock,
+  sessionState,
+  workspacesState,
+  prefsState,
+} = vi.hoisted(() => ({
+  replaceMock: vi.fn(),
+  retryMock: vi.fn(),
+  retryPrefsMock: vi.fn(),
+  updatePreferenceMock: vi.fn(),
+  sessionState: { value: { status: 'loading' } as SessionState },
+  workspacesState: { value: { status: 'idle' } as WorkspacesState },
+  prefsState: { value: { status: 'idle' } as NotificationPreferencesState },
+}));
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ replace: replaceMock, refresh: vi.fn() }),
+  usePathname: () => '/app/settings/notifications',
+}));
+
+vi.mock('../../../../lib/use-session-user', () => ({
+  useSessionUser: () => sessionState.value,
+}));
+
+vi.mock('../../../../lib/use-workspaces', () => ({
+  useWorkspaces: () => ({
+    state: workspacesState.value,
+    retry: retryMock,
+    addWorkspace: vi.fn(),
+  }),
+}));
+
+vi.mock('../../../../lib/use-notification-preferences', () => ({
+  useNotificationPreferences: () => ({
+    state: prefsState.value,
+    isSaving: false,
+    saveError: null,
+    updatePreference: updatePreferenceMock,
+    retry: retryPrefsMock,
+  }),
+}));
+
+vi.mock('../../../../lib/use-channels', () => ({
+  useChannels: () => ({ state: { status: 'ready', channels: [] } }),
+}));
+
+vi.mock('../../../../lib/use-direct-messages', () => ({
+  useDirectMessages: () => ({ state: { status: 'ready', conversations: [] } }),
+}));
+
+vi.mock('../../../../lib/use-notifications', () => ({
+  useNotifications: () => ({
+    state: { status: 'ready', items: [] },
+    hasUnread: false,
+    markRead: vi.fn(),
+    markAllRead: vi.fn(),
+    loadMore: vi.fn(),
+    retry: vi.fn(),
+  }),
+}));
+
+describe('NotificationPreferencesPage', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    sessionState.value = {
+      status: 'authenticated',
+      user: {
+        id: 'u-1',
+        name: 'Alice',
+        email: 'alice@example.com',
+        emailVerified: true,
+        image: null,
+      },
+    };
+    workspacesState.value = {
+      status: 'ready',
+      workspaces: [
+        {
+          id: 'w-1',
+          name: 'Acme',
+          slug: 'acme',
+          role: 'ADMIN',
+          createdAt: '2026-09-01',
+          updatedAt: '2026-09-01',
+        },
+      ],
+      current: {
+        id: 'w-1',
+        name: 'Acme',
+        slug: 'acme',
+        role: 'ADMIN',
+        createdAt: '2026-09-01',
+        updatedAt: '2026-09-01',
+      },
+    };
+  });
+
+  it('renders skeleton while loading preferences', () => {
+    prefsState.value = { status: 'loading' };
+
+    render(<NotificationPreferencesPage />);
+    expect(screen.getByRole('status', { name: 'Loading preferences' })).toBeInTheDocument();
+  });
+
+  it('renders form when preferences are ready', () => {
+    prefsState.value = {
+      status: 'ready',
+      preferences: {
+        mentionDelivery: 'ALL',
+        dmDelivery: 'NONE',
+        threadReplyDelivery: 'ALL',
+      },
+    };
+
+    render(<NotificationPreferencesPage />);
+    expect(screen.getByText('Notification Triggers')).toBeInTheDocument();
+    expect(screen.getByRole('radiogroup', { name: 'Mentions' })).toBeInTheDocument();
+    expect(screen.getByRole('radiogroup', { name: 'Direct & group messages' })).toBeInTheDocument();
+    expect(screen.getByRole('radiogroup', { name: 'Thread replies' })).toBeInTheDocument();
+  });
+
+  it('renders error panel on preferences load failure', () => {
+    prefsState.value = {
+      status: 'error',
+      message: 'Failed to connect to server',
+    };
+
+    render(<NotificationPreferencesPage />);
+    expect(screen.getByRole('alert')).toHaveTextContent('Failed to connect to server');
+  });
+
+  it('redirects to sign-in when session is unauthenticated', () => {
+    sessionState.value = { status: 'unauthenticated' };
+
+    render(<NotificationPreferencesPage />);
+    expect(replaceMock).toHaveBeenCalledWith('/sign-in');
+  });
+});

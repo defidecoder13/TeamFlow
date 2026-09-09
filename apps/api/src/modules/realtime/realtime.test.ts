@@ -14,6 +14,9 @@ import {
   emitMessageCreated,
   emitMessageDeleted,
   emitMessageUpdated,
+  emitNotificationNew,
+  emitNotificationRead,
+  emitNotificationReadAll,
   initRealtime,
 } from './index';
 
@@ -56,10 +59,11 @@ describe('Realtime Gateway (Socket.IO)', () => {
   let serverPort: number;
   let authCookie: string;
   let auth: ReturnType<typeof createTestAuth>;
+  let app: ReturnType<typeof createApp>;
 
   beforeAll(async () => {
     auth = createTestAuth();
-    const app = createApp({ auth });
+    app = createApp({ auth });
     server = http.createServer(app);
     initRealtime(server, () => auth);
 
@@ -533,5 +537,167 @@ describe('Realtime Gateway (Socket.IO)', () => {
     });
 
     client.disconnect();
+  });
+
+  let secondUserCounter = 0;
+  async function signUpSecondUser(
+    app: ReturnType<typeof createApp>,
+  ): Promise<{ cookie: string; userId: string }> {
+    secondUserCounter += 1;
+    const agent = request.agent(app);
+    const res = await agent
+      .post('/api/auth/sign-up/email')
+      .set('Origin', TEST_AUTH_URL)
+      .send({
+        name: 'Realtime User Two',
+        email: `realtime-two-${secondUserCounter}@test.teamflow.local`,
+        password: 'realtime-test-password-12345',
+      });
+    expect(res.status).toBeLessThan(300);
+    const cookies = res.headers['set-cookie'];
+    const cookie = Array.isArray(cookies) ? cookies[0]! : (cookies as unknown as string);
+    const userId = (res.body as { user: { id: string } }).user.id;
+    return { cookie, userId };
+  }
+
+  function notificationPayload(recipientUserId: string) {
+    return {
+      id: 'n-1',
+      type: 'MENTION',
+      workspaceId: 'ws-1',
+      recipientUserId,
+      actorUserId: 'u-actor',
+      actorName: 'Actor',
+      actorImage: null,
+      messageId: 'm-1',
+      conversationId: null,
+      channelId: 'ch-1',
+      threadRootMessageId: null,
+      channelName: 'general',
+      conversationName: null,
+      createdAt: '2026-09-09T02:00:00.000Z',
+      readAt: null,
+    };
+  }
+
+  it('auto-joins the authenticated user room and isolates notification delivery', async () => {
+    const second = await signUpSecondUser(app);
+    const firstUserId = (
+      await request(app).post('/api/auth/sign-in/email').set('Origin', TEST_AUTH_URL).send({
+        email: TEST_USER.email,
+        password: TEST_USER.password,
+      })
+    ).body.user.id as string;
+
+    const clientA = createClient(authCookie);
+    const clientB = createClient(second.cookie);
+
+    await Promise.all([
+      new Promise<void>((resolve) => {
+        clientA.on('connect', () => resolve());
+        clientA.connect();
+      }),
+      new Promise<void>((resolve) => {
+        clientB.on('connect', () => resolve());
+        clientB.connect();
+      }),
+    ]);
+
+    const eventsA: unknown[] = [];
+    const eventsB: unknown[] = [];
+    clientA.on('notification:new', (ev) => eventsA.push(ev));
+    clientB.on('notification:new', (ev) => eventsB.push(ev));
+
+    // No client-driven room join exists; delivery to B must not reach A.
+    emitNotificationNew(second.userId, notificationPayload(second.userId));
+
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    expect(eventsB).toHaveLength(1);
+    expect(eventsB[0]).toEqual({
+      type: 'notification:new',
+      notification: notificationPayload(second.userId),
+    });
+    expect(eventsA).toHaveLength(0);
+    expect(firstUserId).not.toBe(second.userId);
+
+    clientA.disconnect();
+    clientB.disconnect();
+  });
+
+  it('ignores unknown client events without breaking the connection', async () => {
+    const client = createClient(authCookie);
+    await new Promise<void>((resolve) => {
+      client.on('connect', () => resolve());
+      client.connect();
+    });
+
+    // There is no handler for joining other users' rooms; garbage is a no-op.
+    client.emit('user:join' as never, { userId: 'u-evil' } as never);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(client.connected).toBe(true);
+
+    client.disconnect();
+  });
+
+  it('delivers notification:read and notification:read-all to the recipient room only', async () => {
+    const second = await signUpSecondUser(app);
+    const clientA = createClient(authCookie);
+    const clientB = createClient(second.cookie);
+
+    await Promise.all([
+      new Promise<void>((resolve) => {
+        clientA.on('connect', () => resolve());
+        clientA.connect();
+      }),
+      new Promise<void>((resolve) => {
+        clientB.on('connect', () => resolve());
+        clientB.connect();
+      }),
+    ]);
+
+    const readA: unknown[] = [];
+    const readB: unknown[] = [];
+    const readAllA: unknown[] = [];
+    const readAllB: unknown[] = [];
+    clientA.on('notification:read', (ev) => readA.push(ev));
+    clientB.on('notification:read', (ev) => readB.push(ev));
+    clientA.on('notification:read-all', (ev) => readAllA.push(ev));
+    clientB.on('notification:read-all', (ev) => readAllB.push(ev));
+
+    emitNotificationRead(second.userId, {
+      id: 'n-9',
+      workspaceId: 'ws-1',
+      readAt: new Date('2026-09-09T03:00:00.000Z'),
+    });
+    emitNotificationReadAll(second.userId, {
+      workspaceId: 'ws-1',
+      readAt: new Date('2026-09-09T03:01:00.000Z'),
+      updatedCount: 4,
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    expect(readB).toEqual([
+      {
+        type: 'notification:read',
+        id: 'n-9',
+        workspaceId: 'ws-1',
+        readAt: '2026-09-09T03:00:00.000Z',
+      },
+    ]);
+    expect(readAllB).toEqual([
+      {
+        type: 'notification:read-all',
+        workspaceId: 'ws-1',
+        readAt: '2026-09-09T03:01:00.000Z',
+        updatedCount: 4,
+      },
+    ]);
+    expect(readA).toHaveLength(0);
+    expect(readAllA).toHaveLength(0);
+
+    clientA.disconnect();
+    clientB.disconnect();
   });
 });

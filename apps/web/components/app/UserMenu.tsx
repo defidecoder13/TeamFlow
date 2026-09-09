@@ -8,6 +8,7 @@
 
 'use client';
 
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import type { SessionUser } from '../../lib/auth-guard';
@@ -103,16 +104,15 @@ export function UserMenu({ user }: { user: SessionUser }) {
               <PersonIcon className="h-4 w-4" />
               Profile
             </button>
-            <button
-              type="button"
+            <Link
+              href="/app/settings/notifications"
               role="menuitem"
-              disabled
-              title="Settings arrive in a later phase"
-              className="flex h-8 w-full items-center gap-2.5 rounded-md px-2 text-[13px] text-stone-400 disabled:cursor-not-allowed"
+              onClick={() => setOpen(false)}
+              className="flex h-8 w-full items-center gap-2.5 rounded-md px-2 text-[13px] text-stone-700 transition-colors hover:bg-stone-900/[0.05]"
             >
               <SettingsIcon className="h-4 w-4" />
               Settings
-            </button>
+            </Link>
             <div aria-hidden="true" className="mx-2 my-1.5 border-t border-stone-100" />
             <button
               type="button"

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { Message } from '../../lib/messages';
 import { useThreadMessages } from '../../lib/use-thread-messages';
+import { scrollToMessage, useSeekMessage } from '../../lib/use-deep-link';
 import { CloseIcon } from './icons';
 import { UserAvatar } from './UserAvatar';
 import { formatMessageTime } from './message-utils';
@@ -16,9 +17,16 @@ interface ThreadPanelProps {
   rootMessage: Message;
   userId: string | null;
   onClose: () => void;
+  /** Search deep-link: highlight + scroll to this reply once loaded. */
+  highlightedReplyId?: string | null;
 }
 
-export function ThreadPanel({ rootMessage, userId, onClose }: ThreadPanelProps) {
+export function ThreadPanel({
+  rootMessage,
+  userId,
+  onClose,
+  highlightedReplyId,
+}: ThreadPanelProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const repliesScrollRef = useRef<HTMLDivElement>(null);
   const scrollPosBeforeLoadRef = useRef<{ scrollHeight: number; scrollTop: number } | null>(null);
@@ -98,6 +106,29 @@ export function ThreadPanel({ rootMessage, userId, onClose }: ThreadPanelProps) 
     }
     prevRepliesCountRef.current = replies.length;
   }, [replies.length, rootMessage.id]);
+
+  // Search deep link: page back through thread history until the linked
+  // reply loads, then scroll it into view. Reply ids are unique to this
+  // panel, so a document query cannot collide with the main message list
+  // (roots only). Failures resolve to missing and leave the thread open.
+  const replySeekStatus = useSeekMessage({
+    active: state.status === 'ready',
+    targetId: highlightedReplyId ?? null,
+    messages: replies,
+    hasMore,
+    isLoadingOlder,
+    loadOlderError,
+    loadOlder,
+  });
+  useEffect(() => {
+    if (replySeekStatus !== 'found' || !highlightedReplyId) {
+      return;
+    }
+    const targetId = highlightedReplyId;
+    requestAnimationFrame(() => {
+      scrollToMessage(targetId);
+    });
+  }, [replySeekStatus, highlightedReplyId]);
 
   // Handle Escape key at panel level (cancel edit/delete first, otherwise close panel)
   useEffect(() => {
@@ -348,6 +379,7 @@ export function ThreadPanel({ rootMessage, userId, onClose }: ThreadPanelProps) 
                     isCurrentUser={isCurrentUser}
                     showTimestamp={true}
                     previousMessage={prev}
+                    highlighted={highlightedReplyId === reply.id}
                     onEdit={handleEdit}
                     onDelete={handleDeleteRequest}
                   />

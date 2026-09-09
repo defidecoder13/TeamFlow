@@ -9,6 +9,8 @@
 
 import { randomUUID } from 'node:crypto';
 import type { PrismaClient } from '@teamflow/db';
+import { createMentionsForMessage, syncMessageMentions } from '../mentions/service';
+import { generateNotificationsForMessageSafely } from '../notifications/service';
 import { authorizeChannelAccess, isMessageAuthor } from './authorization';
 import { decodeMessageCursor, encodeMessageCursor } from './cursor';
 
@@ -157,6 +159,18 @@ export async function createMessage(
     },
     include: { author: { select: authorSelect } },
   });
+  // Mention persistence runs post-commit in its own transaction, keeping this
+  // write path unchanged (4H.1 §13). Errors propagate: a persisted message
+  // without synced mentions is a loud failure, never silent drift.
+  await createMentionsForMessage(prisma, {
+    messageId: message.id,
+    body: message.body,
+    channelId: message.channelId,
+    directMessageConversationId: message.directMessageConversationId,
+  });
+  // Notification generation runs post-commit after mentions persist (§21):
+  // failures are logged, never rolled back into the message write.
+  await generateNotificationsForMessageSafely(prisma, message.id);
   return toResponse(message);
 }
 
@@ -292,6 +306,15 @@ export async function createThreadReply(
     { maxWait: 10000, timeout: 20000 },
   );
 
+  // Post-commit, outside the reply transaction (4H.1 §13).
+  await createMentionsForMessage(prisma, {
+    messageId: created.id,
+    body: created.body,
+    channelId: created.channelId,
+    directMessageConversationId: created.directMessageConversationId,
+  });
+  await generateNotificationsForMessageSafely(prisma, created.id);
+
   return {
     reply: toResponse(created),
     parent: toResponse(updatedParent),
@@ -413,6 +436,8 @@ export async function updateMessage(
     data: { body: input.body, editedAt: new Date() },
     include: { author: { select: authorSelect } },
   });
+  // Tombstoned messages throw above, so sync only rewrites live mention sets.
+  await syncMessageMentions(prisma, updated.id);
   return toResponse(updated);
 }
 
@@ -434,6 +459,9 @@ export async function deleteMessage(
     data: { deletedAt: new Date() },
     include: { author: { select: authorSelect } },
   });
+  // Soft-delete keeps the row (no DB cascade fires); clear mentions so the
+  // tombstone carries no resolvable mentions.
+  await syncMessageMentions(prisma, deleted.id);
   return toResponse(deleted);
 }
 

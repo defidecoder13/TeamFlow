@@ -12,6 +12,11 @@ import {
   createInvitationAcceptRouter,
   createWorkspaceInvitationsRouter,
 } from './modules/invitations/index';
+import { createSearchRouter } from './modules/search/index';
+import {
+  createNotificationsRouter,
+  createNotificationPreferencesRouter,
+} from './modules/notifications/index';
 import { createWorkspacesRouter } from './modules/workspaces/index';
 
 /** Optional overrides for tests (e.g. a memory-adapter auth instance). */
@@ -62,6 +67,12 @@ export function createApp(deps: AppDeps = {}): Express {
     createWorkspaceDirectMessagesRouter(resolveAuth),
   );
   app.use('/api/direct-messages', createDirectMessagesRouter(resolveAuth));
+  app.use('/api/workspaces/:workspaceId/search', createSearchRouter(resolveAuth));
+  app.use('/api/workspaces/:workspaceId/notifications', createNotificationsRouter(resolveAuth));
+  app.use(
+    '/api/users/me/notification-preferences',
+    createNotificationPreferencesRouter(resolveAuth),
+  );
   app.use(
     '/api/workspaces/:workspaceId/invitations',
     createWorkspaceInvitationsRouter(resolveAuth),

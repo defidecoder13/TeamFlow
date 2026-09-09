@@ -13,6 +13,8 @@ import {
   authorizeDirectConversationAdmin,
   canCreateDirectConversation,
 } from './authorization';
+import { createMentionsForMessage } from '../mentions/service';
+import { generateNotificationsForMessageSafely } from '../notifications/service';
 import { decodeConversationCursor, encodeConversationCursor } from './cursor';
 import { decodeMessageCursor, encodeMessageCursor } from '../messages/cursor';
 import type { MessagePage, MessageResponse } from '../messages/service';
@@ -504,6 +506,15 @@ export async function createDirectMessage(
 
     return { message };
   });
+
+  // Post-commit, outside the message transaction (4H.1 §13).
+  await createMentionsForMessage(prisma, {
+    messageId: message.id,
+    body: message.body,
+    channelId: message.channelId,
+    directMessageConversationId: message.directMessageConversationId,
+  });
+  await generateNotificationsForMessageSafely(prisma, message.id);
 
   return {
     id: message.id,
@@ -1106,75 +1117,79 @@ export async function addConversationParticipant(
     throw new DirectMessageConflictError('User is already a participant in this conversation.');
   }
 
-  const { newParticipant, updatedConversation } = await prisma.$transaction(async (tx) => {
-    // 1. Acquire row lock on conversation to serialize concurrent participant additions
-    await tx.directMessageConversation.update({
-      where: { id: input.conversationId },
-      data: { updatedAt: new Date() },
-    });
+  const { newParticipant, updatedConversation } = await prisma.$transaction(
+    async (tx) => {
+      // 1. Acquire row lock on conversation to serialize concurrent participant additions
+      await tx.directMessageConversation.update({
+        where: { id: input.conversationId },
+        data: { updatedAt: new Date() },
+      });
 
-    const currentCount = await tx.directMessageParticipant.count({
-      where: { conversationId: input.conversationId },
-    });
-    if (currentCount >= 20) {
-      throw new DirectMessageConflictError('A group conversation cannot exceed 20 participants.');
-    }
+      const currentCount = await tx.directMessageParticipant.count({
+        where: { conversationId: input.conversationId },
+      });
+      if (currentCount >= 20) {
+        throw new DirectMessageConflictError('A group conversation cannot exceed 20 participants.');
+      }
 
-    const participant = await tx.directMessageParticipant.create({
-      data: {
-        id: randomUUID(),
-        conversationId: input.conversationId,
-        userId: input.userId,
-        role: 'MEMBER',
-      },
-      include: {
-        user: { select: userProfileSelect },
-      },
-    });
-
-    const latestMessage = await tx.message.findFirst({
-      where: { directMessageConversationId: input.conversationId },
-      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-      select: { id: true },
-    });
-
-    if (latestMessage) {
-      await tx.directMessageReadState.upsert({
-        where: {
-          userId_conversationId: {
-            userId: input.userId,
-            conversationId: input.conversationId,
-          },
-        },
-        create: {
+      const participant = await tx.directMessageParticipant.create({
+        data: {
           id: randomUUID(),
-          userId: input.userId,
           conversationId: input.conversationId,
-          lastReadMessageId: latestMessage.id,
-          lastReadAt: new Date(),
+          userId: input.userId,
+          role: 'MEMBER',
         },
-        update: {
-          lastReadMessageId: latestMessage.id,
-          lastReadAt: new Date(),
+        include: {
+          user: { select: userProfileSelect },
         },
       });
-    }
 
-    const updated = await tx.directMessageConversation.findUnique({
-      where: { id: input.conversationId },
-      include: {
-        ...conversationInclude,
-        _count: {
-          select: { participants: true },
+      const latestMessage = await tx.message.findFirst({
+        where: { directMessageConversationId: input.conversationId },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        select: { id: true },
+      });
+
+      if (latestMessage) {
+        await tx.directMessageReadState.upsert({
+          where: {
+            userId_conversationId: {
+              userId: input.userId,
+              conversationId: input.conversationId,
+            },
+          },
+          create: {
+            id: randomUUID(),
+            userId: input.userId,
+            conversationId: input.conversationId,
+            lastReadMessageId: latestMessage.id,
+            lastReadAt: new Date(),
+          },
+          update: {
+            lastReadMessageId: latestMessage.id,
+            lastReadAt: new Date(),
+          },
+        });
+      }
+
+      const updated = await tx.directMessageConversation.findUnique({
+        where: { id: input.conversationId },
+        include: {
+          ...conversationInclude,
+          _count: {
+            select: { participants: true },
+          },
         },
-      },
-    });
-    if (!updated) {
-      throw new DirectMessageNotFoundError('Conversation not found.');
-    }
+      });
+      if (!updated) {
+        throw new DirectMessageNotFoundError('Conversation not found.');
+      }
 
-    return { newParticipant: participant, updatedConversation: updated };
-  });
+      return { newParticipant: participant, updatedConversation: updated };
+      // Timeout raised to match createThreadReply (slow pooler connections).
+    },
+    { maxWait: 10000, timeout: 20000 },
+  );
 
   emitDirectParticipantAdded(input.conversationId, {
     conversationId: input.conversationId,
@@ -1224,55 +1239,60 @@ export async function removeConversationParticipant(
     );
   }
 
-  await prisma.$transaction(async (tx) => {
-    // 1. Acquire row lock on conversation to serialize concurrent membership mutations
-    await tx.directMessageConversation.update({
-      where: { id: input.conversationId },
-      data: { updatedAt: new Date() },
-    });
+  await prisma.$transaction(
+    async (tx) => {
+      // 1. Acquire row lock on conversation to serialize concurrent membership mutations
+      await tx.directMessageConversation.update({
+        where: { id: input.conversationId },
+        data: { updatedAt: new Date() },
+      });
 
-    const target = await tx.directMessageParticipant.findUnique({
-      where: {
-        conversationId_userId: {
-          conversationId: input.conversationId,
-          userId: input.userId,
+      const target = await tx.directMessageParticipant.findUnique({
+        where: {
+          conversationId_userId: {
+            conversationId: input.conversationId,
+            userId: input.userId,
+          },
         },
-      },
-    });
-    if (!target) {
-      throw new DirectMessageNotFoundError('Participant not found in this conversation.');
-    }
-
-    if (target.role === 'ADMIN') {
-      const adminCount = await tx.directMessageParticipant.count({
-        where: { conversationId: input.conversationId, role: 'ADMIN' },
       });
-      const totalCount = await tx.directMessageParticipant.count({
-        where: { conversationId: input.conversationId },
-      });
-      if (adminCount <= 1 && totalCount > 1) {
-        throw new DirectMessageConflictError(
-          'Cannot remove the sole admin of a group conversation.',
-        );
+      if (!target) {
+        throw new DirectMessageNotFoundError('Participant not found in this conversation.');
       }
-    }
 
-    await tx.directMessageParticipant.delete({
-      where: {
-        conversationId_userId: {
+      if (target.role === 'ADMIN') {
+        const adminCount = await tx.directMessageParticipant.count({
+          where: { conversationId: input.conversationId, role: 'ADMIN' },
+        });
+        const totalCount = await tx.directMessageParticipant.count({
+          where: { conversationId: input.conversationId },
+        });
+        if (adminCount <= 1 && totalCount > 1) {
+          throw new DirectMessageConflictError(
+            'Cannot remove the sole admin of a group conversation.',
+          );
+        }
+      }
+
+      await tx.directMessageParticipant.delete({
+        where: {
+          conversationId_userId: {
+            conversationId: input.conversationId,
+            userId: input.userId,
+          },
+        },
+      });
+
+      await tx.directMessageReadState.deleteMany({
+        where: {
           conversationId: input.conversationId,
           userId: input.userId,
         },
-      },
-    });
-
-    await tx.directMessageReadState.deleteMany({
-      where: {
-        conversationId: input.conversationId,
-        userId: input.userId,
-      },
-    });
-  });
+      });
+      // Bound raised to match createThreadReply: multi-statement membership
+      // transactions exceed the 5s default on high-latency pooler connections.
+    },
+    { maxWait: 10000, timeout: 20000 },
+  );
 
   emitDirectParticipantRemoved(input.conversationId, {
     conversationId: input.conversationId,

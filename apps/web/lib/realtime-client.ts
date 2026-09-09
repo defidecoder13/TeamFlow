@@ -82,6 +82,41 @@ export type RealtimeParticipantRemovedEvent = {
   userId: string;
 };
 
+export type RealtimeNotificationNewEvent = {
+  type: 'notification:new';
+  notification: {
+    id: string;
+    type: string;
+    workspaceId: string;
+    recipientUserId: string;
+    actorUserId: string;
+    actorName: string;
+    actorImage: string | null;
+    messageId: string | null;
+    conversationId: string | null;
+    channelId: string | null;
+    threadRootMessageId: string | null;
+    channelName: string | null;
+    conversationName: string | null;
+    createdAt: string;
+    readAt: string | null;
+  };
+};
+
+export type RealtimeNotificationReadEvent = {
+  type: 'notification:read';
+  id: string;
+  workspaceId: string;
+  readAt: string;
+};
+
+export type RealtimeNotificationReadAllEvent = {
+  type: 'notification:read-all';
+  workspaceId: string;
+  readAt: string;
+  updatedCount: number;
+};
+
 let socketInstance: Socket | null = null;
 
 export function getRealtimeSocket(): Socket {
@@ -268,5 +303,43 @@ export function onRealtimeParticipantRemoved(
   socket.on('conversation:participant-removed', handler);
   return () => {
     socket.off('conversation:participant-removed', handler);
+  };
+}
+
+/**
+ * Notification realtime subscribers (Phase 4H.6, non-visual).
+ *
+ * The server delivers each event only to the recipient's private user room.
+ * Clients merge by notification id (REST initial load, reconnect resync, and
+ * these events can all carry the same row) and recover missed events through
+ * the notification REST API on `onRealtimeReconnect` — no event replay.
+ */
+export function onRealtimeNotificationNew(
+  handler: (event: RealtimeNotificationNewEvent) => void,
+): () => void {
+  const socket = getRealtimeSocket();
+  socket.on('notification:new', handler);
+  return () => {
+    socket.off('notification:new', handler);
+  };
+}
+
+export function onRealtimeNotificationRead(
+  handler: (event: RealtimeNotificationReadEvent) => void,
+): () => void {
+  const socket = getRealtimeSocket();
+  socket.on('notification:read', handler);
+  return () => {
+    socket.off('notification:read', handler);
+  };
+}
+
+export function onRealtimeNotificationReadAll(
+  handler: (event: RealtimeNotificationReadAllEvent) => void,
+): () => void {
+  const socket = getRealtimeSocket();
+  socket.on('notification:read-all', handler);
+  return () => {
+    socket.off('notification:read-all', handler);
   };
 }

@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SessionState } from '../../../../lib/use-session-user';
@@ -119,6 +119,7 @@ function authenticateWithChannel() {
 
 beforeEach(() => {
   replaceMock.mockReset();
+  window.history.replaceState(null, '', '/app/channels/engineering');
   sendMock.mockReset();
   sendMock.mockResolvedValue({ ok: true });
   editMock.mockReset();
@@ -656,6 +657,93 @@ describe('/app/channels/[slug]', () => {
       await user.click(closeButton);
 
       expect(screen.queryByRole('region', { name: /thread panel/i })).toBeNull();
+      expect(container.querySelector('[data-selected-thread-id]')).toBeNull();
+    });
+  });
+
+  describe('search deep links', () => {
+    const linkedMessages = [
+      {
+        id: 'm-own',
+        channelId: 'ch-1',
+        authorId: 'u-1',
+        body: 'My message',
+        createdAt: new Date('2026-09-06T12:00:00.000Z'),
+        updatedAt: new Date('2026-09-06T12:00:00.000Z'),
+        editedAt: null,
+        deletedAt: null,
+        author: { id: 'u-1', name: 'Ada Lovelace', image: null },
+      },
+      {
+        id: 'm-theirs',
+        channelId: 'ch-1',
+        authorId: 'u-2',
+        body: 'Their message',
+        createdAt: new Date('2026-09-06T12:01:00.000Z'),
+        updatedAt: new Date('2026-09-06T12:01:00.000Z'),
+        editedAt: null,
+        deletedAt: null,
+        author: { id: 'u-2', name: 'Grace Hopper', image: null },
+      },
+    ];
+
+    function authenticateWithMessages() {
+      authenticateWithChannel();
+      messagesState.value = {
+        status: 'ready',
+        messages: linkedMessages,
+        hasMore: false,
+        nextCursor: null,
+      };
+    }
+
+    it('highlights a loaded target and consumes the params', async () => {
+      authenticateWithMessages();
+      window.history.replaceState(null, '', '/app/channels/engineering?message=m-theirs');
+      const { container } = render(<ChannelPage />);
+
+      await waitFor(() => {
+        const row = container.querySelector('[data-message-id="m-theirs"]');
+        expect(row?.className).toContain('ring-amber-300');
+      });
+      expect(window.location.search).toBe('');
+      // The other row stays unhighlighted.
+      expect(container.querySelector('[data-message-id="m-own"]')?.className).not.toContain(
+        'ring-amber-300',
+      );
+    });
+
+    it('opens the thread panel for reply links', async () => {
+      authenticateWithMessages();
+      window.history.replaceState(null, '', '/app/channels/engineering?message=m-own&reply=r-9');
+      const { container } = render(<ChannelPage />);
+
+      await waitFor(() => {
+        expect(container.querySelector('[data-selected-thread-id="m-own"]')).not.toBeNull();
+      });
+      expect(window.location.search).toBe('');
+    });
+
+    it('fails gracefully for missing targets and consumes the params', async () => {
+      authenticateWithMessages();
+      window.history.replaceState(null, '', '/app/channels/engineering?message=m-gone');
+      const { container } = render(<ChannelPage />);
+
+      await waitFor(() => {
+        expect(window.location.search).toBe('');
+      });
+      expect(container.querySelector('.ring-amber-300')).toBeNull();
+      expect(container.querySelector('[data-selected-thread-id]')).toBeNull();
+    });
+
+    it('ignores a lone reply param without crashing', async () => {
+      authenticateWithMessages();
+      window.history.replaceState(null, '', '/app/channels/engineering?reply=r-9');
+      const { container } = render(<ChannelPage />);
+
+      await waitFor(() => {
+        expect(window.location.search).toBe('');
+      });
       expect(container.querySelector('[data-selected-thread-id]')).toBeNull();
     });
   });

@@ -27,6 +27,17 @@ const mockPrisma = {
     create: vi.fn(),
     update: vi.fn(),
   },
+  messageMention: {
+    findMany: vi.fn().mockResolvedValue([]),
+    createMany: vi.fn().mockResolvedValue({ count: 0 }),
+    deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+  },
+  userNotificationPreference: {
+    findMany: vi.fn().mockResolvedValue([]),
+  },
+  notification: {
+    createMany: vi.fn().mockResolvedValue({ count: 0 }),
+  },
   $transaction: vi.fn(),
 };
 
@@ -34,18 +45,29 @@ const prisma = mockPrisma as unknown as PrismaClient;
 
 const mockAuthorizeChannelAccess = vi.fn();
 
-const { mockEmitMessageCreated, mockEmitMessageUpdated, mockEmitMessageDeleted } = vi.hoisted(
-  () => ({
-    mockEmitMessageCreated: vi.fn(),
-    mockEmitMessageUpdated: vi.fn(),
-    mockEmitMessageDeleted: vi.fn(),
-  }),
-);
+const {
+  mockEmitMessageCreated,
+  mockEmitMessageUpdated,
+  mockEmitMessageDeleted,
+  mockEmitNotificationNew,
+  mockEmitNotificationRead,
+  mockEmitNotificationReadAll,
+} = vi.hoisted(() => ({
+  mockEmitMessageCreated: vi.fn(),
+  mockEmitMessageUpdated: vi.fn(),
+  mockEmitMessageDeleted: vi.fn(),
+  mockEmitNotificationNew: vi.fn(),
+  mockEmitNotificationRead: vi.fn(),
+  mockEmitNotificationReadAll: vi.fn(),
+}));
 
 vi.mock('../realtime/index', () => ({
   emitMessageCreated: mockEmitMessageCreated,
   emitMessageUpdated: mockEmitMessageUpdated,
   emitMessageDeleted: mockEmitMessageDeleted,
+  emitNotificationNew: mockEmitNotificationNew,
+  emitNotificationRead: mockEmitNotificationRead,
+  emitNotificationReadAll: mockEmitNotificationReadAll,
 }));
 
 vi.mock('./authorization', async (importOriginal) => {
@@ -58,6 +80,12 @@ vi.mock('./authorization', async (importOriginal) => {
 
 vi.mock('../auth/prisma', () => ({
   getPrisma: () => mockPrisma,
+}));
+
+// Notification generation is a separate 4H.4 unit; service tests assert the
+// message write path only.
+vi.mock('../notifications/service', () => ({
+  generateNotificationsForMessageSafely: vi.fn().mockResolvedValue(undefined),
 }));
 
 describe('Phase 4D.1 - Thread Domain & Service Logic', () => {
@@ -355,6 +383,14 @@ describe('Phase 4D.1 - Thread Domain & Service Logic', () => {
         deletedAt: null,
         author: { id: 'u-1', name: 'User 1', image: null },
       });
+      // Mention sync reloads the message after update.
+      mockPrisma.message.findUnique.mockResolvedValueOnce({
+        id: 'reply-1',
+        body: 'Updated reply body',
+        channelId: 'ch-1',
+        directMessageConversationId: null,
+        deletedAt: null,
+      });
 
       const updated = await updateMessage(prisma, {
         messageId: 'reply-1',
@@ -396,6 +432,14 @@ describe('Phase 4D.1 - Thread Domain & Service Logic', () => {
         editedAt: null,
         deletedAt: delDate,
         author: { id: 'u-1', name: 'User 1', image: null },
+      });
+      // Mention sync reloads the message after soft-delete (clears rows).
+      mockPrisma.message.findUnique.mockResolvedValueOnce({
+        id: 'reply-1',
+        body: 'reply body',
+        channelId: 'ch-1',
+        directMessageConversationId: null,
+        deletedAt: delDate,
       });
 
       const deleted = await deleteMessage(prisma, {

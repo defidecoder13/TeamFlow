@@ -17,6 +17,8 @@ interface MessageRowProps {
   showTimestamp: boolean;
   previousMessage?: Message | null;
   isSelected?: boolean;
+  /** Search deep-link highlight: amber ring identifying the linked message. */
+  highlighted?: boolean;
   onEdit?: (messageId: string) => void;
   onDelete?: (messageId: string) => void;
   onReplyInThread?: (message: Message) => void;
@@ -29,6 +31,7 @@ function MessageRowInner({
   showTimestamp,
   previousMessage,
   isSelected,
+  highlighted,
   onEdit,
   onDelete,
   onReplyInThread,
@@ -59,8 +62,9 @@ function MessageRowInner({
       <div
         className={`flex flex-col gap-1 px-4 py-1 sm:px-6 ${
           isSelected ? 'bg-stone-50/90 ring-1 ring-inset ring-stone-200/60' : ''
-        }`}
+        } ${highlighted ? 'rounded-md bg-amber-50 ring-2 ring-inset ring-amber-300' : ''}`}
         aria-label="Message deleted"
+        data-message-id={message.id}
       >
         <div className="flex items-center gap-3 text-stone-400">
           <div
@@ -123,7 +127,7 @@ function MessageRowInner({
     <div
       className={`group relative flex items-start gap-3 px-4 transition-colors hover:bg-stone-50/80 sm:px-6 ${
         isSelected ? 'bg-stone-50/90 ring-1 ring-inset ring-stone-200/60' : ''
-      } ${consecutive ? 'py-0.5' : 'pt-2 pb-0.5'}`}
+      } ${highlighted ? 'rounded-md bg-amber-50 ring-2 ring-inset ring-amber-300' : ''} ${consecutive ? 'py-0.5' : 'pt-2 pb-0.5'}`}
       data-message-id={message.id}
     >
       {consecutive ? (

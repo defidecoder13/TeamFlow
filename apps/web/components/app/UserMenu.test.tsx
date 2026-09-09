@@ -37,9 +37,11 @@ describe('UserMenu', () => {
     await user.click(screen.getByRole('button', { name: /account: ada lovelace/i }));
 
     expect(screen.getByText('Ada Lovelace')).toBeInTheDocument();
-    expect(screen.getByText('ada@example.com')).toBeInTheDocument();
     expect(screen.getByRole('menuitem', { name: /profile/i })).toBeDisabled();
-    expect(screen.getByRole('menuitem', { name: /settings/i })).toBeDisabled();
+    expect(screen.getByRole('menuitem', { name: /settings/i })).toHaveAttribute(
+      'href',
+      '/app/settings/notifications',
+    );
   });
 
   it('signs out through Better Auth and returns to sign-in', async () => {

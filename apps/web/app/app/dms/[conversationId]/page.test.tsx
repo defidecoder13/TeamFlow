@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SessionState } from '../../../../lib/use-session-user';
@@ -150,6 +150,7 @@ const MESSAGE_1: Message = {
 
 beforeEach(() => {
   replaceMock.mockReset();
+  window.history.replaceState(null, '', '/app/dms/dm-1');
   sendMock.mockReset().mockResolvedValue({ ok: true });
   editMock.mockReset().mockResolvedValue({ ok: true });
   removeMock.mockReset().mockResolvedValue({ ok: true });
@@ -220,5 +221,38 @@ describe('DirectMessagePage', () => {
     render(<DirectMessagePage />);
 
     expect(replaceMock).toHaveBeenCalledWith('/sign-in');
+  });
+
+  describe('search deep links', () => {
+    it('highlights a loaded target and consumes the params', async () => {
+      window.history.replaceState(null, '', '/app/dms/dm-1?message=msg-1');
+      const { container } = render(<DirectMessagePage />);
+
+      await waitFor(() => {
+        const row = container.querySelector('[data-message-id="msg-1"]');
+        expect(row?.className).toContain('ring-amber-300');
+      });
+      expect(window.location.search).toBe('');
+    });
+
+    it('opens the thread panel for reply links', async () => {
+      window.history.replaceState(null, '', '/app/dms/dm-1?message=msg-1&reply=r-9');
+      const { container } = render(<DirectMessagePage />);
+
+      await waitFor(() => {
+        expect(container.querySelector('[data-selected-thread-id="msg-1"]')).not.toBeNull();
+      });
+      expect(window.location.search).toBe('');
+    });
+
+    it('fails gracefully for missing targets', async () => {
+      window.history.replaceState(null, '', '/app/dms/dm-1?message=msg-gone');
+      const { container } = render(<DirectMessagePage />);
+
+      await waitFor(() => {
+        expect(window.location.search).toBe('');
+      });
+      expect(container.querySelector('.ring-amber-300')).toBeNull();
+    });
   });
 });

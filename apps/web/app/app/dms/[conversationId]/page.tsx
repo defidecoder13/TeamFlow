@@ -9,6 +9,12 @@ import { useSessionUser } from '@/lib/use-session-user';
 import { useWorkspaces } from '@/lib/use-workspaces';
 import { useDirectConversation } from '@/lib/use-direct-conversation';
 import { useDirectMessages } from '@/lib/use-direct-messages';
+import {
+  consumeDeepLinkParams,
+  scrollToMessage,
+  useDeepLink,
+  useSeekMessage,
+} from '@/lib/use-deep-link';
 import type { WorkspaceRole } from '@/lib/workspaces';
 import type { SessionUser } from '@/lib/auth-guard';
 import {
@@ -121,6 +127,7 @@ function DirectMessageList({
   onEdit,
   onDelete,
   selectedThreadRootMessageId,
+  highlightedMessageId,
   onReplyInThread,
   onMarkRead,
 }: {
@@ -142,6 +149,7 @@ function DirectMessageList({
   onEdit: (messageId: string) => void;
   onDelete: (messageId: string) => void;
   selectedThreadRootMessageId?: string | null;
+  highlightedMessageId?: string | null;
   onReplyInThread?: (message: Message) => void;
   onMarkRead?: (messageId?: string) => void;
 }) {
@@ -315,6 +323,7 @@ function DirectMessageList({
                 showTimestamp={showTimestamp}
                 previousMessage={prev}
                 isSelected={selectedThreadRootMessageId === message.id}
+                highlighted={highlightedMessageId === message.id}
                 onEdit={onEdit}
                 onDelete={onDelete}
                 onReplyInThread={onReplyInThread}
@@ -457,11 +466,69 @@ function DirectMessagePageInner({ workspace, conversationId, user }: DirectMessa
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [selectedThreadRootMessage, setSelectedThreadRootMessage] = useState<Message | null>(null);
+  const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
+  const [highlightedReplyId, setHighlightedReplyId] = useState<string | null>(null);
+  const deepLink = useDeepLink();
+  const deepLinkConsumedRef = useRef(false);
 
   // Clear thread selection when switching conversations
   useEffect(() => {
     setSelectedThreadRootMessage(null);
+    setHighlightedMessageId(null);
+    setHighlightedReplyId(null);
+    deepLinkConsumedRef.current = false;
   }, [conversationId]);
+
+  // Search deep link (?message=<id>[&reply=<replyId>]): page back through
+  // history until the target loads, then highlight it, open its thread for
+  // replies, and scroll into view. Params are consumed only on the terminal
+  // found/missing states — never before handling completes.
+  const seekStatus = useSeekMessage({
+    active: messagesState.status === 'ready',
+    targetId: deepLink.messageId,
+    messages,
+    hasMore: messagesState.status === 'ready' && messagesState.hasMore,
+    isLoadingOlder,
+    loadOlderError,
+    loadOlder,
+  });
+  useEffect(() => {
+    if (deepLinkConsumedRef.current) {
+      return;
+    }
+    if (!deepLink.messageId) {
+      if (deepLink.replyId) {
+        deepLinkConsumedRef.current = true;
+        consumeDeepLinkParams();
+      }
+      return;
+    }
+    if (seekStatus === 'missing') {
+      // Graceful failure (deleted, inaccessible, or beyond the page cap):
+      // open the conversation normally and drop the params.
+      deepLinkConsumedRef.current = true;
+      consumeDeepLinkParams();
+      return;
+    }
+    if (seekStatus !== 'found') {
+      return;
+    }
+    const targetId = deepLink.messageId;
+    const target = messages.find((m) => m.id === targetId);
+    if (!target) {
+      return;
+    }
+    deepLinkConsumedRef.current = true;
+    setHighlightedMessageId(target.id);
+    if (deepLink.replyId) {
+      setSelectedThreadRootMessage(target);
+      setHighlightedReplyId(deepLink.replyId);
+    }
+    requestAnimationFrame(() => {
+      scrollToMessage(target.id);
+    });
+    consumeDeepLinkParams();
+  }, [seekStatus, deepLink, messages, messagesState.status]);
 
   // Keep selected root message fresh if message state updates
   useEffect(() => {
@@ -689,6 +756,7 @@ function DirectMessagePageInner({ workspace, conversationId, user }: DirectMessa
                   onEdit={handleEdit}
                   onDelete={handleDeleteRequest}
                   selectedThreadRootMessageId={selectedThreadRootMessage?.id}
+                  highlightedMessageId={highlightedMessageId}
                   onReplyInThread={handleSelectThread}
                   onMarkRead={markRead}
                 />
@@ -716,6 +784,7 @@ function DirectMessagePageInner({ workspace, conversationId, user }: DirectMessa
               rootMessage={selectedThreadRootMessage}
               userId={userId}
               onClose={handleCloseThread}
+              highlightedReplyId={highlightedReplyId}
             />
           )}
         </div>

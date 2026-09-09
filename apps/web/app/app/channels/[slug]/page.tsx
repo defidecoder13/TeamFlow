@@ -10,6 +10,12 @@ import { useWorkspaces } from '@/lib/use-workspaces';
 import { useWorkspaceChannel } from '@/lib/use-workspace-channel';
 import { useWorkspaceMembers } from '@/lib/use-workspace-members';
 import { useMessages } from '@/lib/use-messages';
+import {
+  consumeDeepLinkParams,
+  scrollToMessage,
+  useDeepLink,
+  useSeekMessage,
+} from '@/lib/use-deep-link';
 import { type Channel } from '@/lib/channels';
 import type { WorkspaceRole } from '@/lib/workspaces';
 import type { WorkspaceMember } from '@/lib/members';
@@ -106,6 +112,7 @@ function MessageList({
   onEdit,
   onDelete,
   selectedThreadRootMessageId,
+  highlightedMessageId,
   onReplyInThread,
 }: {
   channelName?: string;
@@ -126,6 +133,7 @@ function MessageList({
   onEdit: (messageId: string) => void;
   onDelete: (messageId: string) => void;
   selectedThreadRootMessageId?: string | null;
+  highlightedMessageId?: string | null;
   onReplyInThread?: (message: Message) => void;
 }) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -279,6 +287,7 @@ function MessageList({
                 showTimestamp={showTimestamp}
                 previousMessage={prev}
                 isSelected={selectedThreadRootMessageId === message.id}
+                highlighted={highlightedMessageId === message.id}
                 onEdit={onEdit}
                 onDelete={onDelete}
                 onReplyInThread={onReplyInThread}
@@ -417,11 +426,69 @@ function ConversationPageInner({ workspace, slug, user }: ConversationPageInnerP
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [selectedThreadRootMessage, setSelectedThreadRootMessage] = useState<Message | null>(null);
+  const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
+  const [highlightedReplyId, setHighlightedReplyId] = useState<string | null>(null);
+  const deepLink = useDeepLink();
+  const deepLinkConsumedRef = useRef(false);
 
   // Clear thread selection when switching channels
   useEffect(() => {
     setSelectedThreadRootMessage(null);
+    setHighlightedMessageId(null);
+    setHighlightedReplyId(null);
+    deepLinkConsumedRef.current = false;
   }, [slug]);
+
+  // Search deep link (?message=<id>[&reply=<replyId>]): page back through
+  // history until the target loads, then highlight it, open its thread for
+  // replies, and scroll into view. Params are consumed only on the terminal
+  // found/missing states — never before handling completes.
+  const seekStatus = useSeekMessage({
+    active: messagesState.status === 'ready',
+    targetId: deepLink.messageId,
+    messages,
+    hasMore: messagesState.status === 'ready' && messagesState.hasMore,
+    isLoadingOlder,
+    loadOlderError,
+    loadOlder,
+  });
+  useEffect(() => {
+    if (deepLinkConsumedRef.current) {
+      return;
+    }
+    if (!deepLink.messageId) {
+      if (deepLink.replyId) {
+        deepLinkConsumedRef.current = true;
+        consumeDeepLinkParams();
+      }
+      return;
+    }
+    if (seekStatus === 'missing') {
+      // Graceful failure (deleted, inaccessible, or beyond the page cap):
+      // open the conversation normally and drop the params.
+      deepLinkConsumedRef.current = true;
+      consumeDeepLinkParams();
+      return;
+    }
+    if (seekStatus !== 'found') {
+      return;
+    }
+    const targetId = deepLink.messageId;
+    const target = messages.find((m) => m.id === targetId);
+    if (!target) {
+      return;
+    }
+    deepLinkConsumedRef.current = true;
+    setHighlightedMessageId(target.id);
+    if (deepLink.replyId) {
+      setSelectedThreadRootMessage(target);
+      setHighlightedReplyId(deepLink.replyId);
+    }
+    requestAnimationFrame(() => {
+      scrollToMessage(target.id);
+    });
+    consumeDeepLinkParams();
+  }, [seekStatus, deepLink, messages, messagesState.status]);
 
   // Keep selected root message fresh if message state updates
   useEffect(() => {
@@ -652,6 +719,7 @@ function ConversationPageInner({ workspace, slug, user }: ConversationPageInnerP
                   onEdit={handleEdit}
                   onDelete={handleDeleteRequest}
                   selectedThreadRootMessageId={selectedThreadRootMessage?.id}
+                  highlightedMessageId={highlightedMessageId}
                   onReplyInThread={handleSelectThread}
                 />
               )}
@@ -680,6 +748,7 @@ function ConversationPageInner({ workspace, slug, user }: ConversationPageInnerP
               rootMessage={selectedThreadRootMessage}
               userId={userId}
               onClose={handleCloseThread}
+              highlightedReplyId={highlightedReplyId}
             />
           )}
         </div>

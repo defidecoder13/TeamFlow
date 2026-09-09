@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ThreadPanel } from './ThreadPanel';
@@ -280,5 +280,48 @@ describe('ThreadPanel', () => {
     render(<ThreadPanel rootMessage={ROOT_MESSAGE} userId="u-current" onClose={onCloseMock} />);
 
     expect(useThreadMessagesMock).toHaveBeenCalledWith('m-root-1', 'ch-1');
+  });
+
+  it('pages back thread history for a deep-linked reply until loaded', async () => {
+    threadState.value = {
+      status: 'ready',
+      messages: [],
+      hasMore: true,
+      nextCursor: 'cursor-1',
+    };
+    render(
+      <ThreadPanel
+        rootMessage={ROOT_MESSAGE}
+        userId="u-current"
+        onClose={onCloseMock}
+        highlightedReplyId="r-9"
+      />,
+    );
+
+    await waitFor(() => {
+      expect(loadOlderMock).toHaveBeenCalled();
+    });
+  });
+
+  it('highlights a deep-linked reply once loaded without extra paging', () => {
+    threadState.value = {
+      status: 'ready',
+      messages: [makeReply('r-9', 'Linked reply')],
+      hasMore: false,
+      nextCursor: null,
+    };
+    const { container } = render(
+      <ThreadPanel
+        rootMessage={ROOT_MESSAGE}
+        userId="u-current"
+        onClose={onCloseMock}
+        highlightedReplyId="r-9"
+      />,
+    );
+
+    expect(container.querySelector('[data-message-id="r-9"]')?.className).toContain(
+      'ring-amber-300',
+    );
+    expect(loadOlderMock).not.toHaveBeenCalled();
   });
 });

@@ -462,14 +462,20 @@ liveDescribe('message API (live database)', () => {
       .delete(`/api/messages/${created.body.message.id as string}`)
       .set('Origin', ORIGIN);
 
+    // Key set covers the thread (4D) and DM-container (4F) fields added
+    // after Phase 4A; the leak assertions below remain the security check.
     expect(Object.keys(created.body.message).sort()).toEqual([
       'author',
       'body',
       'channelId',
       'createdAt',
       'deletedAt',
+      'directMessageConversationId',
       'editedAt',
       'id',
+      'latestReplyAt',
+      'parentMessageId',
+      'replyCount',
       'updatedAt',
     ]);
     for (const body of [created.body, listed.body, edited.body, deleted.body]) {
