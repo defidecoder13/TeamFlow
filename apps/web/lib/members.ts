@@ -102,3 +102,107 @@ export async function fetchWorkspaceMembers(
   }
   return { ok: true, members };
 }
+
+function memberUrl(apiBaseUrl: string, workspaceId: string, userId?: string): string {
+  const base = `${apiBaseUrl}/api/workspaces/${encodeURIComponent(workspaceId)}/members`;
+  return userId ? `${base}/${encodeURIComponent(userId)}` : base;
+}
+
+function serverMessage(body: unknown, fallback: string): string {
+  if (
+    typeof body === 'object' &&
+    body !== null &&
+    'error' in body &&
+    typeof (body as { error: unknown }).error === 'object' &&
+    (body as { error: { message?: unknown } }).error !== null &&
+    typeof (body as { error: { message?: unknown } }).error.message === 'string'
+  ) {
+    const msg = (body as { error: { message: string } }).error.message.trim();
+    if (msg.length > 0) return msg;
+  }
+  return fallback;
+}
+
+async function readJson(response: Response): Promise<unknown> {
+  try {
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
+
+export type UpdateMemberRoleResult =
+  | { ok: true; member: WorkspaceMember }
+  | {
+      ok: false;
+      kind: 'unauthenticated' | 'forbidden' | 'notFound' | 'conflict' | 'validation' | 'failed';
+      message?: string;
+    };
+
+export async function updateWorkspaceMemberRole(
+  apiBaseUrl: string,
+  workspaceId: string,
+  userId: string,
+  role: WorkspaceRole,
+): Promise<UpdateMemberRoleResult> {
+  let response: Response;
+  try {
+    response = await fetch(memberUrl(apiBaseUrl, workspaceId, userId), {
+      method: 'PATCH',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role }),
+    });
+  } catch {
+    return { ok: false, kind: 'failed' };
+  }
+  if (response.status === 401) return { ok: false, kind: 'unauthenticated' };
+  const body = await readJson(response);
+  if (response.status === 200) {
+    const member =
+      body && isRecord(body) && isWorkspaceMember((body as { member: unknown }).member)
+        ? (body as { member: WorkspaceMember }).member
+        : null;
+    if (!member) return { ok: false, kind: 'failed' };
+    return { ok: true, member };
+  }
+  if (response.status === 400)
+    return { ok: false, kind: 'validation', message: serverMessage(body, 'Invalid role.') };
+  if (response.status === 403) return { ok: false, kind: 'forbidden' };
+  if (response.status === 404) return { ok: false, kind: 'notFound' };
+  if (response.status === 409)
+    return { ok: false, kind: 'conflict', message: serverMessage(body, 'Conflict.') };
+  return { ok: false, kind: 'failed' };
+}
+
+export type RemoveMemberResult =
+  | { ok: true }
+  | {
+      ok: false;
+      kind: 'unauthenticated' | 'forbidden' | 'notFound' | 'conflict' | 'failed';
+      message?: string;
+    };
+
+export async function removeWorkspaceMember(
+  apiBaseUrl: string,
+  workspaceId: string,
+  userId: string,
+): Promise<RemoveMemberResult> {
+  let response: Response;
+  try {
+    response = await fetch(memberUrl(apiBaseUrl, workspaceId, userId), {
+      method: 'DELETE',
+      credentials: 'include',
+    });
+  } catch {
+    return { ok: false, kind: 'failed' };
+  }
+  if (response.status === 401) return { ok: false, kind: 'unauthenticated' };
+  if (response.status === 204) return { ok: true };
+  const body = await readJson(response);
+  if (response.status === 403) return { ok: false, kind: 'forbidden' };
+  if (response.status === 404) return { ok: false, kind: 'notFound' };
+  if (response.status === 409)
+    return { ok: false, kind: 'conflict', message: serverMessage(body, 'Conflict.') };
+  return { ok: false, kind: 'failed' };
+}

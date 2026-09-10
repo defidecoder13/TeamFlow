@@ -15,13 +15,24 @@ import { requireAuth } from '../auth/session';
 import { getMembershipRole } from '../workspaces/authorization';
 import { canUpdateChannel, getAccessibleChannel } from './authorization';
 import {
+  ChannelMembershipConflictError,
+  ChannelMembershipNotFoundError,
   ChannelNotFoundError,
   ChannelSlugConflictError,
+  addChannelMember,
   createChannel,
   listAccessibleChannels,
+  listChannelMembers,
+  removeChannelMember,
   updateChannel,
 } from './service';
-import { createChannelSchema, firstValidationMessage, updateChannelSchema } from './validation';
+import { removeUserFromChannelRoom } from '../realtime/index';
+import {
+  addChannelMemberSchema,
+  createChannelSchema,
+  firstValidationMessage,
+  updateChannelSchema,
+} from './validation';
 
 function validationError(res: Response, message: string): void {
   res.status(400).json({ error: { code: 'VALIDATION_ERROR', message } });
@@ -184,6 +195,149 @@ export function createChannelsRouter(resolveAuth: () => AuthContext): Router {
         }
         if (error instanceof ChannelSlugConflictError) {
           res.status(409).json({ error: { code: 'CONFLICT', message: error.message } });
+          return;
+        }
+        throw error;
+      }
+    }),
+  );
+
+  router.get(
+    '/:channelSlug/members',
+    asyncRoute(async (req, res) => {
+      const authUser = requireSessionUser(req, res);
+      if (!authUser) {
+        return;
+      }
+      const accessible = await getAccessibleChannel(getPrisma(), {
+        workspaceId: req.params.workspaceId,
+        channelSlug: req.params.channelSlug,
+        userId: authUser.id,
+      });
+      if (!accessible) {
+        notFound(res);
+        return;
+      }
+      if (accessible.channel.type !== 'PRIVATE') {
+        notFound(res);
+        return;
+      }
+      try {
+        const members = await listChannelMembers(getPrisma(), {
+          channelId: accessible.channel.id,
+          workspaceId: req.params.workspaceId,
+          userId: authUser.id,
+        });
+        res.status(200).json({ members });
+      } catch (error) {
+        if (error instanceof ChannelNotFoundError) {
+          notFound(res);
+          return;
+        }
+        throw error;
+      }
+    }),
+  );
+
+  router.post(
+    '/:channelSlug/members',
+    asyncRoute(async (req, res) => {
+      const parsed = addChannelMemberSchema.safeParse(req.body);
+      if (!parsed.success) {
+        validationError(res, firstValidationMessage(parsed.error));
+        return;
+      }
+      const authUser = requireSessionUser(req, res);
+      if (!authUser) {
+        return;
+      }
+      const accessible = await getAccessibleChannel(getPrisma(), {
+        workspaceId: req.params.workspaceId,
+        channelSlug: req.params.channelSlug,
+        userId: authUser.id,
+      });
+      if (!accessible) {
+        notFound(res);
+        return;
+      }
+      if (accessible.channel.type !== 'PRIVATE') {
+        notFound(res);
+        return;
+      }
+      if (
+        !canUpdateChannel({
+          workspaceRole: accessible.workspaceRole,
+          isCreator: accessible.channel.createdById === authUser.id,
+        })
+      ) {
+        forbidden(res);
+        return;
+      }
+      try {
+        const member = await addChannelMember(getPrisma(), {
+          channelId: accessible.channel.id,
+          workspaceId: req.params.workspaceId,
+          targetUserId: parsed.data.userId,
+        });
+        res.status(201).json({ member });
+      } catch (error) {
+        if (error instanceof ChannelNotFoundError) {
+          notFound(res);
+          return;
+        }
+        if (error instanceof ChannelMembershipConflictError) {
+          res.status(409).json({ error: { code: 'CONFLICT', message: error.message } });
+          return;
+        }
+        throw error;
+      }
+    }),
+  );
+
+  router.delete(
+    '/:channelSlug/members/:userId',
+    asyncRoute(async (req, res) => {
+      const authUser = requireSessionUser(req, res);
+      if (!authUser) {
+        return;
+      }
+      const accessible = await getAccessibleChannel(getPrisma(), {
+        workspaceId: req.params.workspaceId,
+        channelSlug: req.params.channelSlug,
+        userId: authUser.id,
+      });
+      if (!accessible) {
+        notFound(res);
+        return;
+      }
+      if (accessible.channel.type !== 'PRIVATE') {
+        notFound(res);
+        return;
+      }
+      if (
+        !canUpdateChannel({
+          workspaceRole: accessible.workspaceRole,
+          isCreator: accessible.channel.createdById === authUser.id,
+        })
+      ) {
+        forbidden(res);
+        return;
+      }
+      try {
+        await removeChannelMember(getPrisma(), {
+          channelId: accessible.channel.id,
+          workspaceId: req.params.workspaceId,
+          userId: req.params.userId,
+        });
+        removeUserFromChannelRoom(accessible.channel.id, req.params.userId);
+        res.status(204).send();
+      } catch (error) {
+        if (error instanceof ChannelNotFoundError) {
+          notFound(res);
+          return;
+        }
+        if (error instanceof ChannelMembershipNotFoundError) {
+          notFound(res);
           return;
         }
         throw error;

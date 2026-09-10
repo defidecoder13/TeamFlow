@@ -13,6 +13,7 @@ import { PrismaClient } from '@prisma/client';
 export { PrismaClient };
 export type {
   PrismaClient as PrismaClientType,
+  Attachment,
   Channel,
   ChannelMembership,
   ChannelType,

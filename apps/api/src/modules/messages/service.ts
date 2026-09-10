@@ -21,6 +21,16 @@ export interface MessageAuthor {
   image: string | null;
 }
 
+export interface MessageAttachmentResponse {
+  id: string;
+  messageId: string;
+  uploaderId: string;
+  originalName: string;
+  mimeType: string;
+  size: number;
+  createdAt: Date;
+}
+
 /** Safe message representation. `body` is null once soft-deleted. */
 export interface MessageResponse {
   id: string;
@@ -35,6 +45,7 @@ export interface MessageResponse {
   editedAt: Date | null;
   deletedAt: Date | null;
   author: MessageAuthor;
+  attachments?: MessageAttachmentResponse[];
 }
 
 export interface MessagePage {
@@ -65,6 +76,16 @@ export class MessageConflictError extends Error {
 
 const authorSelect = { id: true, name: true, email: true, image: true } as const;
 
+export const attachmentSelect = {
+  id: true,
+  messageId: true,
+  uploaderId: true,
+  originalName: true,
+  mimeType: true,
+  size: true,
+  createdAt: true,
+} as const;
+
 type MessageRow = {
   id: string;
   channelId?: string | null;
@@ -78,6 +99,7 @@ type MessageRow = {
   editedAt: Date | null;
   deletedAt: Date | null;
   author: MessageAuthor;
+  attachments?: MessageAttachmentResponse[];
 };
 
 function toResponse(message: MessageRow): MessageResponse {
@@ -94,6 +116,7 @@ function toResponse(message: MessageRow): MessageResponse {
     editedAt: message.editedAt,
     deletedAt: message.deletedAt,
     author: message.author,
+    attachments: message.attachments ?? [],
   };
 }
 
@@ -157,7 +180,10 @@ export async function createMessage(
       authorId: input.authorId,
       body: input.body,
     },
-    include: { author: { select: authorSelect } },
+    include: {
+      author: { select: authorSelect },
+      attachments: { select: attachmentSelect, orderBy: { createdAt: 'asc' } },
+    },
   });
   // Mention persistence runs post-commit in its own transaction, keeping this
   // write path unchanged (4H.1 §13). Errors propagate: a persisted message
@@ -208,7 +234,10 @@ export async function listMessages(
           }
         : {}),
     },
-    include: { author: { select: authorSelect } },
+    include: {
+      author: { select: authorSelect },
+      attachments: { select: attachmentSelect, orderBy: { createdAt: 'asc' } },
+    },
     orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     take: limit + 1,
   });
@@ -289,7 +318,10 @@ export async function createThreadReply(
           createdAt: now,
           updatedAt: now,
         },
-        include: { author: { select: authorSelect } },
+        include: {
+          author: { select: authorSelect },
+          attachments: { select: attachmentSelect, orderBy: { createdAt: 'asc' } },
+        },
       });
 
       const updatedParent = await tx.message.update({
@@ -298,7 +330,10 @@ export async function createThreadReply(
           replyCount: { increment: 1 },
           latestReplyAt: now,
         },
-        include: { author: { select: authorSelect } },
+        include: {
+          author: { select: authorSelect },
+          attachments: { select: attachmentSelect, orderBy: { createdAt: 'asc' } },
+        },
       });
 
       return { created, updatedParent };
@@ -374,7 +409,10 @@ export async function listThreadReplies(
           }
         : {}),
     },
-    include: { author: { select: authorSelect } },
+    include: {
+      author: { select: authorSelect },
+      attachments: { select: attachmentSelect, orderBy: { createdAt: 'asc' } },
+    },
     orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     take: limit + 1,
   });
@@ -404,6 +442,7 @@ async function resolveAuthoredMessage(
     include: {
       channel: { select: { id: true } },
       author: { select: authorSelect },
+      attachments: { select: attachmentSelect, orderBy: { createdAt: 'asc' } },
     },
   });
   if (!message) {
@@ -434,7 +473,10 @@ export async function updateMessage(
   const updated = await prisma.message.update({
     where: { id: message.id },
     data: { body: input.body, editedAt: new Date() },
-    include: { author: { select: authorSelect } },
+    include: {
+      author: { select: authorSelect },
+      attachments: { select: attachmentSelect, orderBy: { createdAt: 'asc' } },
+    },
   });
   // Tombstoned messages throw above, so sync only rewrites live mention sets.
   await syncMessageMentions(prisma, updated.id);
@@ -457,12 +499,41 @@ export async function deleteMessage(
   const deleted = await prisma.message.update({
     where: { id: message.id },
     data: { deletedAt: new Date() },
-    include: { author: { select: authorSelect } },
+    include: {
+      author: { select: authorSelect },
+      attachments: { select: attachmentSelect, orderBy: { createdAt: 'asc' } },
+    },
   });
   // Soft-delete keeps the row (no DB cascade fires); clear mentions so the
   // tombstone carries no resolvable mentions.
   await syncMessageMentions(prisma, deleted.id);
   return toResponse(deleted);
+}
+
+/**
+ * Resolves a single message with its author and attachments, verifying container authorization.
+ */
+export async function getMessageWithDetails(
+  prisma: PrismaClient,
+  input: { messageId: string; userId?: string },
+): Promise<MessageResponse | null> {
+  const message = await prisma.message.findUnique({
+    where: { id: input.messageId },
+    include: {
+      author: { select: authorSelect },
+      attachments: { select: attachmentSelect, orderBy: { createdAt: 'asc' } },
+    },
+  });
+  if (!message) {
+    return null;
+  }
+  if (input.userId) {
+    const hasAccess = await authorizeMessageContainerAccess(prisma, message, input.userId);
+    if (!hasAccess) {
+      return null;
+    }
+  }
+  return toResponse(message);
 }
 
 export interface MessageReactionResponse {

@@ -57,6 +57,27 @@ export class WorkspaceSlugConflictError extends Error {
   }
 }
 
+export class WorkspaceMemberNotFoundError extends Error {
+  constructor() {
+    super('Workspace member not found.');
+    this.name = 'WorkspaceMemberNotFoundError';
+  }
+}
+
+export class WorkspaceMemberConflictError extends Error {
+  constructor(message = 'Workspace member operation conflict.') {
+    super(message);
+    this.name = 'WorkspaceMemberConflictError';
+  }
+}
+
+export class WorkspaceForbiddenError extends Error {
+  constructor(message = 'You do not have permission.') {
+    super(message);
+    this.name = 'WorkspaceForbiddenError';
+  }
+}
+
 function toResponse(
   workspace: { id: string; name: string; slug: string; createdAt: Date; updatedAt: Date },
   role: WorkspaceRole,
@@ -193,6 +214,86 @@ export interface WorkspaceMemberWithUser {
     email: string;
     image: string | null;
   };
+}
+
+/**
+ * Update a member's role. Only ADMIN↔MEMBER is allowed via this endpoint;
+ * OWNER is immutable here (prevents accidental ownerless workspace). Caller
+ * must have verified requester is OWNER and target is in same workspace.
+ * Protects the last OWNER from demotion. Idempotent if same role.
+ */
+export async function updateWorkspaceMemberRole(
+  prisma: PrismaClient,
+  input: { workspaceId: string; targetUserId: string; newRole: WorkspaceRole },
+): Promise<WorkspaceMemberWithUser> {
+  if (input.newRole === 'OWNER') {
+    throw new WorkspaceMemberConflictError('Cannot assign OWNER via this endpoint.');
+  }
+  const target = await prisma.workspaceMembership.findUnique({
+    where: { workspaceId_userId: { workspaceId: input.workspaceId, userId: input.targetUserId } },
+    select: { id: true, role: true },
+  });
+  if (!target) {
+    throw new WorkspaceMemberNotFoundError();
+  }
+  if (target.role === input.newRole) {
+    const full = await prisma.workspaceMembership.findUnique({
+      where: { workspaceId_userId: { workspaceId: input.workspaceId, userId: input.targetUserId } },
+      select: {
+        id: true,
+        role: true,
+        createdAt: true,
+        user: { select: { id: true, name: true, email: true, image: true } },
+      },
+    });
+    if (!full) throw new WorkspaceMemberNotFoundError();
+    return { id: full.id, role: full.role, createdAt: full.createdAt, user: full.user };
+  }
+  if (target.role === 'OWNER') {
+    // OWNER demotion requires ownership transfer workflow which does not exist.
+    throw new WorkspaceMemberConflictError('Cannot change the OWNER role via this endpoint.');
+  }
+  const updated = await prisma.workspaceMembership.update({
+    where: { workspaceId_userId: { workspaceId: input.workspaceId, userId: input.targetUserId } },
+    data: { role: input.newRole },
+    select: {
+      id: true,
+      role: true,
+      createdAt: true,
+      user: { select: { id: true, name: true, email: true, image: true } },
+    },
+  });
+  return { id: updated.id, role: updated.role, createdAt: updated.createdAt, user: updated.user };
+}
+
+/**
+ * Remove a member from a workspace. Caller must have verified requester is
+ * OWNER. Protects the last OWNER from removal. Preserves ChannelMembership
+ * rows (they become inaccessible via workspace boundary) to avoid destructive
+ * cascades; realtime rooms are revoked post-commit.
+ */
+export async function removeWorkspaceMember(
+  prisma: PrismaClient,
+  input: { workspaceId: string; targetUserId: string },
+): Promise<void> {
+  const target = await prisma.workspaceMembership.findUnique({
+    where: { workspaceId_userId: { workspaceId: input.workspaceId, userId: input.targetUserId } },
+    select: { id: true, role: true },
+  });
+  if (!target) {
+    throw new WorkspaceMemberNotFoundError();
+  }
+  if (target.role === 'OWNER') {
+    const ownerCount = await prisma.workspaceMembership.count({
+      where: { workspaceId: input.workspaceId, role: 'OWNER' },
+    });
+    if (ownerCount <= 1) {
+      throw new WorkspaceMemberConflictError('Cannot remove the only OWNER.');
+    }
+  }
+  await prisma.workspaceMembership.delete({
+    where: { workspaceId_userId: { workspaceId: input.workspaceId, userId: input.targetUserId } },
+  });
 }
 
 /**

@@ -18,11 +18,20 @@ import {
   getWorkspaceForMember,
   listWorkspaceMembers,
   listWorkspaces,
+  removeWorkspaceMember,
   renameWorkspace,
+  updateWorkspaceMemberRole,
+  WorkspaceMemberConflictError,
+  WorkspaceMemberNotFoundError,
   WorkspaceNotFoundError,
   WorkspaceSlugConflictError,
 } from './service';
-import { createWorkspaceSchema, firstValidationMessage, updateWorkspaceSchema } from './validation';
+import {
+  createWorkspaceSchema,
+  firstValidationMessage,
+  updateWorkspaceMemberSchema,
+  updateWorkspaceSchema,
+} from './validation';
 
 function validationError(res: Response, message: string): void {
   res.status(400).json({ error: { code: 'VALIDATION_ERROR', message } });
@@ -112,6 +121,121 @@ export function createWorkspacesRouter(resolveAuth: () => AuthContext): Router {
         workspaceId: req.params.workspaceId,
       });
       res.status(200).json({ members });
+    }),
+  );
+
+  router.patch(
+    '/:workspaceId/members/:userId',
+    asyncRoute(async (req, res) => {
+      const parsed = updateWorkspaceMemberSchema.safeParse(req.body);
+      if (!parsed.success) {
+        validationError(res, firstValidationMessage(parsed.error));
+        return;
+      }
+      const authUser = req.authUser;
+      if (!authUser) {
+        res
+          .status(401)
+          .json({ error: { code: 'UNAUTHENTICATED', message: 'Authentication required.' } });
+        return;
+      }
+      const prisma = getPrisma();
+      const requesterRole = await getMembershipRole(prisma, req.params.workspaceId, authUser.id);
+      if (!requesterRole) {
+        notFound(res);
+        return;
+      }
+      if (requesterRole !== 'OWNER') {
+        forbidden(res);
+        return;
+      }
+      try {
+        const member = await updateWorkspaceMemberRole(prisma, {
+          workspaceId: req.params.workspaceId,
+          targetUserId: req.params.userId,
+          newRole: parsed.data.role,
+        });
+        res.status(200).json({ member });
+      } catch (error) {
+        if (error instanceof WorkspaceMemberNotFoundError) {
+          notFound(res);
+          return;
+        }
+        if (error instanceof WorkspaceMemberConflictError) {
+          res.status(409).json({ error: { code: 'CONFLICT', message: error.message } });
+          return;
+        }
+        if (error instanceof WorkspaceNotFoundError) {
+          notFound(res);
+          return;
+        }
+        throw error;
+      }
+    }),
+  );
+
+  router.delete(
+    '/:workspaceId/members/:userId',
+    asyncRoute(async (req, res) => {
+      const authUser = req.authUser;
+      if (!authUser) {
+        res
+          .status(401)
+          .json({ error: { code: 'UNAUTHENTICATED', message: 'Authentication required.' } });
+        return;
+      }
+      const prisma = getPrisma();
+      const requesterRole = await getMembershipRole(prisma, req.params.workspaceId, authUser.id);
+      if (!requesterRole) {
+        notFound(res);
+        return;
+      }
+      if (requesterRole !== 'OWNER') {
+        forbidden(res);
+        return;
+      }
+      try {
+        // Check that target is in same workspace is handled inside service
+        await removeWorkspaceMember(prisma, {
+          workspaceId: req.params.workspaceId,
+          targetUserId: req.params.userId,
+        });
+        // Best-effort: revoke realtime channel memberships for the removed user
+        // We preserve ChannelMembership rows but kick sockets from channel rooms
+        // in this workspace to prevent continued delivery.
+        const channels = await prisma.channel.findMany({
+          where: { workspaceId: req.params.workspaceId },
+          select: { id: true },
+        });
+        const { removeUserFromChannelRoom } = await import('../realtime/index');
+        for (const channel of channels) {
+          removeUserFromChannelRoom(channel.id, req.params.userId);
+        }
+        // Also leave direct-message rooms in this workspace
+        const dmConversations = await prisma.directMessageConversation.findMany({
+          where: { workspaceId: req.params.workspaceId },
+          select: { id: true },
+        });
+        const { removeUserFromDirectConversationRoom } = await import('../realtime/index');
+        for (const conv of dmConversations) {
+          removeUserFromDirectConversationRoom(conv.id, req.params.userId);
+        }
+        res.status(204).end();
+      } catch (error) {
+        if (error instanceof WorkspaceMemberNotFoundError) {
+          notFound(res);
+          return;
+        }
+        if (error instanceof WorkspaceMemberConflictError) {
+          res.status(409).json({ error: { code: 'CONFLICT', message: error.message } });
+          return;
+        }
+        if (error instanceof WorkspaceNotFoundError) {
+          notFound(res);
+          return;
+        }
+        throw error;
+      }
     }),
   );
 

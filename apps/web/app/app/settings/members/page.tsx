@@ -151,6 +151,7 @@ export default function MembersPage() {
         <MembersContent
           members={members.members}
           currentUserId={session.user.id}
+          currentUserRole={current.role}
           workspace={{ id: current.id, name: current.name }}
           canInvite={canInvite}
           pending={pending.status === 'ready' ? pending.invitations : []}
@@ -159,6 +160,7 @@ export default function MembersPage() {
           onRetryPending={retryPending}
           onInvitationCreated={retryPending}
           onUnauthenticated={() => router.replace('/sign-in')}
+          onMembersChanged={retryMembers}
         />
       </AppShell>
     );

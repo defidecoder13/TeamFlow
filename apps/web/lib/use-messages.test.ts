@@ -201,7 +201,7 @@ describe('useMessages', () => {
     await act(async () => {
       sendResult = await result.current.send('Fresh');
     });
-    expect(sendResult).toEqual({ ok: true });
+    expect(sendResult).toEqual({ ok: true, messageId: 'm-9' });
     expect(result.current.state).toEqual({
       status: 'ready',
       messages: [existing, created],

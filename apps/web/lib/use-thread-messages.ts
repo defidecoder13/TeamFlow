@@ -267,7 +267,7 @@ export function useThreadMessages(rootMessageId: string | null, channelId?: stri
   }, [rootMessageId, state, normalizeReplies]);
 
   const send = useCallback(
-    async (body: string): Promise<{ ok: boolean; error?: string }> => {
+    async (body: string): Promise<{ ok: boolean; error?: string; messageId?: string }> => {
       const trimmed = body.trim();
       if (!trimmed) {
         return { ok: false, error: 'Reply cannot be empty.' };
@@ -295,6 +295,7 @@ export function useThreadMessages(rootMessageId: string | null, channelId?: stri
           return { ok: false, error: result.message ?? 'Failed to send reply.' };
         }
 
+        const createdId = result.data.id;
         setState((current) => {
           if (current.status !== 'ready') return current;
           return {
@@ -302,7 +303,7 @@ export function useThreadMessages(rootMessageId: string | null, channelId?: stri
             messages: mergeMessages(current.messages, [result.data], false),
           };
         });
-        return { ok: true };
+        return { ok: true, messageId: createdId };
       } catch {
         return { ok: false, error: 'Network error while sending reply.' };
       } finally {

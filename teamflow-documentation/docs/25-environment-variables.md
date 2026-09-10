@@ -21,6 +21,13 @@ CORS_ORIGIN=
 BETTER_AUTH_SECRET=
 # Base URL of the API, e.g. http://localhost:4000
 BETTER_AUTH_URL=
+
+# Cloudflare R2 Storage (API only)
+R2_ACCOUNT_ID=
+R2_ACCESS_KEY_ID=
+R2_SECRET_ACCESS_KEY=
+R2_BUCKET_NAME=
+R2_ENDPOINT=
 ```
 
 ## Workers

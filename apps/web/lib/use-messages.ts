@@ -112,7 +112,7 @@ export function useMessages(channelId: string | null) {
   }, [channelId, state, normalizeMessages]);
 
   const send = useCallback(
-    async (body: string): Promise<{ ok: boolean; error?: string }> => {
+    async (body: string): Promise<{ ok: boolean; error?: string; messageId?: string }> => {
       const trimmed = body.trim();
       if (!trimmed) {
         return { ok: false, error: 'Message cannot be empty.' };
@@ -145,6 +145,7 @@ export function useMessages(channelId: string | null) {
         }
 
         if (result.ok) {
+          const createdId = result.data.id;
           setState((current) => {
             if (current.status !== 'ready') {
               return {
@@ -159,7 +160,7 @@ export function useMessages(channelId: string | null) {
               messages: mergeMessages(current.messages, [result.data], false),
             };
           });
-          return { ok: true };
+          return { ok: true, messageId: createdId };
         }
         if ('unauthenticated' in result && result.unauthenticated) {
           setState({ status: 'unauthenticated' });

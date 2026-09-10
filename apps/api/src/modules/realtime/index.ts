@@ -796,6 +796,16 @@ export function removeUserFromDirectConversationRoom(conversationId: string, use
   }
 }
 
+export function removeUserFromChannelRoom(channelId: string, userId: string): void {
+  if (!ioInstance) return;
+  const roomName = `channel:${channelId}`;
+  for (const [, socket] of ioInstance.of('/').sockets) {
+    if (socket.data?.user?.id === userId) {
+      void socket.leave(roomName);
+    }
+  }
+}
+
 /**
  * Deliver a persisted notification to its recipient's private user room.
  * Call only after the notification row has committed. The payload mirrors

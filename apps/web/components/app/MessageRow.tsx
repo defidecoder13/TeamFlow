@@ -9,6 +9,7 @@ import { PencilIcon, SmileyIcon, ThreadsIcon, TrashIcon } from './icons';
 import { useMessageReactions } from '../../lib/use-message-reactions';
 import { MessageReactions } from './MessageReactions';
 import { EmojiPicker } from './EmojiPicker';
+import { AttachmentDisplay } from './AttachmentDisplay';
 
 interface MessageRowProps {
   message: Message;
@@ -168,6 +169,10 @@ function MessageRowInner({
             </span>
           )}
         </div>
+
+        {message.attachments && message.attachments.length > 0 && (
+          <AttachmentDisplay attachments={message.attachments} />
+        )}
 
         <MessageReactions
           messageId={message.id}

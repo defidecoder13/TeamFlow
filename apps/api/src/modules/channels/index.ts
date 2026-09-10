@@ -9,10 +9,18 @@
 export { createChannelsRouter } from './routes';
 export { canUpdateChannel, getAccessibleChannel } from './authorization';
 export {
+  ChannelForbiddenError,
+  ChannelMembershipConflictError,
+  ChannelMembershipNotFoundError,
   ChannelNotFoundError,
   ChannelSlugConflictError,
+  ChannelValidationError,
+  addChannelMember,
   createChannel,
   listAccessibleChannels,
+  listChannelMembers,
+  removeChannelMember,
   updateChannel,
+  type ChannelMember,
   type ChannelResponse,
 } from './service';

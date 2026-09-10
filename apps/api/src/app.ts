@@ -17,6 +17,7 @@ import {
   createNotificationsRouter,
   createNotificationPreferencesRouter,
 } from './modules/notifications/index';
+import { createAttachmentsRouter, createMessageAttachmentsRouter } from './modules/storage/index';
 import { createWorkspacesRouter } from './modules/workspaces/index';
 
 /** Optional overrides for tests (e.g. a memory-adapter auth instance). */
@@ -61,7 +62,9 @@ export function createApp(deps: AppDeps = {}): Express {
   app.use('/api/workspaces', createWorkspacesRouter(resolveAuth));
   app.use('/api/workspaces/:workspaceId/channels', createChannelsRouter(resolveAuth));
   app.use('/api/channels/:channelId/messages', createChannelMessagesRouter(resolveAuth));
+  app.use('/api/messages/:messageId/attachments', createMessageAttachmentsRouter(resolveAuth));
   app.use('/api/messages', createMessagesRouter(resolveAuth));
+  app.use('/api/attachments', createAttachmentsRouter(resolveAuth));
   app.use(
     '/api/workspaces/:workspaceId/direct-messages',
     createWorkspaceDirectMessagesRouter(resolveAuth),

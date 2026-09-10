@@ -7,6 +7,16 @@
  * are sent.
  */
 
+export interface MessageAttachment {
+  id: string;
+  messageId: string;
+  uploaderId?: string;
+  originalName: string;
+  mimeType: string;
+  size: number;
+  createdAt: Date;
+}
+
 /**
  * A single message as returned by the backend, normalized for the UI layer.
  * The `author` shape is the safe, public-facing subset of the author record.
@@ -30,6 +40,7 @@ export interface Message {
     name: string;
     image: string | null;
   };
+  attachments?: MessageAttachment[];
 }
 
 export interface MessageReactionSummary {
@@ -105,6 +116,15 @@ export function isMessagePayload(value: unknown): value is {
   replyCount?: number;
   latestReplyAt?: string | null;
   author?: { id: string; name: string; image?: string | null };
+  attachments?: Array<{
+    id: string;
+    messageId: string;
+    uploaderId?: string;
+    originalName: string;
+    mimeType: string;
+    size: number;
+    createdAt: string;
+  }>;
 } {
   if (!isRecord(value)) return false;
   if (!isNonEmptyString(value.id)) return false;
@@ -145,6 +165,16 @@ export function isMessagePayload(value: unknown): value is {
       typeof value.author.image !== 'string'
     ) {
       return false;
+    }
+  }
+  if (value.attachments !== undefined) {
+    if (!Array.isArray(value.attachments)) return false;
+    for (const att of value.attachments) {
+      if (!isRecord(att)) return false;
+      if (!isNonEmptyString(att.id) || !isNonEmptyString(att.messageId)) return false;
+      if (typeof att.originalName !== 'string' || typeof att.mimeType !== 'string') return false;
+      if (typeof att.size !== 'number') return false;
+      if (!isDateString(att.createdAt)) return false;
     }
   }
   return true;
@@ -544,7 +574,29 @@ export function messageFromJson(json: unknown): Message | null {
           image: candidate.author.image ?? null,
         };
   const rawAuthorId = (candidate as { authorId?: unknown }).authorId;
-  const rawCandidate = candidate as { directMessageConversationId?: string | null };
+  const rawCandidate = candidate as {
+    directMessageConversationId?: string | null;
+    attachments?: Array<{
+      id: string;
+      messageId: string;
+      uploaderId?: string;
+      originalName: string;
+      mimeType: string;
+      size: number;
+      createdAt: string;
+    }>;
+  };
+  const attachments: MessageAttachment[] | undefined = Array.isArray(rawCandidate.attachments)
+    ? rawCandidate.attachments.map((att) => ({
+        id: att.id,
+        messageId: att.messageId,
+        uploaderId: att.uploaderId,
+        originalName: att.originalName,
+        mimeType: att.mimeType,
+        size: att.size,
+        createdAt: new Date(att.createdAt),
+      }))
+    : undefined;
   return {
     id: candidate.id,
     channelId: candidate.channelId,
@@ -571,6 +623,7 @@ export function messageFromJson(json: unknown): Message | null {
       ? { latestReplyAt: candidate.latestReplyAt ? new Date(candidate.latestReplyAt) : null }
       : {}),
     author,
+    attachments,
   };
 }
 

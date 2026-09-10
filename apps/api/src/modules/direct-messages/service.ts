@@ -17,7 +17,7 @@ import { createMentionsForMessage } from '../mentions/service';
 import { generateNotificationsForMessageSafely } from '../notifications/service';
 import { decodeConversationCursor, encodeConversationCursor } from './cursor';
 import { decodeMessageCursor, encodeMessageCursor } from '../messages/cursor';
-import type { MessagePage, MessageResponse } from '../messages/service';
+import { attachmentSelect, type MessagePage, type MessageResponse } from '../messages/service';
 import {
   emitDirectConversationUpdated,
   emitDirectParticipantAdded,
@@ -496,7 +496,10 @@ export async function createDirectMessage(
         createdAt: now,
         updatedAt: now,
       },
-      include: { author: { select: userProfileSelect } },
+      include: {
+        author: { select: userProfileSelect },
+        attachments: { select: attachmentSelect, orderBy: { createdAt: 'asc' } },
+      },
     });
 
     await tx.directMessageConversation.update({
@@ -529,6 +532,7 @@ export async function createDirectMessage(
     editedAt: null,
     deletedAt: null,
     author: message.author,
+    attachments: message.attachments ?? [],
   };
 }
 
@@ -573,7 +577,10 @@ export async function listDirectMessages(
           }
         : {}),
     },
-    include: { author: { select: userProfileSelect } },
+    include: {
+      author: { select: userProfileSelect },
+      attachments: { select: attachmentSelect, orderBy: { createdAt: 'asc' } },
+    },
     orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     take: limit + 1,
   });
@@ -596,6 +603,7 @@ export async function listDirectMessages(
       editedAt: m.editedAt,
       deletedAt: m.deletedAt,
       author: m.author,
+      attachments: m.attachments ?? [],
     })),
     pageInfo: {
       hasMore,

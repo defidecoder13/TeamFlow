@@ -54,6 +54,34 @@ export class ChannelSlugConflictError extends Error {
   }
 }
 
+export class ChannelMembershipConflictError extends Error {
+  constructor(message = 'User is already a member of this channel.') {
+    super(message);
+    this.name = 'ChannelMembershipConflictError';
+  }
+}
+
+export class ChannelMembershipNotFoundError extends Error {
+  constructor(message = 'Channel member not found.') {
+    super(message);
+    this.name = 'ChannelMembershipNotFoundError';
+  }
+}
+
+export class ChannelValidationError extends Error {
+  constructor(message = 'Validation failed.') {
+    super(message);
+    this.name = 'ChannelValidationError';
+  }
+}
+
+export class ChannelForbiddenError extends Error {
+  constructor(message = 'You do not have permission.') {
+    super(message);
+    this.name = 'ChannelForbiddenError';
+  }
+}
+
 function toResponse(channel: {
   id: string;
   name: string;
@@ -139,6 +167,135 @@ export async function listAccessibleChannels(
     orderBy: [{ name: 'asc' }, { id: 'asc' }],
   });
   return channels.map(toResponse);
+}
+
+export interface ChannelMember {
+  id: string;
+  channelId: string;
+  userId: string;
+  createdAt: Date;
+  user: {
+    id: string;
+    name: string;
+    email: string;
+    image: string | null;
+  };
+}
+
+/**
+ * List private-channel members. Caller must have verified access via
+ * getAccessibleChannel and the channel must be PRIVATE — otherwise
+ * ChannelNotFoundError preserves non-enumeration for callers without access.
+ * The service double-checks membership so direct callers cannot bypass routes.
+ */
+export async function listChannelMembers(
+  prisma: PrismaClient,
+  input: { channelId: string; workspaceId: string; userId: string },
+): Promise<ChannelMember[]> {
+  const channel = await prisma.channel.findUnique({
+    where: { id: input.channelId },
+    select: { id: true, type: true, workspaceId: true },
+  });
+  if (!channel || channel.type !== 'PRIVATE' || channel.workspaceId !== input.workspaceId) {
+    throw new ChannelNotFoundError();
+  }
+  const membership = await prisma.channelMembership.findUnique({
+    where: { channelId_userId: { channelId: channel.id, userId: input.userId } },
+    select: { id: true },
+  });
+  if (!membership) {
+    throw new ChannelNotFoundError();
+  }
+  // Deterministic order mirrors listWorkspaceMembers: createdAt asc, id asc
+  const members = await prisma.channelMembership.findMany({
+    where: { channelId: channel.id },
+    include: { user: { select: { id: true, name: true, email: true, image: true } } },
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+  });
+  return members.map((m) => ({
+    id: m.id,
+    channelId: m.channelId,
+    userId: m.userId,
+    createdAt: m.createdAt,
+    user: m.user,
+  }));
+}
+
+/**
+ * Add an existing workspace member to a private channel. Validates channel
+ * is PRIVATE and target belongs to same workspace; idempotency is enforced
+ * by the DB unique constraint.
+ */
+export async function addChannelMember(
+  prisma: PrismaClient,
+  input: { channelId: string; workspaceId: string; targetUserId: string },
+): Promise<ChannelMember> {
+  const channel = await prisma.channel.findUnique({
+    where: { id: input.channelId },
+    select: { type: true, workspaceId: true },
+  });
+  if (!channel || channel.type !== 'PRIVATE' || channel.workspaceId !== input.workspaceId) {
+    throw new ChannelNotFoundError();
+  }
+  const targetMembership = await prisma.workspaceMembership.findUnique({
+    where: { workspaceId_userId: { workspaceId: input.workspaceId, userId: input.targetUserId } },
+    select: { id: true },
+  });
+  if (!targetMembership) {
+    throw new ChannelNotFoundError();
+  }
+  const existing = await prisma.channelMembership.findUnique({
+    where: { channelId_userId: { channelId: input.channelId, userId: input.targetUserId } },
+    select: { id: true },
+  });
+  if (existing) {
+    throw new ChannelMembershipConflictError();
+  }
+  try {
+    const created = await prisma.channelMembership.create({
+      data: { id: randomUUID(), channelId: input.channelId, userId: input.targetUserId },
+      include: { user: { select: { id: true, name: true, email: true, image: true } } },
+    });
+    return {
+      id: created.id,
+      channelId: created.channelId,
+      userId: created.userId,
+      createdAt: created.createdAt,
+      user: created.user,
+    };
+  } catch (error) {
+    if (isUniqueConstraintError(error)) {
+      throw new ChannelMembershipConflictError();
+    }
+    throw error;
+  }
+}
+
+/**
+ * Remove a member from a private channel. Validates channel is PRIVATE and
+ * target is a member.
+ */
+export async function removeChannelMember(
+  prisma: PrismaClient,
+  input: { channelId: string; workspaceId: string; userId: string },
+): Promise<void> {
+  const channel = await prisma.channel.findUnique({
+    where: { id: input.channelId },
+    select: { type: true, workspaceId: true },
+  });
+  if (!channel || channel.type !== 'PRIVATE' || channel.workspaceId !== input.workspaceId) {
+    throw new ChannelNotFoundError();
+  }
+  const existing = await prisma.channelMembership.findUnique({
+    where: { channelId_userId: { channelId: input.channelId, userId: input.userId } },
+    select: { id: true },
+  });
+  if (!existing) {
+    throw new ChannelMembershipNotFoundError();
+  }
+  await prisma.channelMembership.delete({
+    where: { channelId_userId: { channelId: input.channelId, userId: input.userId } },
+  });
 }
 
 /**

@@ -40,6 +40,7 @@ model User {
   conversationsAsParticipantB DirectMessageConversation[] @relation("ConversationParticipantB")
   directMessageParticipants   DirectMessageParticipant[]
   directMessageReadStates     DirectMessageReadState[]
+  attachments                 Attachment[]
 
   @@unique([email])
   @@map("user")
@@ -220,6 +221,7 @@ model Message {
   reactions                   MessageReaction[]
   readStates                  DirectMessageReadState[]
   mentions                    MessageMention[]
+  attachments                 Attachment[]
   notifications               Notification[] @relation("NotificationMessage")
   threadNotifications         Notification[] @relation("NotificationThreadRoot")
 
@@ -228,6 +230,25 @@ model Message {
   @@index([parentMessageId, createdAt, id])
   @@index([authorId])
   @@map("message")
+}
+
+model Attachment {
+  id           String   @id
+  messageId    String
+  uploaderId   String
+  originalName String
+  mimeType     String
+  size         Int
+  storageKey   String   @unique
+  createdAt    DateTime @default(now())
+
+  message      Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  uploader     User     @relation(fields: [uploaderId], references: [id], onDelete: Cascade)
+
+  @@index([messageId])
+  @@index([uploaderId])
+  @@index([createdAt])
+  @@map("attachment")
 }
 
 model MessageReaction {

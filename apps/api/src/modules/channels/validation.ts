@@ -52,8 +52,13 @@ export const updateChannelSchema = z
     message: 'Provide a name or description to update.',
   });
 
+export const addChannelMemberSchema = z
+  .object({ userId: z.string().trim().min(1, 'User ID is required.') })
+  .strict();
+
 export type CreateChannelInput = z.infer<typeof createChannelSchema>;
 export type UpdateChannelInput = z.infer<typeof updateChannelSchema>;
+export type AddChannelMemberInput = z.infer<typeof addChannelMemberSchema>;
 
 /** First safe, user-facing message from a Zod parse failure. */
 export function firstValidationMessage(error: z.ZodError, fallback = 'Invalid request.'): string {

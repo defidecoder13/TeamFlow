@@ -195,6 +195,145 @@ export async function createChannel(
   return { ok: false, kind: 'failed' };
 }
 
+export interface ChannelMember {
+  id: string;
+  channelId: string;
+  userId: string;
+  createdAt: string;
+  user: {
+    id: string;
+    name: string;
+    email: string;
+    image: string | null;
+  };
+}
+
+function isChannelMember(value: unknown): value is ChannelMember {
+  if (!isRecord(value)) return false;
+  if (
+    typeof value.id !== 'string' ||
+    value.id.length === 0 ||
+    typeof value.channelId !== 'string' ||
+    typeof value.userId !== 'string' ||
+    typeof value.createdAt !== 'string'
+  ) {
+    return false;
+  }
+  if (!isRecord(value.user)) return false;
+  const u = value.user;
+  return (
+    typeof u.id === 'string' &&
+    u.id.length > 0 &&
+    typeof u.name === 'string' &&
+    u.name.length > 0 &&
+    typeof u.email === 'string' &&
+    u.email.length > 0 &&
+    (u.image === null || typeof u.image === 'string')
+  );
+}
+
+export type FetchChannelMembersResult =
+  | { ok: true; members: ChannelMember[] }
+  | { ok: false; kind: 'unauthenticated' | 'notFound' | 'failed' };
+
+export async function fetchChannelMembers(
+  apiBaseUrl: string,
+  workspaceId: string,
+  channelSlug: string,
+): Promise<FetchChannelMembersResult> {
+  let response: Response;
+  try {
+    response = await fetch(`${channelsUrl(apiBaseUrl, workspaceId, channelSlug)}/members`, {
+      credentials: 'include',
+      cache: 'no-store',
+    });
+  } catch {
+    return { ok: false, kind: 'failed' };
+  }
+  if (response.status === 401) return { ok: false, kind: 'unauthenticated' };
+  if (response.status === 404) return { ok: false, kind: 'notFound' };
+  if (!response.ok) return { ok: false, kind: 'failed' };
+  const body = await readJson(response);
+  if (!isRecord(body) || !Array.isArray(body.members) || !body.members.every(isChannelMember)) {
+    return { ok: false, kind: 'failed' };
+  }
+  return { ok: true, members: body.members };
+}
+
+export type AddChannelMemberResult =
+  | { ok: true; member: ChannelMember }
+  | {
+      ok: false;
+      kind: 'unauthenticated' | 'notFound' | 'conflict' | 'validation' | 'forbidden' | 'failed';
+      message?: string;
+    };
+
+export async function addChannelMember(
+  apiBaseUrl: string,
+  workspaceId: string,
+  channelSlug: string,
+  userId: string,
+): Promise<AddChannelMemberResult> {
+  let response: Response;
+  try {
+    response = await fetch(`${channelsUrl(apiBaseUrl, workspaceId, channelSlug)}/members`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId }),
+    });
+  } catch {
+    return { ok: false, kind: 'failed' };
+  }
+  if (response.status === 401) return { ok: false, kind: 'unauthenticated' };
+  const body = await readJson(response);
+  if (response.status === 201) {
+    const member = isRecord(body) && isChannelMember(body.member) ? body.member : null;
+    if (!member) return { ok: false, kind: 'failed' };
+    return { ok: true, member };
+  }
+  if (response.status === 400)
+    return { ok: false, kind: 'validation', message: serverMessage(body, 'Invalid request.') };
+  if (response.status === 403) return { ok: false, kind: 'forbidden' };
+  if (response.status === 404) return { ok: false, kind: 'notFound' };
+  if (response.status === 409)
+    return { ok: false, kind: 'conflict', message: serverMessage(body, 'Already a member.') };
+  return { ok: false, kind: 'failed' };
+}
+
+export type RemoveChannelMemberResult =
+  | { ok: true }
+  | {
+      ok: false;
+      kind: 'unauthenticated' | 'notFound' | 'forbidden' | 'validation' | 'failed';
+      message?: string;
+    };
+
+export async function removeChannelMember(
+  apiBaseUrl: string,
+  workspaceId: string,
+  channelSlug: string,
+  userId: string,
+): Promise<RemoveChannelMemberResult> {
+  let response: Response;
+  try {
+    response = await fetch(
+      `${channelsUrl(apiBaseUrl, workspaceId, channelSlug)}/members/${encodeURIComponent(userId)}`,
+      { method: 'DELETE', credentials: 'include' },
+    );
+  } catch {
+    return { ok: false, kind: 'failed' };
+  }
+  if (response.status === 401) return { ok: false, kind: 'unauthenticated' };
+  if (response.status === 204) return { ok: true };
+  const body = await readJson(response);
+  if (response.status === 403) return { ok: false, kind: 'forbidden' };
+  if (response.status === 404) return { ok: false, kind: 'notFound' };
+  if (response.status === 400)
+    return { ok: false, kind: 'validation', message: serverMessage(body, 'Invalid request.') };
+  return { ok: false, kind: 'failed' };
+}
+
 export interface UpdateChannelInput {
   name?: string;
   description?: string | null;

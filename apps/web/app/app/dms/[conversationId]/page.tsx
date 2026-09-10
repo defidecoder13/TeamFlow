@@ -567,7 +567,7 @@ function DirectMessagePageInner({ workspace, conversationId, user }: DirectMessa
   }, []);
 
   const handleSend = useCallback(
-    async (body: string): Promise<{ ok: boolean; error?: string }> => {
+    async (body: string): Promise<{ ok: boolean; error?: string; messageId?: string }> => {
       setSubmitting(true);
       setSubmitError(null);
       try {

@@ -23,8 +23,15 @@ export const createWorkspaceSchema = z.object({ name: workspaceNameSchema }).str
 
 export const updateWorkspaceSchema = z.object({ name: workspaceNameSchema }).strict();
 
+export const workspaceMemberRoleSchema = z.enum(['ADMIN', 'MEMBER'], {
+  error: 'Role must be ADMIN or MEMBER.',
+});
+
+export const updateWorkspaceMemberSchema = z.object({ role: workspaceMemberRoleSchema }).strict();
+
 export type CreateWorkspaceInput = z.infer<typeof createWorkspaceSchema>;
 export type UpdateWorkspaceInput = z.infer<typeof updateWorkspaceSchema>;
+export type UpdateWorkspaceMemberInput = z.infer<typeof updateWorkspaceMemberSchema>;
 
 /** First safe, user-facing message from a Zod parse failure. */
 export function firstValidationMessage(error: z.ZodError, fallback = 'Invalid request.'): string {

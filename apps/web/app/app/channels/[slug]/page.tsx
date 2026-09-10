@@ -33,6 +33,7 @@ import {
   ThreadPanel,
   TypingIndicator,
 } from '@/components/app';
+import { ChannelMembersDialog } from '@/components/app/ChannelMembersDialog';
 import { useTyping } from '@/lib/use-typing';
 import type { Message } from '@/lib/messages';
 
@@ -48,11 +49,15 @@ function ChannelHeader({
   members,
   isOwner,
   onLeave,
+  onManageMembers,
+  canManageMembers,
 }: {
   channel: Channel | null;
   members: MemberInfo[];
   isOwner?: boolean;
   onLeave?: () => void;
+  onManageMembers?: () => void;
+  canManageMembers?: boolean;
 }) {
   if (!channel) return null;
   const isPrivate = channel.type === 'PRIVATE';
@@ -80,6 +85,16 @@ function ChannelHeader({
           <span className="text-[12px] text-stone-400">
             {members.length} {members.length === 1 ? 'member' : 'members'}
           </span>
+        )}
+        {isPrivate && onManageMembers && (
+          <button
+            type="button"
+            onClick={onManageMembers}
+            className="rounded-md border border-stone-200 bg-white px-2.5 py-1 text-[12px] font-medium text-stone-700 shadow-sm transition-colors hover:bg-stone-50 hover:text-stone-900"
+            aria-label={canManageMembers ? 'Manage members' : 'View members'}
+          >
+            {canManageMembers ? 'Manage' : 'Members'}
+          </button>
         )}
         {onLeave && !isOwner && (
           <button
@@ -439,8 +454,10 @@ function ConversationPageInner({ workspace, slug, user }: ConversationPageInnerP
   const [selectedThreadRootMessage, setSelectedThreadRootMessage] = useState<Message | null>(null);
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
   const [highlightedReplyId, setHighlightedReplyId] = useState<string | null>(null);
+  const [isMembersDialogOpen, setIsMembersDialogOpen] = useState(false);
   const deepLink = useDeepLink();
   const deepLinkConsumedRef = useRef(false);
+  const canManageChannelMembers = workspace.role === 'OWNER' || workspace.role === 'ADMIN';
 
   // Clear thread selection when switching channels
   useEffect(() => {
@@ -520,7 +537,7 @@ function ConversationPageInner({ workspace, slug, user }: ConversationPageInnerP
   }, []);
 
   const handleSend = useCallback(
-    async (body: string): Promise<{ ok: boolean; error?: string }> => {
+    async (body: string): Promise<{ ok: boolean; error?: string; messageId?: string }> => {
       setSubmitting(true);
       setSubmitError(null);
       try {
@@ -697,7 +714,15 @@ function ConversationPageInner({ workspace, slug, user }: ConversationPageInnerP
         className="flex min-h-0 flex-1 flex-col bg-white"
         data-selected-thread-id={selectedThreadRootMessage?.id ?? undefined}
       >
-        <ChannelHeader channel={channel} members={memberInfo} isOwner={isOwner} />
+        <ChannelHeader
+          channel={channel}
+          members={memberInfo}
+          isOwner={isOwner}
+          canManageMembers={canManageChannelMembers}
+          onManageMembers={
+            channel.type === 'PRIVATE' ? () => setIsMembersDialogOpen(true) : undefined
+          }
+        />
 
         <div className="flex min-h-0 flex-1 flex-row">
           <div className="flex min-h-0 flex-1 flex-col">
@@ -778,6 +803,14 @@ function ConversationPageInner({ workspace, slug, user }: ConversationPageInnerP
           deleting={submitting}
           error={deleteError}
         />
+        {isMembersDialogOpen && channel && (
+          <ChannelMembersDialog
+            workspaceId={workspace.id}
+            channel={channel}
+            canManage={canManageChannelMembers}
+            onClose={() => setIsMembersDialogOpen(false)}
+          />
+        )}
       </div>
     </AppShell>
   );
