@@ -94,16 +94,15 @@ export function UserMenu({ user }: { user: SessionUser }) {
             </div>
           </div>
           <div className="p-1.5">
-            <button
-              type="button"
+            <Link
+              href="/app/settings/profile"
               role="menuitem"
-              disabled
-              title="Profile arrives in a later phase"
-              className="flex h-8 w-full items-center gap-2.5 rounded-md px-2 text-[13px] text-stone-400 disabled:cursor-not-allowed"
+              onClick={() => setOpen(false)}
+              className="flex h-8 w-full items-center gap-2.5 rounded-md px-2 text-[13px] text-stone-700 transition-colors hover:bg-stone-900/[0.05]"
             >
               <PersonIcon className="h-4 w-4" />
               Profile
-            </button>
+            </Link>
             <Link
               href="/app/settings/notifications"
               role="menuitem"

@@ -21,6 +21,8 @@ import {
   ChannelSlugConflictError,
   addChannelMember,
   createChannel,
+  deleteChannel,
+  leaveChannel,
   listAccessibleChannels,
   listChannelMembers,
   removeChannelMember,
@@ -295,6 +297,41 @@ export function createChannelsRouter(resolveAuth: () => AuthContext): Router {
   );
 
   router.delete(
+    '/:channelSlug/members/me',
+    asyncRoute(async (req, res) => {
+      const authUser = requireSessionUser(req, res);
+      if (!authUser) return;
+      const accessible = await getAccessibleChannel(getPrisma(), {
+        workspaceId: req.params.workspaceId,
+        channelSlug: req.params.channelSlug,
+        userId: authUser.id,
+      });
+      if (!accessible) {
+        notFound(res);
+        return;
+      }
+      try {
+        await leaveChannel(getPrisma(), {
+          channelId: accessible.channel.id,
+          userId: authUser.id,
+        });
+        removeUserFromChannelRoom(accessible.channel.id, authUser.id);
+        res.status(204).send();
+      } catch (error) {
+        if (error instanceof ChannelNotFoundError) {
+          notFound(res);
+          return;
+        }
+        if (error instanceof ChannelMembershipNotFoundError) {
+          notFound(res);
+          return;
+        }
+        throw error;
+      }
+    }),
+  );
+
+  router.delete(
     '/:channelSlug/members/:userId',
     asyncRoute(async (req, res) => {
       const authUser = requireSessionUser(req, res);
@@ -337,6 +374,42 @@ export function createChannelsRouter(resolveAuth: () => AuthContext): Router {
           return;
         }
         if (error instanceof ChannelMembershipNotFoundError) {
+          notFound(res);
+          return;
+        }
+        throw error;
+      }
+    }),
+  );
+
+  router.delete(
+    '/:channelSlug',
+    asyncRoute(async (req, res) => {
+      const authUser = requireSessionUser(req, res);
+      if (!authUser) return;
+      const accessible = await getAccessibleChannel(getPrisma(), {
+        workspaceId: req.params.workspaceId,
+        channelSlug: req.params.channelSlug,
+        userId: authUser.id,
+      });
+      if (!accessible) {
+        notFound(res);
+        return;
+      }
+      if (
+        !canUpdateChannel({
+          workspaceRole: accessible.workspaceRole,
+          isCreator: accessible.channel.createdById === authUser.id,
+        })
+      ) {
+        forbidden(res);
+        return;
+      }
+      try {
+        await deleteChannel(getPrisma(), { channelId: accessible.channel.id });
+        res.status(204).send();
+      } catch (error) {
+        if (error instanceof ChannelNotFoundError) {
           notFound(res);
           return;
         }

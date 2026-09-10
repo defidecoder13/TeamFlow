@@ -130,6 +130,8 @@ export type CreateWorkspaceResult =
   | { ok: false; kind: 'failed' };
 
 const CREATE_FALLBACK_MESSAGE = "We couldn't create the workspace. Please try again.";
+const UPDATE_FALLBACK_MESSAGE = "We couldn't update the workspace. Please try again.";
+const DELETE_FALLBACK_MESSAGE = "We couldn't delete the workspace. Please try again.";
 
 /** Safe server-provided message ({ error: { message } }), else the fallback. */
 function serverMessage(body: unknown, fallback: string): string {
@@ -189,4 +191,90 @@ export async function createWorkspace(
     return { ok: false, kind: 'conflict', message: serverMessage(body, CREATE_FALLBACK_MESSAGE) };
   }
   return { ok: false, kind: 'failed' };
+}
+
+export type UpdateWorkspaceResult =
+  | { ok: true; workspace: WorkspaceSummary }
+  | { ok: false; kind: 'unauthenticated' }
+  | { ok: false; kind: 'validation'; message: string }
+  | { ok: false; kind: 'forbidden' }
+  | { ok: false; kind: 'notFound' }
+  | { ok: false; kind: 'failed' };
+
+/**
+ * Rename a workspace via PATCH /api/workspaces/:workspaceId.
+ * Only name is sent; slug stays server-side immutable.
+ */
+export async function updateWorkspace(
+  apiBaseUrl: string,
+  workspaceId: string,
+  name: string,
+): Promise<UpdateWorkspaceResult> {
+  let response: Response;
+  try {
+    response = await fetch(`${apiBaseUrl}/api/workspaces/${encodeURIComponent(workspaceId)}`, {
+      method: 'PATCH',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }),
+      cache: 'no-store',
+    });
+  } catch {
+    return { ok: false, kind: 'failed' };
+  }
+  if (response.status === 401) return { ok: false, kind: 'unauthenticated' };
+  let body: unknown = null;
+  try {
+    body = await response.json();
+  } catch {
+    body = null;
+  }
+  if (response.status === 200) {
+    const workspace = isRecord(body) && isWorkspaceSummary(body.workspace) ? body.workspace : null;
+    if (!workspace) return { ok: false, kind: 'failed' };
+    return { ok: true, workspace };
+  }
+  if (response.status === 400) {
+    return { ok: false, kind: 'validation', message: serverMessage(body, UPDATE_FALLBACK_MESSAGE) };
+  }
+  if (response.status === 403) return { ok: false, kind: 'forbidden' };
+  if (response.status === 404) return { ok: false, kind: 'notFound' };
+  return { ok: false, kind: 'failed' };
+}
+
+export type DeleteWorkspaceResult =
+  | { ok: true }
+  | { ok: false; kind: 'unauthenticated' }
+  | { ok: false; kind: 'forbidden' }
+  | { ok: false; kind: 'notFound' }
+  | { ok: false; kind: 'failed'; message?: string };
+
+/**
+ * Delete a workspace via DELETE /api/workspaces/:workspaceId.
+ */
+export async function deleteWorkspace(
+  apiBaseUrl: string,
+  workspaceId: string,
+): Promise<DeleteWorkspaceResult> {
+  let response: Response;
+  try {
+    response = await fetch(`${apiBaseUrl}/api/workspaces/${encodeURIComponent(workspaceId)}`, {
+      method: 'DELETE',
+      credentials: 'include',
+      cache: 'no-store',
+    });
+  } catch {
+    return { ok: false, kind: 'failed' };
+  }
+  if (response.status === 401) return { ok: false, kind: 'unauthenticated' };
+  if (response.status === 204) return { ok: true };
+  let body: unknown = null;
+  try {
+    body = await response.json();
+  } catch {
+    body = null;
+  }
+  if (response.status === 403) return { ok: false, kind: 'forbidden' };
+  if (response.status === 404) return { ok: false, kind: 'notFound' };
+  return { ok: false, kind: 'failed', message: serverMessage(body, DELETE_FALLBACK_MESSAGE) };
 }

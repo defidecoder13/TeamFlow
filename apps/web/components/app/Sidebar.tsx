@@ -397,6 +397,19 @@ export function Sidebar({
           Members
         </Link>
         <Link
+          href="/app/settings/workspace"
+          aria-current={pathname === '/app/settings/workspace' ? 'page' : undefined}
+          className={[
+            'flex h-8 w-full items-center gap-2.5 rounded-md px-2 text-[13px] font-medium transition-colors',
+            pathname === '/app/settings/workspace'
+              ? 'bg-stone-900/[0.07] text-stone-900'
+              : 'text-stone-600 hover:bg-stone-900/[0.04] hover:text-stone-900',
+          ].join(' ')}
+        >
+          <SettingsIcon className="h-4 w-4 shrink-0" />
+          Workspace
+        </Link>
+        <Link
           href="/app/settings/notifications"
           className={[
             'flex h-8 w-full items-center gap-2.5 rounded-md px-2 text-[13px] font-medium transition-colors',

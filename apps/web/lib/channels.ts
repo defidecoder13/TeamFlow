@@ -1,10 +1,9 @@
 /**
- * Channel API client (Phase 3B).
+ * Channel API client (Phase 3B + 4K.5 delete/leave).
  *
  * Thin fetch wrappers over the approved channel contract. Session cookies
  * travel via `credentials: 'include'`, matching the other clients. Payloads
  * are runtime-validated before use; failures are values with safe messages.
- * No DELETE exists on the backend, so none is implemented here.
  */
 
 export const CHANNEL_TYPES = ['PUBLIC', 'PRIVATE'] as const;
@@ -411,4 +410,71 @@ export async function updateChannel(
     };
   }
   return { ok: false, kind: 'failed' };
+}
+
+export type DeleteChannelResult =
+  | { ok: true }
+  | { ok: false; kind: 'unauthenticated' | 'forbidden' | 'notFound' | 'failed'; message?: string };
+
+/**
+ * Delete a channel via DELETE /api/workspaces/:workspaceId/channels/:slug.
+ */
+export async function deleteChannel(
+  apiBaseUrl: string,
+  workspaceId: string,
+  slug: string,
+): Promise<DeleteChannelResult> {
+  let response: Response;
+  try {
+    response = await fetch(channelsUrl(apiBaseUrl, workspaceId, slug), {
+      method: 'DELETE',
+      credentials: 'include',
+      cache: 'no-store',
+    });
+  } catch {
+    return { ok: false, kind: 'failed' };
+  }
+  if (response.status === 401) return { ok: false, kind: 'unauthenticated' };
+  if (response.status === 204) return { ok: true };
+  const body = await readJson(response);
+  if (response.status === 403) return { ok: false, kind: 'forbidden' };
+  if (response.status === 404) return { ok: false, kind: 'notFound' };
+  return {
+    ok: false,
+    kind: 'failed',
+    message: serverMessage(body, "We couldn't delete the channel. Please try again."),
+  };
+}
+
+export type LeaveChannelResult =
+  { ok: true } | { ok: false; kind: 'unauthenticated' | 'notFound' | 'failed'; message?: string };
+
+/**
+ * Leave a channel via DELETE /api/workspaces/:workspaceId/channels/:slug/members/me.
+ * Session user is always the target — no userId in body.
+ */
+export async function leaveChannel(
+  apiBaseUrl: string,
+  workspaceId: string,
+  slug: string,
+): Promise<LeaveChannelResult> {
+  let response: Response;
+  try {
+    response = await fetch(`${channelsUrl(apiBaseUrl, workspaceId, slug)}/members/me`, {
+      method: 'DELETE',
+      credentials: 'include',
+      cache: 'no-store',
+    });
+  } catch {
+    return { ok: false, kind: 'failed' };
+  }
+  if (response.status === 401) return { ok: false, kind: 'unauthenticated' };
+  if (response.status === 204) return { ok: true };
+  const body = await readJson(response);
+  if (response.status === 404) return { ok: false, kind: 'notFound' };
+  return {
+    ok: false,
+    kind: 'failed',
+    message: serverMessage(body, "We couldn't leave the channel. Please try again."),
+  };
 }

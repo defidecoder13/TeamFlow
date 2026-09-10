@@ -26,6 +26,7 @@ export function useWorkspaceChannels(workspaceId: string | null): {
   retry: () => void;
   addChannel: (channel: Channel) => void;
   updateChannelState: (channel: Channel) => void;
+  removeChannel: (channelId: string) => void;
 } {
   const [attempt, setAttempt] = useState(0);
   const [state, setState] = useState<WorkspaceChannelsState>({ status: 'idle' });
@@ -57,6 +58,13 @@ export function useWorkspaceChannels(workspaceId: string | null): {
           existing.id === channel.id ? channel : existing,
         ),
       };
+    });
+  }, []);
+
+  const removeChannel = useCallback((channelId: string) => {
+    setState((current) => {
+      if (current.status !== 'ready') return current;
+      return { status: 'ready', channels: current.channels.filter((c) => c.id !== channelId) };
     });
   }, []);
 
@@ -99,5 +107,24 @@ export function useWorkspaceChannels(workspaceId: string | null): {
     };
   }, [workspaceId, attempt]);
 
-  return { state, retry, addChannel, updateChannelState };
+  useEffect(() => {
+    function onRemoved(e: Event) {
+      const detail = (e as CustomEvent<{ channelId: string; workspaceId: string }>).detail;
+      if (!detail || detail.workspaceId !== workspaceId) return;
+      removeChannel(detail.channelId);
+    }
+    function onUpdated(e: Event) {
+      const detail = (e as CustomEvent<{ channel: Channel; workspaceId: string }>).detail;
+      if (!detail || detail.workspaceId !== workspaceId) return;
+      updateChannelState(detail.channel);
+    }
+    window.addEventListener('teamflow:channel:removed', onRemoved as EventListener);
+    window.addEventListener('teamflow:channel:updated', onUpdated as EventListener);
+    return () => {
+      window.removeEventListener('teamflow:channel:removed', onRemoved as EventListener);
+      window.removeEventListener('teamflow:channel:updated', onUpdated as EventListener);
+    };
+  }, [workspaceId, removeChannel, updateChannelState]);
+
+  return { state, retry, addChannel, updateChannelState, removeChannel };
 }

@@ -327,3 +327,60 @@ export async function updateChannel(
     throw error;
   }
 }
+
+/**
+ * Delete a channel by id. Cascades to messages/memberships at DB level.
+ * Throws ChannelNotFoundError on races.
+ */
+export async function deleteChannel(
+  prisma: PrismaClient,
+  input: { channelId: string },
+): Promise<void> {
+  try {
+    await prisma.channel.delete({ where: { id: input.channelId } });
+  } catch (error) {
+    if (isRecordNotFoundError(error)) {
+      throw new ChannelNotFoundError();
+    }
+    throw error;
+  }
+}
+
+/**
+ * Self-leave a channel. For PRIVATE channels, removes ChannelMembership.
+ * For PUBLIC channels, there is no membership to remove — succeeds as no-op
+ * if the user is a workspace member (verified by route via getAccessibleChannel).
+ * Throws ChannelMembershipNotFoundError when PRIVATE membership missing.
+ */
+export async function leaveChannel(
+  prisma: PrismaClient,
+  input: { channelId: string; userId: string },
+): Promise<void> {
+  const channel = await prisma.channel.findUnique({
+    where: { id: input.channelId },
+    select: { type: true },
+  });
+  if (!channel) throw new ChannelNotFoundError();
+  if (channel.type === 'PUBLIC') {
+    // Public channels have no membership rows; leaving is a no-op success.
+    // If a stray PRIVATE-style membership exists, clean it.
+    const existing = await prisma.channelMembership.findUnique({
+      where: { channelId_userId: { channelId: input.channelId, userId: input.userId } },
+      select: { id: true },
+    });
+    if (existing) {
+      await prisma.channelMembership.delete({
+        where: { channelId_userId: { channelId: input.channelId, userId: input.userId } },
+      });
+    }
+    return;
+  }
+  const existing = await prisma.channelMembership.findUnique({
+    where: { channelId_userId: { channelId: input.channelId, userId: input.userId } },
+    select: { id: true },
+  });
+  if (!existing) throw new ChannelMembershipNotFoundError();
+  await prisma.channelMembership.delete({
+    where: { channelId_userId: { channelId: input.channelId, userId: input.userId } },
+  });
+}

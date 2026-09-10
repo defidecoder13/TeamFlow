@@ -59,6 +59,8 @@ export function useWorkspaces(enabled: boolean): {
   retry: () => void;
   addWorkspace: (workspace: WorkspaceSummary) => void;
   setCurrentWorkspace: (workspaceId: string) => void;
+  updateWorkspace: (workspace: WorkspaceSummary) => void;
+  removeWorkspace: (workspaceId: string) => void;
 } {
   const [attempt, setAttempt] = useState(0);
   const [state, setState] = useState<WorkspacesState>({ status: 'idle' });
@@ -93,6 +95,30 @@ export function useWorkspaces(enabled: boolean): {
       if (!found) return current;
       if (current.current?.id === workspaceId) return current;
       return { ...current, current: found };
+    });
+  }, []);
+
+  const updateWorkspace = useCallback((workspace: WorkspaceSummary) => {
+    setState((current) => {
+      if (current.status !== 'ready') return current;
+      const workspaces = current.workspaces.map((w) => (w.id === workspace.id ? workspace : w));
+      const currentUpdated = current.current?.id === workspace.id ? workspace : current.current;
+      return { ...current, workspaces, current: currentUpdated };
+    });
+  }, []);
+
+  const removeWorkspace = useCallback((workspaceId: string) => {
+    const stored = getStoredWorkspaceId();
+    if (stored === workspaceId) setStoredWorkspaceId(null);
+    setState((current) => {
+      if (current.status !== 'ready') return current;
+      const workspaces = current.workspaces.filter((w) => w.id !== workspaceId);
+      if (workspaces.length === 0) return { status: 'ready', workspaces, current: null };
+      if (current.current?.id !== workspaceId) return { ...current, workspaces };
+      // Deleted current — pick stored if still valid, else first
+      const nextCurrent = selectStoredWorkspace(workspaces);
+      if (nextCurrent) setStoredWorkspaceId(nextCurrent.id);
+      return { status: 'ready', workspaces, current: nextCurrent };
     });
   }, []);
 
@@ -138,5 +164,5 @@ export function useWorkspaces(enabled: boolean): {
     };
   }, [enabled, attempt]);
 
-  return { state, retry, addWorkspace, setCurrentWorkspace };
+  return { state, retry, addWorkspace, setCurrentWorkspace, updateWorkspace, removeWorkspace };
 }

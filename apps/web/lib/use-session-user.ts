@@ -19,8 +19,15 @@ export type SessionState =
 
 const LOAD_FAILURE_MESSAGE = 'Could not load your session. Check your connection and try again.';
 
-export function useSessionUser(): SessionState {
+export function useSessionUser(): SessionState & {
+  refresh: () => void;
+  setUser: (user: SessionUser) => void;
+} {
   const [state, setState] = useState<SessionState>({ status: 'loading' });
+  const [attempt, setAttempt] = useState(0);
+
+  const refresh = () => setAttempt((c) => c + 1);
+  const setUser = (user: SessionUser) => setState({ status: 'authenticated', user });
 
   useEffect(() => {
     let cancelled = false;
@@ -90,9 +97,12 @@ export function useSessionUser(): SessionState {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [attempt]);
 
-  return state;
+  return { ...state, refresh, setUser } as SessionState & {
+    refresh: () => void;
+    setUser: (user: SessionUser) => void;
+  };
 }
 
 function isSessionUserBody(value: unknown): value is {

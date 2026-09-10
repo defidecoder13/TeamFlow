@@ -32,8 +32,11 @@ import {
   LockIcon,
   ThreadPanel,
   TypingIndicator,
+  EditChannelDialog,
 } from '@/components/app';
 import { ChannelMembersDialog } from '@/components/app/ChannelMembersDialog';
+import { ChannelDeleteDialog } from '@/components/app/ChannelDeleteDialog';
+import { ChannelLeaveDialog } from '@/components/app/ChannelLeaveDialog';
 import { useTyping } from '@/lib/use-typing';
 import type { Message } from '@/lib/messages';
 
@@ -47,14 +50,20 @@ type MemberInfo = {
 function ChannelHeader({
   channel,
   members,
-  isOwner,
+  canEdit,
+  canDelete,
+  onEdit,
+  onDelete,
   onLeave,
   onManageMembers,
   canManageMembers,
 }: {
   channel: Channel | null;
   members: MemberInfo[];
-  isOwner?: boolean;
+  canEdit?: boolean;
+  canDelete?: boolean;
+  onEdit?: () => void;
+  onDelete?: () => void;
   onLeave?: () => void;
   onManageMembers?: () => void;
   canManageMembers?: boolean;
@@ -80,9 +89,9 @@ function ChannelHeader({
           )}
         </div>
       </div>
-      <div className="flex shrink-0 items-center gap-3">
+      <div className="flex shrink-0 items-center gap-2">
         {members.length > 0 && (
-          <span className="text-[12px] text-stone-400">
+          <span className="hidden text-[12px] text-stone-400 sm:inline">
             {members.length} {members.length === 1 ? 'member' : 'members'}
           </span>
         )}
@@ -96,7 +105,27 @@ function ChannelHeader({
             {canManageMembers ? 'Manage' : 'Members'}
           </button>
         )}
-        {onLeave && !isOwner && (
+        {canEdit && onEdit && (
+          <button
+            type="button"
+            onClick={onEdit}
+            aria-label="Edit channel"
+            className="rounded-md border border-stone-200 bg-white px-2.5 py-1 text-[12px] font-medium text-stone-700 shadow-sm transition-colors hover:bg-stone-50 hover:text-stone-900"
+          >
+            Edit
+          </button>
+        )}
+        {canDelete && onDelete && (
+          <button
+            type="button"
+            onClick={onDelete}
+            aria-label="Delete channel"
+            className="rounded-md border border-red-200 bg-white px-2.5 py-1 text-[12px] font-medium text-red-600 shadow-sm transition-colors hover:bg-red-50"
+          >
+            Delete
+          </button>
+        )}
+        {onLeave && (
           <button
             type="button"
             onClick={onLeave}
@@ -409,8 +438,8 @@ type ConversationPageInnerProps = {
 };
 
 function ConversationPageInner({ workspace, slug, user }: ConversationPageInnerProps) {
+  const router = useRouter();
   const userId = user.id;
-  const isOwner = workspace.role === 'OWNER';
 
   const channelState = useWorkspaceChannel(workspace.id, slug);
   const membersState = useWorkspaceMembers(workspace.id);
@@ -455,9 +484,14 @@ function ConversationPageInner({ workspace, slug, user }: ConversationPageInnerP
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
   const [highlightedReplyId, setHighlightedReplyId] = useState<string | null>(null);
   const [isMembersDialogOpen, setIsMembersDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isLeaveDialogOpen, setIsLeaveDialogOpen] = useState(false);
   const deepLink = useDeepLink();
   const deepLinkConsumedRef = useRef(false);
   const canManageChannelMembers = workspace.role === 'OWNER' || workspace.role === 'ADMIN';
+  const canEditChannel = workspace.role === 'OWNER' || workspace.role === 'ADMIN';
+  const canDeleteChannel = canEditChannel;
 
   // Clear thread selection when switching channels
   useEffect(() => {
@@ -717,7 +751,11 @@ function ConversationPageInner({ workspace, slug, user }: ConversationPageInnerP
         <ChannelHeader
           channel={channel}
           members={memberInfo}
-          isOwner={isOwner}
+          canEdit={canEditChannel}
+          canDelete={canDeleteChannel}
+          onEdit={() => setIsEditDialogOpen(true)}
+          onDelete={() => setIsDeleteDialogOpen(true)}
+          onLeave={() => setIsLeaveDialogOpen(true)}
           canManageMembers={canManageChannelMembers}
           onManageMembers={
             channel.type === 'PRIVATE' ? () => setIsMembersDialogOpen(true) : undefined
@@ -809,6 +847,56 @@ function ConversationPageInner({ workspace, slug, user }: ConversationPageInnerP
             channel={channel}
             canManage={canManageChannelMembers}
             onClose={() => setIsMembersDialogOpen(false)}
+          />
+        )}
+        {isEditDialogOpen && channel && (
+          <EditChannelDialog
+            workspaceId={workspace.id}
+            channel={channel}
+            onClose={() => setIsEditDialogOpen(false)}
+            onUpdated={(updated) => {
+              setIsEditDialogOpen(false);
+              // Dispatch update for sidebar and navigate if slug changed
+              try {
+                window.dispatchEvent(
+                  new CustomEvent('teamflow:channel:updated', {
+                    detail: { channel: updated, workspaceId: workspace.id },
+                  }),
+                );
+              } catch {
+                // ignore
+              }
+              if (updated.slug !== channel.slug) {
+                router.push(`/app/channels/${updated.slug}`);
+              } else {
+                channelState.retry();
+              }
+            }}
+            onUnauthenticated={() => router.replace('/sign-in')}
+          />
+        )}
+        {isDeleteDialogOpen && channel && (
+          <ChannelDeleteDialog
+            workspaceId={workspace.id}
+            channel={channel}
+            onClose={() => setIsDeleteDialogOpen(false)}
+            onDeleted={() => {
+              setIsDeleteDialogOpen(false);
+              router.push('/app');
+            }}
+            onUnauthenticated={() => router.replace('/sign-in')}
+          />
+        )}
+        {isLeaveDialogOpen && channel && (
+          <ChannelLeaveDialog
+            workspaceId={workspace.id}
+            channel={channel}
+            onClose={() => setIsLeaveDialogOpen(false)}
+            onLeft={() => {
+              setIsLeaveDialogOpen(false);
+              router.push('/app');
+            }}
+            onUnauthenticated={() => router.replace('/sign-in')}
           />
         )}
       </div>

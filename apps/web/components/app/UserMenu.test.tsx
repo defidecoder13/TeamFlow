@@ -30,14 +30,17 @@ beforeEach(() => {
 });
 
 describe('UserMenu', () => {
-  it('shows the real name and email, with placeholders disabled', async () => {
+  it('shows the real name and email, with profile enabled', async () => {
     const user = userEvent.setup();
     render(<UserMenu user={USER} />);
 
     await user.click(screen.getByRole('button', { name: /account: ada lovelace/i }));
 
     expect(screen.getByText('Ada Lovelace')).toBeInTheDocument();
-    expect(screen.getByRole('menuitem', { name: /profile/i })).toBeDisabled();
+    expect(screen.getByRole('menuitem', { name: /profile/i })).toHaveAttribute(
+      'href',
+      '/app/settings/profile',
+    );
     expect(screen.getByRole('menuitem', { name: /settings/i })).toHaveAttribute(
       'href',
       '/app/settings/notifications',
