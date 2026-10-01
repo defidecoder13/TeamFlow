@@ -6,7 +6,9 @@
 
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { Mail, Check } from 'lucide-react';
+import { AuthField } from '../auth/AuthField';
 import { getApiBaseUrl } from '../../lib/config';
 import {
   updateProfile,
@@ -14,7 +16,7 @@ import {
   validateProfileName,
   type SessionUser,
 } from '../../lib/profile';
-import { UserAvatar } from './UserAvatar';
+import { Avatar } from '@/components/ui/Avatar';
 
 interface ProfileContentProps {
   user: SessionUser;
@@ -29,6 +31,9 @@ export function ProfileContent({ user, onUpdated, onUnauthenticated }: ProfileCo
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
+  const nameInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const saveErrorRef = useRef<HTMLParagraphElement>(null);
 
   useEffect(() => {
     setName(user.name);
@@ -40,7 +45,6 @@ export function ProfileContent({ user, onUpdated, onUnauthenticated }: ProfileCo
 
   const nameError = touched ? validateProfileName(name) : null;
   const imageError = touched ? validateProfileImage(image) : null;
-  const hasValidationError = !!nameError || !!imageError;
 
   const trimmedName = name.trim();
   const trimmedImage = image.trim();
@@ -54,7 +58,14 @@ export function ProfileContent({ user, onUpdated, onUnauthenticated }: ProfileCo
     setTouched(true);
     const nErr = validateProfileName(name);
     const iErr = validateProfileImage(image);
-    if (nErr || iErr) return;
+    if (nErr) {
+      nameInputRef.current?.focus();
+      return;
+    }
+    if (iErr) {
+      imageInputRef.current?.focus();
+      return;
+    }
     if (!hasChanged) {
       setSaveSuccess('No changes to save.');
       return;
@@ -67,7 +78,8 @@ export function ProfileContent({ user, onUpdated, onUnauthenticated }: ProfileCo
       apiBase = getApiBaseUrl();
     } catch {
       setSaving(false);
-      setSaveError('Could not connect to API server.');
+      setSaveError('Could not connect to API server. Check your connection and try again.');
+      saveErrorRef.current?.focus();
       return;
     }
     const result = await updateProfile(apiBase, {
@@ -86,54 +98,54 @@ export function ProfileContent({ user, onUpdated, onUnauthenticated }: ProfileCo
     }
     if (result.kind === 'validation') {
       setSaveError(result.message);
+      nameInputRef.current?.focus();
       return;
     }
     if (result.kind === 'notFound') {
       setSaveError('User not found.');
+      saveErrorRef.current?.focus();
       return;
     }
-    setSaveError(result.message ?? 'Could not update profile. Please try again.');
+    setSaveError(
+      result.message ?? 'Could not update profile. Check your connection and try again.',
+    );
+    saveErrorRef.current?.focus();
   }
 
   const previewName = trimmedName.length > 0 ? trimmedName : user.name;
   const previewImage = trimmedImage.length > 0 ? trimmedImage : user.image;
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <div>
-        <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-stone-400">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-[#737782]">
           Account settings
         </p>
-        <h1 className="mt-2 text-[26px] font-semibold tracking-tight text-stone-900">Profile</h1>
-        <p className="mt-1.5 max-w-xl text-sm leading-relaxed text-stone-500">
+        <h1 className="mt-1 text-[26px] font-semibold tracking-tight text-[#171A21]">
+          Profile & account
+        </h1>
+        <p className="mt-1 text-[14px] leading-relaxed text-[#4F5360]">
           Update your display name and avatar. Changes are visible to teammates immediately.
         </p>
       </div>
 
-      <section
-        aria-labelledby="profile-heading"
-        className="rounded-xl border border-stone-200 bg-white p-6 shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
-      >
-        <h2 id="profile-heading" className="text-[13px] font-semibold text-stone-900">
-          Profile
-        </h2>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* Left 2 cols: Profile Form */}
+        <section
+          aria-labelledby="profile-heading"
+          className="md:col-span-2 rounded-[12px] border border-[#E4E2DF] bg-white p-6 shadow-2xs"
+        >
+          <h2 id="profile-heading" className="text-[15px] font-semibold text-[#171A21] mb-5">
+            Profile details
+          </h2>
 
-        <div className="mt-4 flex items-center gap-4">
-          <UserAvatar name={previewName} image={previewImage} size="md" />
-          <div>
-            <p className="text-sm font-medium text-stone-900">{previewName}</p>
-            <p className="text-xs text-stone-500">{user.email}</p>
-          </div>
-        </div>
-
-        <form onSubmit={handleSubmit} noValidate className="mt-6 space-y-4">
-          <div>
-            <label htmlFor="profile-name" className="text-[13px] font-medium text-stone-700">
-              Display name
-            </label>
-            <input
+          <form onSubmit={handleSubmit} noValidate className="space-y-5">
+            <AuthField
+              ref={nameInputRef}
               id="profile-name"
+              label="Display name"
               type="text"
+              autoComplete="name"
               value={name}
               onChange={(e) => {
                 setName(e.target.value);
@@ -142,80 +154,115 @@ export function ProfileContent({ user, onUpdated, onUnauthenticated }: ProfileCo
               onBlur={() => setTouched(true)}
               maxLength={100}
               disabled={saving}
-              aria-invalid={nameError ? 'true' : undefined}
-              className="mt-1.5 h-9 w-full rounded-md border border-stone-200 bg-white px-3 text-sm text-stone-900 shadow-[0_1px_2px_rgba(0,0,0,0.04)] outline-none placeholder:text-stone-400 hover:border-stone-300 focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10 disabled:opacity-60"
+              error={nameError}
               placeholder="Your display name"
             />
-            {nameError ? (
-              <p role="alert" className="mt-1.5 text-xs text-red-600">
-                {nameError}
+
+            <div>
+              <AuthField
+                ref={imageInputRef}
+                id="profile-image"
+                label="Avatar image URL (optional)"
+                type="url"
+                autoComplete="url"
+                inputMode="url"
+                value={image}
+                onChange={(e) => {
+                  setImage(e.target.value);
+                  if (saveSuccess) setSaveSuccess(null);
+                }}
+                onBlur={() => setTouched(true)}
+                disabled={saving}
+                error={imageError}
+                placeholder="https://example.com/avatar.jpg"
+              />
+              {!imageError ? (
+                <p className="mt-1.5 text-[12px] text-[#737782]">
+                  Leave empty to remove avatar. Must be http(s) URL.
+                </p>
+              ) : null}
+            </div>
+
+            {saveError ? (
+              <p
+                ref={saveErrorRef}
+                tabIndex={-1}
+                role="alert"
+                className="rounded-[8px] bg-rose-50 border border-rose-200 px-3.5 py-2.5 text-[13px] text-[#C94A45] outline-none"
+              >
+                {saveError}
               </p>
             ) : null}
-          </div>
-
-          <div>
-            <label htmlFor="profile-image" className="text-[13px] font-medium text-stone-700">
-              Avatar image URL (optional)
-            </label>
-            <input
-              id="profile-image"
-              type="url"
-              value={image}
-              onChange={(e) => {
-                setImage(e.target.value);
-                if (saveSuccess) setSaveSuccess(null);
-              }}
-              onBlur={() => setTouched(true)}
-              placeholder="https://example.com/avatar.jpg"
-              disabled={saving}
-              aria-invalid={imageError ? 'true' : undefined}
-              className="mt-1.5 h-9 w-full rounded-md border border-stone-200 bg-white px-3 text-sm text-stone-900 shadow-[0_1px_2px_rgba(0,0,0,0.04)] outline-none placeholder:text-stone-400 hover:border-stone-300 focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10 disabled:opacity-60"
-            />
-            {imageError ? (
-              <p role="alert" className="mt-1.5 text-xs text-red-600">
-                {imageError}
+            {saveSuccess ? (
+              <p
+                role="status"
+                className="flex items-center gap-1.5 rounded-[8px] bg-emerald-50 border border-emerald-200 px-3.5 py-2.5 text-[13px] text-emerald-700"
+              >
+                <Check className="w-4 h-4 shrink-0" />
+                <span>{saveSuccess}</span>
               </p>
-            ) : (
-              <p className="mt-1.5 text-xs text-stone-500">
-                Leave empty to remove avatar. Must be http(s) URL.
-              </p>
-            )}
-          </div>
-
-          {saveError ? (
-            <p role="alert" className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
-              {saveError}
-            </p>
-          ) : null}
-          {saveSuccess ? (
-            <p role="status" className="rounded-md bg-green-50 px-3 py-2 text-sm text-green-700">
-              {saveSuccess}
-            </p>
-          ) : null}
-
-          <div className="flex items-center gap-3">
-            <button
-              type="submit"
-              disabled={saving || hasValidationError}
-              className="inline-flex h-9 items-center justify-center rounded-lg bg-zinc-900 px-4 text-sm font-medium text-white transition-colors hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {saving ? 'Saving…' : 'Save changes'}
-            </button>
-            {!hasChanged && touched ? (
-              <span className="text-xs text-stone-500">No changes.</span>
             ) : null}
-          </div>
-        </form>
-      </section>
 
-      <section className="rounded-xl border border-stone-200 bg-stone-50 p-4">
-        <h3 className="text-[13px] font-semibold text-stone-700">About your profile</h3>
-        <p className="mt-1 text-[13px] leading-relaxed text-stone-500">
-          Your name and avatar are shown in messages, member lists, and mentions. Email cannot be
-          changed here.
-        </p>
-        <p className="mt-2 text-xs font-mono text-stone-500">{user.email}</p>
-      </section>
+            <div className="pt-4 flex items-center justify-between border-t border-[#E4E2DF]">
+              <div>
+                {!hasChanged && touched ? (
+                  <span className="text-xs text-[#737782]">No changes.</span>
+                ) : null}
+              </div>
+              <button
+                type="submit"
+                disabled={saving}
+                aria-busy={saving}
+                className="px-4 py-2 bg-[#2E3440] text-white text-[13px] font-medium rounded-[8px] hover:bg-[#1E222A] disabled:opacity-60 transition-colors shadow-2xs active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-[#3157D5]"
+              >
+                {saving ? 'Saving…' : 'Save changes'}
+              </button>
+            </div>
+          </form>
+        </section>
+
+        {/* Right col: Live Avatar Preview & About Card */}
+        <div className="space-y-5">
+          {/* Live avatar preview */}
+          <div className="rounded-[12px] border border-[#E4E2DF] bg-white p-5 text-center shadow-2xs space-y-3">
+            <h2 className="text-[12px] font-semibold uppercase tracking-wider text-[#737782]">
+              Live Avatar Preview
+            </h2>
+            <div className="relative inline-block mx-auto">
+              <Avatar
+                name={previewName}
+                src={previewImage}
+                size={80}
+                presence="online"
+                showPresence
+                className="shadow-sm"
+              />
+            </div>
+            <div>
+              <p className="text-[15px] font-semibold text-[#171A21] truncate">{previewName}</p>
+              <p className="text-[12px] text-[#737782] truncate">{user.email}</p>
+            </div>
+          </div>
+
+          {/* About Card */}
+          <div className="rounded-[12px] border border-[#E4E2DF] bg-white p-5 shadow-2xs space-y-3 text-[13px]">
+            <h2 className="text-[12px] font-semibold uppercase tracking-wider text-[#737782] border-b border-[#E4E2DF] pb-2">
+              Account information
+            </h2>
+
+            <div className="space-y-3">
+              <div className="flex items-center gap-2.5 text-[#4F5360]">
+                <Mail className="w-4 h-4 text-[#737782] shrink-0" />
+                <span className="truncate font-sans">{user.email}</span>
+              </div>
+              <p className="text-[12px] leading-relaxed text-[#737782]">
+                Your name and avatar are shown in messages, member lists, and mentions. Email cannot
+                be changed here.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

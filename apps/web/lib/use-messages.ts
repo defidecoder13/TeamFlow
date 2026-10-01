@@ -233,6 +233,9 @@ export function useMessages(channelId: string | null) {
       if (result.kind === 'forbidden') {
         return { ok: false, error: 'You can only edit your own messages.' };
       }
+      if (result.kind === 'notFound') {
+        return { ok: false, error: 'Message not found. It may have been deleted.' };
+      }
       return { ok: false, error: LOAD_FAILURE_MESSAGE };
     },
     [channelId],
@@ -276,10 +279,44 @@ export function useMessages(channelId: string | null) {
       if (result.kind === 'forbidden') {
         return { ok: false, error: 'You can only delete your own messages.' };
       }
+      if (result.kind === 'notFound') {
+        return { ok: false, error: 'Message not found. It may have been deleted.' };
+      }
       return { ok: false, error: LOAD_FAILURE_MESSAGE };
     },
     [channelId],
   );
+
+  /**
+   * Silent refetch used after attachment uploads so the new files appear
+   * without flipping the feed into its full loading skeleton.
+   */
+  const refresh = useCallback(async () => {
+    if (!channelId || isLoadingRef.current) return;
+    const targetChannelId = channelId;
+    isLoadingRef.current = true;
+    try {
+      const apiBase = getApiBaseUrl();
+      const result = await fetchMessages(apiBase, channelId);
+      if (activeChannelIdRef.current !== targetChannelId || !result.ok) return;
+      const normalized = normalizeMessages(result.data.messages);
+      setState((current) => {
+        if (current.status !== 'ready') return current;
+        return {
+          status: 'ready',
+          messages: mergeMessages(current.messages, normalized, false, {
+            preferIncomingOnTie: true,
+          }),
+          hasMore: result.data.pageInfo.hasMore,
+          nextCursor: current.nextCursor ?? result.data.pageInfo.nextCursor,
+        };
+      });
+    } catch {
+      // Silent — keep existing feed on refresh failure.
+    } finally {
+      isLoadingRef.current = false;
+    }
+  }, [channelId, normalizeMessages]);
 
   const loadMessages = useCallback(async () => {
     if (!channelId) {
@@ -455,13 +492,35 @@ export function useMessages(channelId: string | null) {
     };
   }, [channelId, normalizeMessages]);
 
+  /**
+   * Splice a backend-deleted attachment out of a message's local state.
+   * Called only after the DELETE succeeds (via AttachmentDisplay's
+   * onAttachmentDeleted); idempotent no-op when already absent. Other
+   * messages, ordering, and reactions are untouched.
+   */
+  const removeAttachment = useCallback((messageId: string, attachmentId: string) => {
+    setState((current) => {
+      if (current.status !== 'ready') return current;
+      return {
+        ...current,
+        messages: current.messages.map((m) =>
+          m.id === messageId && m.attachments
+            ? { ...m, attachments: m.attachments.filter((a) => a.id !== attachmentId) }
+            : m,
+        ),
+      };
+    });
+  }, []);
+
   return {
     state,
     retry,
+    refresh,
     loadOlder,
     send,
     edit,
     remove,
+    removeAttachment,
     normalizeMessages,
     isLoadingOlder,
     loadOlderError,

@@ -1,88 +1,133 @@
 /**
- * Second-level navigation sidebar (Phase 1D shell, Phase 3B channels).
+ * Sidebar navigation component matching the new design project.
  *
- * Only real data is shown: primary navigation (static chrome), the current
- * workspace name, and channels from the channel API. Channels the backend
- * does not return (e.g. inaccessible private channels) never appear here.
- * The URL is the source of truth for the active channel.
+ * Implements:
+ * - Single integrated sidebar (width 256px / w-64, surface #F7F6F5, border #E4E2DF)
+ * - Workspace header with integrated popover workspace switcher ([AF] Acme Flow ▾)
+ * - Switcher displays real workspaces, active checkmark, and "+ Create a workspace" trigger
+ * - Primary navigation: Home, Threads, Mentions, Drafts
+ * - Channels section with + trigger, unread badges, hover actions (copy link, star, mute)
+ * - Direct Messages section with + trigger, presence status dots, group counts, unread badges
+ * - Footer actions: "Invite people" and "Workspace settings"
+ * - Connects to real TeamFlow channels, direct messages, presence, and workspace store
  */
 
 'use client';
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useState } from 'react';
-import { PRIMARY_NAV_ITEMS } from '../../lib/shell-data';
+import React, { useState, useRef, useEffect } from 'react';
+import {
+  Home,
+  MessageSquare,
+  AtSign,
+  FileEdit,
+  Hash,
+  Lock,
+  Plus,
+  ChevronDown,
+  Settings,
+  UserPlus,
+  Star,
+  BellOff,
+  Link2,
+  Check,
+} from 'lucide-react';
+import { useWorkspaceChannels } from '../../lib/use-workspace-channels';
 import { useDirectConversations } from '../../lib/use-direct-conversations';
 import { usePresence } from '../../lib/use-presence';
-import { useWorkspaceChannels } from '../../lib/use-workspace-channels';
+import { useOptionalWorkspaces } from '../../lib/use-workspaces';
 import { CreateChannelDialog } from './CreateChannelDialog';
-import { PresenceIndicator } from './PresenceIndicator';
 import { StartDirectMessageDialog } from './StartDirectMessageDialog';
-import {
-  HashIcon,
-  HelpIcon,
-  HomeIcon,
-  LockIcon,
-  MembersIcon,
-  MentionsIcon,
-  PlusIcon,
-  SavedIcon,
-  SettingsIcon,
-  ThreadsIcon,
-} from './icons';
+import { CreateWorkspaceDialog } from './CreateWorkspaceDialog';
+import { InviteMemberDialog } from './InviteMemberDialog';
 
-function PrimaryIcon({ id }: { id: string }) {
-  const className = 'h-4 w-4 shrink-0';
-  switch (id) {
-    case 'home':
-      return <HomeIcon className={className} />;
-    case 'threads':
-      return <ThreadsIcon className={className} />;
-    case 'mentions':
-      return <MentionsIcon className={className} />;
-    case 'saved':
-      return <SavedIcon className={className} />;
-    default:
-      return null;
-  }
-}
-
-function SectionLabel({ children }: { children: string }) {
-  return (
-    <p className="px-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-stone-400">
-      {children}
-    </p>
-  );
+function getWorkspaceInitial(name: string): string {
+  return name.trim().charAt(0).toUpperCase() || 'T';
 }
 
 export function Sidebar({
   workspaceName,
   workspaceId,
   currentUserId,
+  className,
+  onNavigateMobile,
 }: {
   workspaceName: string | null;
   workspaceId: string | null;
   currentUserId?: string | null;
+  className?: string;
+  onNavigateMobile?: () => void;
 }) {
-  const [selected, setSelected] = useState('home');
-  const [createOpen, setCreateOpen] = useState(false);
-  const [startDmOpen, setStartDmOpen] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
-  const membersActive = pathname === '/app/settings/members';
-  const settingsActive = pathname.startsWith('/app/settings/notifications');
+
+  // Dialog states
+  const [createChannelOpen, setCreateChannelOpen] = useState(false);
+  const [startDmOpen, setStartDmOpen] = useState(false);
+  const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false);
+  const [inviteMemberOpen, setInviteMemberOpen] = useState(false);
+
+  // List pagination states
+  const [showAllChannels, setShowAllChannels] = useState(false);
+  const [showAllDms, setShowAllDms] = useState(false);
+
+  // Workspace switcher popover state
+  const [isWorkspaceMenuOpen, setIsWorkspaceMenuOpen] = useState(false);
+  const [copiedChannelId, setCopiedChannelId] = useState<string | null>(null);
+
+  // Star & mute local visual state
+  const [starredChannels, setStarredChannels] = useState<Record<string, boolean>>({});
+  const [mutedChannels, setMutedChannels] = useState<Record<string, boolean>>({});
+
+  const workspaceTriggerRef = useRef<HTMLButtonElement>(null);
+  const workspaceMenuRef = useRef<HTMLDivElement>(null);
+
+  // Workspaces store (safe access if provider is mounted)
+  const workspacesStore = useOptionalWorkspaces();
+
   const {
     state: channelsState,
-    retry: retryChannels,
     addChannel,
   } = useWorkspaceChannels(workspaceId);
+
   const {
     state: dmsState,
-    retry: retryDms,
     addConversation,
   } = useDirectConversations(workspaceId, currentUserId);
+
   const { getPresence } = usePresence(workspaceId);
+
+  // Close workspace switcher when clicking outside or pressing Escape
+  useEffect(() => {
+    if (!isWorkspaceMenuOpen) return;
+
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        workspaceMenuRef.current &&
+        !workspaceMenuRef.current.contains(e.target as Node) &&
+        workspaceTriggerRef.current &&
+        !workspaceTriggerRef.current.contains(e.target as Node)
+      ) {
+        setIsWorkspaceMenuOpen(false);
+      }
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsWorkspaceMenuOpen(false);
+        workspaceTriggerRef.current?.focus();
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isWorkspaceMenuOpen]);
 
   const activeSlug = pathname.startsWith('/app/channels/')
     ? decodeURIComponent(pathname.slice('/app/channels/'.length).split('/')[0] ?? '')
@@ -92,286 +137,552 @@ export function Sidebar({
     ? decodeURIComponent(pathname.slice('/app/dms/'.length).split('/')[0] ?? '')
     : null;
 
+  const channels = channelsState.status === 'ready' ? channelsState.channels : [];
+  const conversations = dmsState.status === 'ready' ? dmsState.conversations : [];
+
+  const visibleChannels = showAllChannels ? channels : channels.slice(0, 8);
+  const visibleConversations = showAllDms ? conversations : conversations.slice(0, 8);
+
+  const handleCopyChannelLink = (slug: string, channelId: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (typeof window !== 'undefined') {
+      const url = `${window.location.origin}/app/channels/${slug}`;
+      navigator.clipboard.writeText(url);
+      setCopiedChannelId(channelId);
+      setTimeout(() => setCopiedChannelId(null), 1500);
+    }
+  };
+
+  const toggleStarChannel = (id: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setStarredChannels((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  const toggleMuteChannel = (id: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setMutedChannels((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  const realWorkspaces =
+    workspacesStore && workspacesStore.state.status === 'ready'
+      ? workspacesStore.state.workspaces
+      : workspaceName && workspaceId
+        ? [{ id: workspaceId, name: workspaceName, slug: workspaceName.toLowerCase(), role: 'OWNER' as const }]
+        : [];
+
+  const effectiveWorkspaceName =
+    workspaceName ||
+    (workspacesStore && workspacesStore.state.status === 'ready'
+      ? workspacesStore.state.current?.name ?? null
+      : null);
+
+  const effectiveWorkspaceId =
+    workspaceId ||
+    (workspacesStore && workspacesStore.state.status === 'ready'
+      ? workspacesStore.state.current?.id ?? null
+      : null);
+
   return (
     <nav
       aria-label="Primary"
-      className="hidden w-60 shrink-0 flex-col overflow-y-auto border-r border-stone-200 bg-[#faf9f7] px-3 py-4 lg:flex"
+      className={
+        className ??
+        'hidden w-64 shrink-0 bg-[#F7F6F5] border-r border-[#E4E2DF] flex-col h-full select-none lg:flex'
+      }
     >
-      <div className="mb-3 px-1">
+      {/* Workspace Header with Integrated Popover Switcher */}
+      <div className="h-[52px] px-3 border-b border-[#E4E2DF] flex items-center relative bg-[#F7F6F5] shrink-0">
+        <nav aria-label="Workspaces" className="sr-only">
+          {realWorkspaces.map((ws) => (
+            <button
+              key={ws.id}
+              type="button"
+              onClick={() => {
+                if (workspacesStore) workspacesStore.setCurrentWorkspace(ws.id);
+                router.push('/app');
+              }}
+            >
+              {ws.name}
+            </button>
+          ))}
+        </nav>
+        {effectiveWorkspaceName && (
+          <span className="sr-only" aria-label={`Current workspace: ${effectiveWorkspaceName}`}>
+            Current workspace: {effectiveWorkspaceName}
+          </span>
+        )}
         <button
+          ref={workspaceTriggerRef}
           type="button"
-          disabled
-          title={
-            workspaceName
-              ? 'Workspace switching arrives in a later phase'
-              : 'Create a workspace to get started'
-          }
-          aria-label={workspaceName ? `Current workspace: ${workspaceName}` : 'No workspace yet'}
-          className="flex h-9 w-full items-center gap-2 rounded-md px-1 text-left disabled:cursor-not-allowed"
+          onClick={() => setIsWorkspaceMenuOpen(!isWorkspaceMenuOpen)}
+          className="w-full flex items-center justify-between gap-2 px-2 py-1.5 -mx-1 rounded-[8px] hover:bg-[#F1F0EE] transition-colors text-left focus-visible:ring-2 focus-visible:ring-[#3157D5] group cursor-pointer"
+          aria-expanded={isWorkspaceMenuOpen}
+          aria-haspopup="dialog"
+          aria-label={effectiveWorkspaceName ? `${effectiveWorkspaceName} workspace menu` : 'Workspace menu'}
         >
-          <span
-            aria-hidden="true"
-            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-stone-900 text-[11px] font-semibold text-white"
-          >
-            {(workspaceName ?? 'T').trim().charAt(0).toUpperCase() || 'T'}
-          </span>
-          <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-stone-900">
-            {workspaceName ?? 'TeamFlow'}
-          </span>
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-7 h-7 rounded-[8px] bg-[#171A21] text-white flex items-center justify-center font-bold text-[12px] shrink-0 shadow-2xs">
+              {effectiveWorkspaceName ? getWorkspaceInitial(effectiveWorkspaceName) : 'T'}
+            </div>
+            <span className="text-[14px] font-semibold text-[#171A21] truncate tracking-tight">
+              {effectiveWorkspaceName || 'Select workspace'}
+            </span>
+          </div>
+          <ChevronDown
+            className={`w-4 h-4 text-[#737782] group-hover:text-[#171A21] shrink-0 transition-transform duration-150 ${
+              isWorkspaceMenuOpen ? 'rotate-180 text-[#171A21]' : ''
+            }`}
+          />
         </button>
-      </div>
-      <ul className="space-y-0.5">
-        {PRIMARY_NAV_ITEMS.map((item) => {
-          // Home is a real route: exact pathname match only, so nested
-          // /app/* routes never highlight it. Other entries are placeholders
-          // with local selection until their features land.
-          const active = item.id === 'home' ? pathname === '/app' : selected === item.id;
-          const rowClassName = (isActive: boolean) =>
-            [
-              'flex h-8 w-full items-center gap-2.5 rounded-md px-2 text-[13px] font-medium transition-colors',
-              isActive
-                ? 'bg-stone-900/[0.07] text-stone-900'
-                : 'text-stone-600 hover:bg-stone-900/[0.04] hover:text-stone-900',
-            ].join(' ');
-          if (item.id === 'home') {
-            return (
-              <li key={item.id}>
-                <Link
-                  href="/app"
-                  aria-current={active ? 'page' : undefined}
-                  className={rowClassName(active)}
-                >
-                  <PrimaryIcon id={item.id} />
-                  {item.label}
-                </Link>
-              </li>
-            );
-          }
-          return (
-            <li key={item.id}>
-              <button
-                type="button"
-                aria-current={active ? 'page' : undefined}
-                onClick={() => setSelected(item.id)}
-                className={rowClassName(active)}
-              >
-                <PrimaryIcon id={item.id} />
-                {item.label}
-              </button>
-            </li>
-          );
-        })}
-      </ul>
 
-      <div className="mt-6 space-y-1.5">
-        <div className="flex items-center justify-between">
-          <SectionLabel>Channels</SectionLabel>
-          {workspaceId ? (
-            <button
-              type="button"
-              onClick={() => setCreateOpen(true)}
-              aria-label="Create channel"
-              title="Create a channel"
-              className="mr-1 flex h-6 w-6 items-center justify-center rounded-md text-stone-500 transition-colors hover:bg-stone-900/[0.05] hover:text-stone-900 focus-visible:outline-2 focus-visible:outline-stone-900"
-            >
-              <PlusIcon className="h-3.5 w-3.5" />
-            </button>
-          ) : null}
-        </div>
-        {workspaceId && (channelsState.status === 'loading' || channelsState.status === 'idle') ? (
-          <div role="status" aria-label="Loading channels" className="space-y-1 px-0.5">
-            <span className="sr-only">Loading channels…</span>
-            {[0, 1].map((row) => (
-              <div
-                key={row}
-                aria-hidden="true"
-                className="h-8 animate-pulse rounded-md bg-stone-900/[0.05]"
-              />
-            ))}
-          </div>
-        ) : workspaceId && channelsState.status === 'error' ? (
-          <div className="px-2">
-            <p role="alert" className="text-[13px] text-stone-500">
-              Couldn&apos;t load channels.
-            </p>
-            <button
-              type="button"
-              onClick={retryChannels}
-              className="mt-1 text-[13px] font-medium text-zinc-900 underline decoration-zinc-300 underline-offset-4 transition-colors hover:decoration-zinc-900"
-            >
-              Try again
-            </button>
-          </div>
-        ) : workspaceId && channelsState.status === 'ready' && channelsState.channels.length > 0 ? (
-          <ul className="space-y-0.5" aria-label="Channels">
-            {channelsState.channels.map((channel) => {
-              const active = activeSlug === channel.slug;
-              const ChannelIcon = channel.type === 'PRIVATE' ? LockIcon : HashIcon;
-              return (
-                <li key={channel.id}>
-                  <Link
-                    href={`/app/channels/${channel.slug}`}
-                    aria-current={active ? 'page' : undefined}
-                    title={channel.type === 'PRIVATE' ? `${channel.name} (private)` : channel.name}
-                    className={[
-                      'flex h-8 w-full items-center gap-2 rounded-md px-2 text-[13px] transition-colors',
-                      active
-                        ? 'bg-stone-900/[0.07] font-medium text-stone-900'
-                        : 'text-stone-600 hover:bg-stone-900/[0.04] hover:text-stone-900',
-                    ].join(' ')}
+        {/* Workspace Switcher Popover */}
+        {isWorkspaceMenuOpen && (
+          <div
+            ref={workspaceMenuRef}
+            role="dialog"
+            aria-label="Switch workspace"
+            className="absolute top-[48px] left-2 right-2 w-[calc(100%-16px)] bg-white border border-[#E4E2DF] rounded-[12px] shadow-[0_12px_32px_rgba(20,24,32,0.12)] p-1.5 z-50 animate-in fade-in zoom-in-95 duration-150"
+          >
+            <div className="px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-[#737782]">
+              Switch workspace
+            </div>
+
+            <div className="max-h-60 overflow-y-auto space-y-0.5 py-0.5">
+              {realWorkspaces.map((ws) => {
+                const isActive = ws.id === effectiveWorkspaceId;
+                return (
+                  <button
+                    key={ws.id}
+                    type="button"
+                    onClick={() => {
+                      if (workspacesStore) {
+                        workspacesStore.setCurrentWorkspace(ws.id);
+                      }
+                      setIsWorkspaceMenuOpen(false);
+                      router.push('/app');
+                    }}
+                    className={`w-full h-11 px-2.5 flex items-center gap-2.5 text-left transition-colors rounded-[8px] cursor-pointer ${
+                      isActive
+                        ? 'bg-[#EEF2FF] text-[#3157D5]'
+                        : 'hover:bg-[#F1F0EE] text-[#171A21]'
+                    }`}
                   >
-                    <ChannelIcon className="h-4 w-4 shrink-0 text-stone-400" />
-                    <span className="min-w-0 flex-1 truncate">{channel.name}</span>
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        ) : (
-          <p className="px-2 text-[13px] leading-snug text-stone-400">No channels yet.</p>
+                    {/* Active checkmark */}
+                    <div className="w-4 flex items-center justify-center shrink-0">
+                      {isActive && <Check className="w-4 h-4 text-[#3157D5]" />}
+                    </div>
+
+                    <div
+                      className={`w-7 h-7 rounded-[6px] flex items-center justify-center text-[11px] font-bold shrink-0 ${
+                        isActive
+                          ? 'bg-[#3157D5] text-white'
+                          : 'bg-[#171A21] text-white'
+                      }`}
+                    >
+                      {getWorkspaceInitial(ws.name)}
+                    </div>
+
+                    <span
+                      className={`text-[13px] truncate flex-1 ${
+                        isActive ? 'font-semibold text-[#3157D5]' : 'font-medium text-[#171A21]'
+                      }`}
+                    >
+                      {ws.name}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="my-1 border-t border-[#E4E2DF]" />
+
+            <button
+              type="button"
+              onClick={() => {
+                setIsWorkspaceMenuOpen(false);
+                setCreateWorkspaceOpen(true);
+              }}
+              className="w-full h-10 px-2.5 flex items-center gap-2.5 text-left text-[13px] font-medium text-[#171A21] hover:bg-[#F1F0EE] rounded-[8px] transition-colors cursor-pointer"
+            >
+              <div className="w-4 flex items-center justify-center shrink-0">
+                <Plus className="w-4 h-4 text-[#737782]" />
+              </div>
+              <span>Create a workspace</span>
+            </button>
+          </div>
         )}
       </div>
 
-      {createOpen && workspaceId ? (
+      {/* Primary Navigation & Section Lists */}
+      <div className="flex-1 overflow-y-auto px-2.5 py-3 space-y-4 text-[13px]">
+        {/* Core Navigation Items */}
+        <div className="space-y-0.5">
+          {/* Home */}
+          <Link
+            href="/app"
+            onClick={onNavigateMobile}
+            aria-current={pathname === '/app' ? 'page' : undefined}
+            className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-[8px] font-medium transition-colors ${
+              pathname === '/app'
+                ? 'bg-[#EEF2FF] text-[#3157D5] font-semibold'
+                : 'text-[#4F5360] hover:text-[#171A21] hover:bg-[#F1F0EE]'
+            }`}
+          >
+            <Home
+              className={`w-4 h-4 ${
+                pathname === '/app' ? 'text-[#3157D5]' : 'text-[#737782]'
+              }`}
+            />
+            <span>Home</span>
+          </Link>
+
+          {/* Threads */}
+          <Link
+            href="/app/search?type=messages"
+            onClick={onNavigateMobile}
+            className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-[8px] font-medium text-[#4F5360] hover:text-[#171A21] hover:bg-[#F1F0EE] transition-colors"
+          >
+            <MessageSquare className="w-4 h-4 text-[#737782]" />
+            <span>Threads</span>
+          </Link>
+
+          {/* Mentions */}
+          <Link
+            href="/app/search?q=@"
+            onClick={onNavigateMobile}
+            className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-[8px] font-medium text-[#4F5360] hover:text-[#171A21] hover:bg-[#F1F0EE] transition-colors"
+          >
+            <AtSign className="w-4 h-4 text-[#737782]" />
+            <span>Mentions</span>
+          </Link>
+
+          {/* Drafts */}
+          <button
+            type="button"
+            onClick={() => {}}
+            className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-[8px] font-medium text-[#4F5360] hover:text-[#171A21] hover:bg-[#F1F0EE] transition-colors"
+          >
+            <FileEdit className="w-4 h-4 text-[#737782]" />
+            <span>Drafts</span>
+          </button>
+        </div>
+
+        {/* CHANNELS Section */}
+        <div>
+          <div className="flex items-center justify-between px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-[#737782]">
+            <span>CHANNELS</span>
+            {effectiveWorkspaceId ? (
+              <button
+                type="button"
+                onClick={() => setCreateChannelOpen(true)}
+                className="p-0.5 rounded hover:bg-[#ECEAE7] text-[#737782] hover:text-[#171A21] transition-colors"
+                title="Create channel"
+                aria-label="Create channel"
+              >
+                <Plus className="w-3.5 h-3.5" />
+              </button>
+            ) : null}
+          </div>
+
+          {effectiveWorkspaceId && (channelsState.status === 'loading' || channelsState.status === 'idle') ? (
+            <div role="status" aria-label="Loading channels" className="space-y-1 px-1 py-1">
+              <span className="sr-only">Loading channels…</span>
+              {[0, 1].map((r) => (
+                <div key={r} aria-hidden="true" className="h-7 animate-pulse rounded-[6px] bg-[#ECEAE7]" />
+              ))}
+            </div>
+          ) : effectiveWorkspaceId && channelsState.status === 'ready' && channels.length > 0 ? (
+            <ul className="mt-0.5 space-y-0.5" aria-label="Channels">
+              {visibleChannels.map((channel) => {
+                const isActive = activeSlug === channel.slug;
+                const isStarred = Boolean(starredChannels[channel.id]);
+                const isMuted = Boolean(mutedChannels[channel.id]);
+                const unreadCount = (channel as unknown as { unreadCount?: number }).unreadCount ?? 0;
+
+                return (
+                  <li key={channel.id} className="group relative flex items-center rounded-[8px]">
+                    <Link
+                      href={`/app/channels/${channel.slug}`}
+                      onClick={onNavigateMobile}
+                      aria-current={isActive ? 'page' : undefined}
+                      title={channel.type === 'PRIVATE' ? `${channel.name} (private)` : channel.name}
+                      className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-[8px] font-medium text-left transition-colors ${
+                        isActive
+                          ? 'bg-[#EEF2FF] text-[#3157D5] font-semibold'
+                          : 'text-[#4F5360] hover:text-[#171A21] hover:bg-[#F1F0EE]'
+                      } ${isMuted ? 'opacity-60' : ''}`}
+                    >
+                      <div className="flex items-center gap-2 min-w-0 pr-2">
+                        {channel.type === 'PRIVATE' ? (
+                          <Lock className="w-3.5 h-3.5 text-[#737782] shrink-0" />
+                        ) : (
+                          <Hash className="w-3.5 h-3.5 text-[#737782] shrink-0" />
+                        )}
+                        <span className="truncate">{channel.name}</span>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {isStarred && <Star className="w-3 h-3 text-amber-500 fill-amber-500" />}
+                        {unreadCount > 0 && !isActive && (
+                          <span className="bg-[#171A21] text-white text-[11px] font-semibold px-1.5 py-0.2 rounded-full tabular-nums">
+                            {unreadCount}
+                          </span>
+                        )}
+                      </div>
+                    </Link>
+
+                    {/* Channel Hover Toolbar */}
+                    <div className="absolute right-1 hidden group-hover:flex items-center bg-white border border-[#E4E2DF] rounded-[6px] shadow-2xs p-0.5 gap-0.5 z-10">
+                      <button
+                        type="button"
+                        onClick={(e) => handleCopyChannelLink(channel.slug, channel.id, e)}
+                        className="p-1 hover:bg-[#F1F0EE] rounded text-[#737782] hover:text-[#171A21]"
+                        title="Copy channel link"
+                        aria-label={`Copy link to #${channel.name}`}
+                      >
+                        {copiedChannelId === channel.id ? (
+                          <Check className="w-3 h-3 text-emerald-600" />
+                        ) : (
+                          <Link2 className="w-3 h-3" />
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => toggleStarChannel(channel.id, e)}
+                        className={`p-1 hover:bg-[#F1F0EE] rounded ${
+                          isStarred ? 'text-amber-500 fill-amber-500' : 'text-[#737782] hover:text-[#171A21]'
+                        }`}
+                        title={isStarred ? 'Unstar channel' : 'Star channel'}
+                        aria-label={isStarred ? 'Unstar channel' : 'Star channel'}
+                      >
+                        <Star className="w-3 h-3" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => toggleMuteChannel(channel.id, e)}
+                        className={`p-1 hover:bg-[#F1F0EE] rounded ${
+                          isMuted ? 'text-[#C94A45]' : 'text-[#737782] hover:text-[#171A21]'
+                        }`}
+                        title={isMuted ? 'Unmute channel' : 'Mute channel'}
+                        aria-label={isMuted ? 'Unmute channel' : 'Mute channel'}
+                      >
+                        <BellOff className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <div className="px-2 py-1 text-[13px] text-[#737782]">
+              <p>No channels yet.</p>
+              {effectiveWorkspaceId ? (
+                <button
+                  type="button"
+                  onClick={() => setCreateChannelOpen(true)}
+                  className="mt-1 text-[12px] font-medium text-[#171A21] underline decoration-[#DDDCDF] hover:decoration-[#171A21]"
+                >
+                  Create the first channel
+                </button>
+              ) : null}
+            </div>
+          )}
+
+          {channels.length > 8 && (
+            <button
+              type="button"
+              onClick={() => setShowAllChannels(!showAllChannels)}
+              aria-expanded={showAllChannels}
+              className="mt-1 px-2.5 py-1 text-[12px] font-medium text-[#737782] hover:text-[#171A21] hover:bg-[#F1F0EE] rounded-[6px] w-full text-left transition-colors"
+            >
+              <span>{showAllChannels ? 'Show fewer' : `Show all ${channels.length} channels`}</span>
+            </button>
+          )}
+        </div>
+
+        {/* DIRECT MESSAGES Section */}
+        <div>
+          <div className="flex items-center justify-between px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-[#737782]">
+            <span>DIRECT MESSAGES</span>
+            {effectiveWorkspaceId ? (
+              <button
+                type="button"
+                onClick={() => setStartDmOpen(true)}
+                className="p-0.5 rounded hover:bg-[#ECEAE7] text-[#737782] hover:text-[#171A21] transition-colors"
+                title="Start direct message"
+                aria-label="Start direct message"
+              >
+                <Plus className="w-3.5 h-3.5" />
+              </button>
+            ) : null}
+          </div>
+
+          {effectiveWorkspaceId && dmsState.status === 'loading' ? (
+            <div role="status" aria-label="Loading direct messages" className="space-y-1 px-1 py-1">
+              <span className="sr-only">Loading direct messages…</span>
+              {[0, 1].map((k) => (
+                <div key={k} aria-hidden="true" className="h-7 animate-pulse rounded-[6px] bg-[#ECEAE7]" />
+              ))}
+            </div>
+          ) : effectiveWorkspaceId && dmsState.status === 'ready' && conversations.length > 0 ? (
+            <ul className="mt-0.5 space-y-0.5" aria-label="Direct messages">
+              {visibleConversations.map((conv) => {
+                const isActive = activeDmId === conv.id;
+                const isGroup = conv.type === 'GROUP';
+                const groupDisplayName =
+                  conv.name?.trim() ||
+                  (conv.participants && conv.participants.length > 0
+                    ? conv.participants
+                        .filter((p) => !currentUserId || p.id !== currentUserId)
+                        .map((p) => p.name)
+                        .join(', ') || 'Group Message'
+                    : 'Group Message');
+
+                const peer = conv.peer ?? conv.participant;
+                const displayName = isGroup ? groupDisplayName : (peer?.name ?? 'Direct Message');
+                const initial = displayName.trim().charAt(0).toUpperCase() || '?';
+                const unreadCount = conv.unreadCount ?? 0;
+                const participantCount = conv.participantCount ?? conv.participants?.length;
+                const presenceStatus = peer?.id ? getPresence(peer.id).status : 'offline';
+
+                return (
+                  <li key={conv.id}>
+                    <Link
+                      href={`/app/dms/${conv.id}`}
+                      onClick={onNavigateMobile}
+                      aria-current={isActive ? 'page' : undefined}
+                      title={displayName}
+                      className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-[8px] font-medium text-left transition-colors ${
+                        isActive
+                          ? 'bg-[#EEF2FF] text-[#3157D5] font-semibold'
+                          : unreadCount > 0 || conv.hasUnread
+                            ? 'font-semibold text-[#171A21] hover:bg-[#F1F0EE]'
+                            : 'text-[#4F5360] hover:text-[#171A21] hover:bg-[#F1F0EE]'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0 pr-2">
+                        <div className="relative shrink-0">
+                          {peer?.image ? (
+                            <img
+                              src={peer.image}
+                              alt=""
+                              className="w-5 h-5 rounded-full object-cover bg-[#ECEAE7]"
+                            />
+                          ) : (
+                            <div className="w-5 h-5 rounded-full bg-[#E4E2DF] text-[#171A21] text-[10px] font-semibold flex items-center justify-center">
+                              {initial}
+                            </div>
+                          )}
+                          {!isGroup && (
+                            <span
+                              role="img"
+                              aria-label={`Presence: ${String(presenceStatus).toUpperCase() === 'ONLINE' ? 'online' : 'offline'}`}
+                              className={`absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border border-white ${
+                                String(presenceStatus).toUpperCase() === 'ONLINE'
+                                  ? 'bg-[#48B88A]'
+                                  : 'bg-neutral-400'
+                              }`}
+                            />
+                          )}
+                        </div>
+                        <span className="truncate">{displayName}</span>
+                        {isGroup && participantCount && participantCount > 0 ? (
+                          <span className="shrink-0 text-[11px] font-normal tabular-nums text-[#737782]">
+                            {participantCount}
+                          </span>
+                        ) : null}
+                      </div>
+
+                      {unreadCount > 0 && (
+                        <span
+                          data-testid={`unread-badge-${conv.id}`}
+                          aria-label={`${unreadCount} unread message${unreadCount === 1 ? '' : 's'}`}
+                          className="bg-[#171A21] text-white text-[11px] font-semibold px-1.5 py-0.2 rounded-full tabular-nums ml-auto"
+                        >
+                          {unreadCount > 99 ? '99+' : unreadCount}
+                        </span>
+                      )}
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <div className="px-2 py-1 text-[13px] text-[#737782]">
+              <p>No messages yet.</p>
+              {effectiveWorkspaceId ? (
+                <button
+                  type="button"
+                  onClick={() => setStartDmOpen(true)}
+                  className="mt-1 text-[12px] font-medium text-[#171A21] underline decoration-[#DDDCDF] hover:decoration-[#171A21]"
+                >
+                  Start a conversation
+                </button>
+              ) : null}
+            </div>
+          )}
+
+          {conversations.length > 8 && (
+            <button
+              type="button"
+              onClick={() => setShowAllDms(!showAllDms)}
+              aria-expanded={showAllDms}
+              className="mt-1 px-2.5 py-1 text-[12px] font-medium text-[#737782] hover:text-[#171A21] hover:bg-[#F1F0EE] rounded-[6px] w-full text-left transition-colors"
+            >
+              <span>{showAllDms ? 'Show fewer' : `Show all ${conversations.length} conversations`}</span>
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Footer Administration */}
+      <div className="p-2 border-t border-[#E4E2DF] bg-[#F7F6F5] space-y-0.5">
+        <button
+          type="button"
+          onClick={() => setInviteMemberOpen(true)}
+          className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-[8px] text-[13px] font-medium text-[#4F5360] hover:text-[#171A21] hover:bg-[#F1F0EE] transition-colors"
+        >
+          <UserPlus className="w-4 h-4 text-[#737782]" />
+          <span>Invite people</span>
+        </button>
+
+        <Link
+          href="/app/settings/workspace"
+          onClick={onNavigateMobile}
+          aria-current={pathname === '/app/settings/workspace' ? 'page' : undefined}
+          className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-[8px] text-[13px] font-medium transition-colors ${
+            pathname === '/app/settings/workspace'
+              ? 'bg-[#EEF2FF] text-[#3157D5] font-semibold'
+              : 'text-[#4F5360] hover:text-[#171A21] hover:bg-[#F1F0EE]'
+          }`}
+        >
+          <Settings className="w-4 h-4 text-[#737782]" />
+          <span>Workspace settings</span>
+        </Link>
+      </div>
+
+      {/* Dialogs */}
+      {createChannelOpen && effectiveWorkspaceId ? (
         <CreateChannelDialog
-          workspaceId={workspaceId}
-          workspaceName={workspaceName ?? 'this workspace'}
-          onClose={() => setCreateOpen(false)}
+          workspaceId={effectiveWorkspaceId}
+          workspaceName={effectiveWorkspaceName ?? 'this workspace'}
+          onClose={() => setCreateChannelOpen(false)}
           onCreated={(channel) => {
             addChannel(channel);
-            setCreateOpen(false);
+            setCreateChannelOpen(false);
             router.push(`/app/channels/${channel.slug}`);
           }}
           onUnauthenticated={() => router.replace('/sign-in')}
         />
       ) : null}
 
-      <div className="mt-6 space-y-1.5">
-        <div className="flex items-center justify-between">
-          <SectionLabel>Direct messages</SectionLabel>
-          {workspaceId ? (
-            <button
-              type="button"
-              onClick={() => setStartDmOpen(true)}
-              aria-label="New direct message"
-              className="flex h-5 w-5 items-center justify-center rounded text-stone-400 transition-colors hover:bg-stone-900/[0.06] hover:text-stone-700"
-            >
-              <PlusIcon className="h-3.5 w-3.5" />
-            </button>
-          ) : null}
-        </div>
-
-        {workspaceId && dmsState.status === 'loading' ? (
-          <div className="space-y-1 px-2" aria-label="Loading direct messages">
-            {[0, 1].map((key) => (
-              <div key={key} className="h-8 animate-pulse rounded-md bg-stone-900/[0.05]" />
-            ))}
-          </div>
-        ) : workspaceId && dmsState.status === 'error' ? (
-          <div className="px-2">
-            <p role="alert" className="text-[13px] text-stone-500">
-              Couldn&apos;t load direct messages.
-            </p>
-            <button
-              type="button"
-              onClick={retryDms}
-              className="mt-1 text-[13px] font-medium text-zinc-900 underline decoration-zinc-300 underline-offset-4 transition-colors hover:decoration-zinc-900"
-            >
-              Try again
-            </button>
-          </div>
-        ) : workspaceId && dmsState.status === 'ready' && dmsState.conversations.length > 0 ? (
-          <ul className="space-y-0.5" aria-label="Direct messages">
-            {dmsState.conversations.map((conv) => {
-              const active = activeDmId === conv.id;
-              const isGroup = conv.type === 'GROUP';
-              const groupDisplayName =
-                conv.name?.trim() ||
-                (conv.participants && conv.participants.length > 0
-                  ? conv.participants
-                      .filter((p) => !currentUserId || p.id !== currentUserId)
-                      .map((p) => p.name)
-                      .join(', ') || 'Group Message'
-                  : 'Group Message');
-
-              const peer = conv.peer ?? conv.participant;
-              const displayName = isGroup ? groupDisplayName : (peer?.name ?? 'Direct Message');
-              const initial = displayName.trim().charAt(0).toUpperCase() || '?';
-              const unreadCount = conv.unreadCount ?? 0;
-              const hasUnread = unreadCount > 0 || Boolean(conv.hasUnread);
-              const participantCount = conv.participantCount ?? conv.participants?.length;
-              return (
-                <li key={conv.id}>
-                  <Link
-                    href={`/app/dms/${conv.id}`}
-                    aria-current={active ? 'page' : undefined}
-                    title={displayName}
-                    className={[
-                      'flex h-8 w-full items-center gap-2 rounded-md px-2 text-[13px] transition-colors',
-                      active
-                        ? 'bg-stone-900/[0.07] font-medium text-stone-900'
-                        : hasUnread
-                          ? 'font-semibold text-stone-900 hover:bg-stone-900/[0.04]'
-                          : 'text-stone-600 hover:bg-stone-900/[0.04] hover:text-stone-900',
-                    ].join(' ')}
-                  >
-                    {isGroup ? (
-                      <span
-                        aria-hidden="true"
-                        className={[
-                          'flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-medium',
-                          hasUnread ? 'bg-stone-900 text-white' : 'bg-stone-200 text-stone-700',
-                        ].join(' ')}
-                      >
-                        <MembersIcon className="h-3 w-3" />
-                      </span>
-                    ) : (
-                      <span className="relative inline-flex shrink-0">
-                        <span
-                          aria-hidden="true"
-                          className={[
-                            'flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-medium',
-                            hasUnread ? 'bg-stone-900 text-white' : 'bg-stone-200 text-stone-700',
-                          ].join(' ')}
-                        >
-                          {initial}
-                        </span>
-                        {peer?.id ? (
-                          <span className="absolute bottom-0 right-0 translate-x-[20%] translate-y-[20%]">
-                            <PresenceIndicator status={getPresence(peer.id).status} size="sm" />
-                          </span>
-                        ) : null}
-                      </span>
-                    )}
-                    <span className="min-w-0 flex-1 truncate">{displayName}</span>
-                    {isGroup && participantCount && participantCount > 0 ? (
-                      <span className="text-[11px] text-stone-400 font-normal shrink-0">
-                        {participantCount}
-                      </span>
-                    ) : null}
-                    {unreadCount > 0 ? (
-                      <span
-                        data-testid={`unread-badge-${conv.id}`}
-                        aria-label={`${unreadCount} unread message${unreadCount === 1 ? '' : 's'}`}
-                        className="ml-auto flex h-4 min-w-4 items-center justify-center rounded-full bg-stone-900 px-1.5 text-[10px] font-semibold text-white"
-                      >
-                        {unreadCount > 99 ? '99+' : unreadCount}
-                      </span>
-                    ) : null}
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        ) : (
-          <p className="px-2 text-[13px] leading-snug text-stone-400">No messages yet.</p>
-        )}
-      </div>
-
-      {startDmOpen && workspaceId ? (
+      {startDmOpen && effectiveWorkspaceId ? (
         <StartDirectMessageDialog
-          workspaceId={workspaceId}
-          workspaceName={workspaceName ?? 'this workspace'}
+          workspaceId={effectiveWorkspaceId}
+          workspaceName={effectiveWorkspaceName ?? 'this workspace'}
           onClose={() => setStartDmOpen(false)}
           onSelectConversation={(conv) => {
             addConversation(conv);
@@ -382,55 +693,26 @@ export function Sidebar({
         />
       ) : null}
 
-      <div className="mt-auto space-y-0.5 pt-6">
-        <Link
-          href="/app/settings/members"
-          aria-current={membersActive ? 'page' : undefined}
-          className={[
-            'flex h-8 w-full items-center gap-2.5 rounded-md px-2 text-[13px] font-medium transition-colors',
-            membersActive
-              ? 'bg-stone-900/[0.07] text-stone-900'
-              : 'text-stone-600 hover:bg-stone-900/[0.04] hover:text-stone-900',
-          ].join(' ')}
-        >
-          <MembersIcon className="h-4 w-4 shrink-0" />
-          Members
-        </Link>
-        <Link
-          href="/app/settings/workspace"
-          aria-current={pathname === '/app/settings/workspace' ? 'page' : undefined}
-          className={[
-            'flex h-8 w-full items-center gap-2.5 rounded-md px-2 text-[13px] font-medium transition-colors',
-            pathname === '/app/settings/workspace'
-              ? 'bg-stone-900/[0.07] text-stone-900'
-              : 'text-stone-600 hover:bg-stone-900/[0.04] hover:text-stone-900',
-          ].join(' ')}
-        >
-          <SettingsIcon className="h-4 w-4 shrink-0" />
-          Workspace
-        </Link>
-        <Link
-          href="/app/settings/notifications"
-          className={[
-            'flex h-8 w-full items-center gap-2.5 rounded-md px-2 text-[13px] font-medium transition-colors',
-            settingsActive
-              ? 'bg-stone-900/[0.07] text-stone-900'
-              : 'text-stone-600 hover:bg-stone-900/[0.04] hover:text-stone-900',
-          ].join(' ')}
-        >
-          <SettingsIcon className="h-4 w-4 shrink-0" />
-          Settings
-        </Link>
-        <button
-          type="button"
-          disabled
-          title="Help arrives in a later phase"
-          className="flex h-8 w-full items-center gap-2.5 rounded-md px-2 text-[13px] text-stone-400 disabled:cursor-not-allowed"
-        >
-          <HelpIcon className="h-4 w-4 shrink-0" />
-          Help
-        </button>
-      </div>
+      {createWorkspaceOpen ? (
+        <CreateWorkspaceDialog
+          open={createWorkspaceOpen}
+          onClose={() => setCreateWorkspaceOpen(false)}
+          onCreated={() => {
+            setCreateWorkspaceOpen(false);
+            router.push('/app');
+          }}
+        />
+      ) : null}
+
+      {inviteMemberOpen && effectiveWorkspaceId ? (
+        <InviteMemberDialog
+          workspaceId={effectiveWorkspaceId}
+          workspaceName={effectiveWorkspaceName ?? 'this workspace'}
+          onClose={() => setInviteMemberOpen(false)}
+          onCreated={() => setInviteMemberOpen(false)}
+          onUnauthenticated={() => router.replace('/sign-in')}
+        />
+      ) : null}
     </nav>
   );
 }

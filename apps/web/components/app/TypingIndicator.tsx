@@ -59,31 +59,31 @@ export function TypingIndicator({
     return formatTypingNames(names);
   }, [typingUserIds, memberMap]);
 
-  if (!typingText) {
-    return (
-      <div
-        className={`h-5 text-[11px] text-transparent select-none transition-opacity ${className}`}
-        aria-hidden="true"
-      >
-        &nbsp;
-      </div>
-    );
-  }
-
+  // One stable live region: it stays mounted whether or not anyone is
+  // typing, so screen readers track it instead of discovering a new
+  // region on every keystroke burst. Empty text announces nothing.
   return (
     <div
       role="status"
       aria-live="polite"
       aria-atomic="true"
-      className={`flex h-5 items-center gap-1.5 text-[11px] font-medium text-stone-500 ${className}`}
+      className={`flex h-5 items-center gap-1.5 text-[11px] font-medium tabular-nums text-[#47464b] ${className}`}
       data-testid="typing-indicator"
     >
-      <span className="flex items-center gap-0.5" aria-hidden="true">
-        <span className="inline-block h-1 w-1 rounded-full bg-stone-400 animate-pulse" />
-        <span className="inline-block h-1 w-1 rounded-full bg-stone-400 animate-pulse [animation-delay:200ms]" />
-        <span className="inline-block h-1 w-1 rounded-full bg-stone-400 animate-pulse [animation-delay:400ms]" />
-      </span>
-      <span>{typingText}</span>
+      {typingText ? (
+        <>
+          <span className="flex items-center gap-0.5" aria-hidden="true">
+            <span className="inline-block h-1 w-1 rounded-full bg-[#c8c5cb] animate-pulse" />
+            <span className="inline-block h-1 w-1 rounded-full bg-[#c8c5cb] animate-pulse [animation-delay:200ms]" />
+            <span className="inline-block h-1 w-1 rounded-full bg-[#c8c5cb] animate-pulse [animation-delay:400ms]" />
+          </span>
+          <span>{typingText}</span>
+        </>
+      ) : (
+        <span aria-hidden="true" className="select-none text-transparent">
+          &nbsp;
+        </span>
+      )}
     </div>
   );
 }

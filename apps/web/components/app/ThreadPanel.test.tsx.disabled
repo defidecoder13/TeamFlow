@@ -1,0 +1,580 @@
+import { act, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { ThreadPanel } from './ThreadPanel';
+import type { Message } from '../../lib/messages';
+import type { ThreadMessagesState } from '../../lib/use-thread-messages';
+
+const {
+  threadState,
+  isLoadingOlderState,
+  loadOlderErrorState,
+  retryMock,
+  loadOlderMock,
+  sendMock,
+  editMock,
+  removeMock,
+  useThreadMessagesMock,
+} = vi.hoisted(() => ({
+  threadState: {
+    value: {
+      status: 'ready',
+      messages: [] as Message[],
+      hasMore: false,
+      nextCursor: null,
+    } as ThreadMessagesState,
+  },
+  isLoadingOlderState: { value: false },
+  loadOlderErrorState: { value: null as string | null },
+  retryMock: vi.fn(),
+  loadOlderMock: vi.fn(),
+  sendMock: vi.fn().mockResolvedValue({ ok: true }),
+  editMock: vi.fn().mockResolvedValue({ ok: true }),
+  removeMock: vi.fn().mockResolvedValue({ ok: true }),
+  useThreadMessagesMock: vi.fn(),
+}));
+
+vi.mock('../../lib/use-thread-messages', () => ({
+  useThreadMessages: (...args: unknown[]) => {
+    useThreadMessagesMock(...args);
+    return {
+      state: threadState.value,
+      isLoadingOlder: isLoadingOlderState.value,
+      loadOlderError: loadOlderErrorState.value,
+      retry: retryMock,
+      loadOlder: loadOlderMock,
+      send: sendMock,
+      edit: editMock,
+      remove: removeMock,
+    };
+  },
+}));
+
+const { emitTypingStartMock, emitTypingStopMock, onTypingStartedMock, onTypingStoppedMock } =
+  vi.hoisted(() => ({
+    emitTypingStartMock: vi.fn(),
+    emitTypingStopMock: vi.fn(),
+    onTypingStartedMock: vi.fn(),
+    onTypingStoppedMock: vi.fn(),
+  }));
+
+vi.mock('../../lib/realtime-client', async (importOriginal) => ({
+  ...((await importOriginal<typeof import('../../lib/realtime-client')>()) as object),
+  emitTypingStart: emitTypingStartMock,
+  emitTypingStop: emitTypingStopMock,
+  onRealtimeTypingStarted: onTypingStartedMock,
+  onRealtimeTypingStopped: onTypingStoppedMock,
+}));
+
+type TypingStartedHandler = (event: {
+  type: 'typing:started';
+  userId: string;
+  channelId?: string | null;
+  conversationId?: string | null;
+}) => void;
+
+type TypingStoppedHandler = (event: {
+  type: 'typing:stopped';
+  userId: string;
+  channelId?: string | null;
+  conversationId?: string | null;
+}) => void;
+
+const typingStartedHandlers: TypingStartedHandler[] = [];
+const typingStoppedHandlers: TypingStoppedHandler[] = [];
+
+const TYPING_MEMBERS = [
+  { id: 'u-peer', name: 'Grace Hopper' },
+  { id: 'u-friend', name: 'Ada Lovelace' },
+];
+
+const ROOT_MESSAGE: Message = {
+  id: 'm-root-1',
+  channelId: 'ch-1',
+  authorId: 'u-author',
+  body: 'Initial question for discussion',
+  createdAt: new Date('2026-09-06T10:00:00.000Z'),
+  updatedAt: new Date('2026-09-06T10:00:00.000Z'),
+  editedAt: null,
+  deletedAt: null,
+  replyCount: 2,
+  latestReplyAt: new Date('2026-09-06T10:15:00.000Z'),
+  author: { id: 'u-author', name: 'Alan Turing', image: null },
+};
+
+function makeReply(id: string, body: string, authorId = 'u-other'): Message {
+  return {
+    id,
+    channelId: 'ch-1',
+    parentMessageId: 'm-root-1',
+    authorId,
+    body,
+    createdAt: new Date('2026-09-06T10:05:00.000Z'),
+    updatedAt: new Date('2026-09-06T10:05:00.000Z'),
+    editedAt: null,
+    deletedAt: null,
+    author: {
+      id: authorId,
+      name: authorId === 'u-author' ? 'Alan Turing' : 'Grace Hopper',
+      image: null,
+    },
+  };
+}
+
+describe('ThreadPanel', () => {
+  const onCloseMock = vi.fn();
+
+  beforeEach(() => {
+    onCloseMock.mockReset();
+    retryMock.mockReset();
+    loadOlderMock.mockReset();
+    sendMock.mockReset().mockResolvedValue({ ok: true });
+    editMock.mockReset().mockResolvedValue({ ok: true });
+    removeMock.mockReset().mockResolvedValue({ ok: true });
+    useThreadMessagesMock.mockReset();
+    emitTypingStartMock.mockReset().mockResolvedValue({ ok: true });
+    emitTypingStopMock.mockReset().mockResolvedValue({ ok: true });
+    typingStartedHandlers.length = 0;
+    typingStoppedHandlers.length = 0;
+    onTypingStartedMock.mockImplementation((handler: TypingStartedHandler) => {
+      typingStartedHandlers.push(handler);
+      return () => {
+        const index = typingStartedHandlers.indexOf(handler);
+        if (index !== -1) typingStartedHandlers.splice(index, 1);
+      };
+    });
+    onTypingStoppedMock.mockImplementation((handler: TypingStoppedHandler) => {
+      typingStoppedHandlers.push(handler);
+      return () => {
+        const index = typingStoppedHandlers.indexOf(handler);
+        if (index !== -1) typingStoppedHandlers.splice(index, 1);
+      };
+    });
+
+    threadState.value = {
+      status: 'ready',
+      messages: [],
+      hasMore: false,
+      nextCursor: null,
+    };
+    isLoadingOlderState.value = false;
+    loadOlderErrorState.value = null;
+  });
+
+  it('renders pinned root message and header with author name', () => {
+    render(<ThreadPanel rootMessage={ROOT_MESSAGE} userId="u-current" onClose={onCloseMock} />);
+
+    expect(screen.getByRole('heading', { level: 2, name: 'Thread' })).toBeInTheDocument();
+    expect(screen.getByText('with Alan Turing')).toBeInTheDocument();
+    expect(screen.getByText('Initial question for discussion')).toBeInTheDocument();
+  });
+
+  it('renders deleted pinned root message placeholder if body is null', () => {
+    const deletedRoot: Message = { ...ROOT_MESSAGE, body: null, deletedAt: new Date() };
+    render(<ThreadPanel rootMessage={deletedRoot} userId="u-current" onClose={onCloseMock} />);
+
+    expect(screen.getByText('Message deleted')).toBeInTheDocument();
+  });
+
+  it('renders loading state while thread messages are loading', () => {
+    threadState.value = { status: 'loading' };
+
+    render(<ThreadPanel rootMessage={ROOT_MESSAGE} userId="u-current" onClose={onCloseMock} />);
+
+    expect(screen.getByRole('status', { name: /loading replies/i })).toBeInTheDocument();
+  });
+
+  it('renders unavailable state with close action and no composer when thread is not found', async () => {
+    const user = userEvent.setup();
+    threadState.value = { status: 'notFound' };
+
+    render(<ThreadPanel rootMessage={ROOT_MESSAGE} userId="u-current" onClose={onCloseMock} />);
+
+    expect(screen.getByText('Thread unavailable')).toBeInTheDocument();
+    expect(screen.getByText(/no longer have access/i)).toBeInTheDocument();
+    // No stale reply controls.
+    expect(screen.queryByPlaceholderText('Reply...')).toBeNull();
+    const closeButtons = screen.getAllByRole('button', { name: /close thread/i });
+    await user.click(closeButtons[closeButtons.length - 1]);
+    expect(onCloseMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders session-expired state with close action and no composer when unauthenticated', async () => {
+    const user = userEvent.setup();
+    threadState.value = { status: 'unauthenticated' };
+
+    render(<ThreadPanel rootMessage={ROOT_MESSAGE} userId="u-current" onClose={onCloseMock} />);
+
+    expect(screen.getByText('Session expired')).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText('Reply...')).toBeNull();
+    const closeButtons = screen.getAllByRole('button', { name: /close thread/i });
+    await user.click(closeButtons[closeButtons.length - 1]);
+    expect(onCloseMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders error state and retries on button click', async () => {
+    const user = userEvent.setup();
+    threadState.value = { status: 'error', message: 'Network disconnected' };
+
+    render(<ThreadPanel rootMessage={ROOT_MESSAGE} userId="u-current" onClose={onCloseMock} />);
+
+    expect(screen.getByText('Network disconnected')).toBeInTheDocument();
+    const retryBtn = screen.getByRole('button', { name: /^retry$/i });
+    await user.click(retryBtn);
+    expect(retryMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders empty replies state when thread has no replies', () => {
+    threadState.value = { status: 'ready', messages: [], hasMore: false, nextCursor: null };
+
+    render(<ThreadPanel rootMessage={ROOT_MESSAGE} userId="u-current" onClose={onCloseMock} />);
+
+    expect(screen.getByText('No replies yet')).toBeInTheDocument();
+    expect(screen.getByText('Start the conversation in this thread.')).toBeInTheDocument();
+  });
+
+  it('renders thread replies and supports pagination', async () => {
+    const user = userEvent.setup();
+    const reply1 = makeReply('r-1', 'First reply message');
+    const reply2 = makeReply('r-2', 'Second reply message');
+
+    threadState.value = {
+      status: 'ready',
+      messages: [reply1, reply2],
+      hasMore: true,
+      nextCursor: 'cur-1',
+    };
+
+    render(<ThreadPanel rootMessage={ROOT_MESSAGE} userId="u-current" onClose={onCloseMock} />);
+
+    expect(screen.getByText('First reply message')).toBeInTheDocument();
+    expect(screen.getByText('Second reply message')).toBeInTheDocument();
+
+    const loadOlderBtn = screen.getByRole('button', { name: /load older replies/i });
+    await user.click(loadOlderBtn);
+    expect(loadOlderMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('highlights mentions in replies when member data is provided', () => {
+    const reply = makeReply('r-9', 'looping in @Alan Turing today');
+    threadState.value = {
+      status: 'ready',
+      messages: [reply],
+      hasMore: false,
+      nextCursor: null,
+    };
+
+    const { container } = render(
+      <ThreadPanel
+        rootMessage={ROOT_MESSAGE}
+        userId="u-current"
+        onClose={onCloseMock}
+        mentionMembers={[{ id: 'u-other', name: 'Grace Hopper' }]}
+      />,
+    );
+
+    // Grace Hopper is not mentioned; Alan Turing is unknown here — plain.
+    expect(container.querySelector('mark')).not.toBeInTheDocument();
+  });
+
+  it('highlights known mentions in replies', () => {
+    const reply = makeReply('r-9', 'looping in @Alan Turing today', 'u-other');
+    threadState.value = {
+      status: 'ready',
+      messages: [reply],
+      hasMore: false,
+      nextCursor: null,
+    };
+
+    const { container } = render(
+      <ThreadPanel
+        rootMessage={ROOT_MESSAGE}
+        userId="u-current"
+        onClose={onCloseMock}
+        mentionMembers={[{ id: 'u-alan', name: 'Alan Turing' }]}
+      />,
+    );
+
+    const mark = container.querySelector('mark');
+    expect(mark).toBeInTheDocument();
+    expect(mark).toHaveTextContent('@Alan Turing');
+  });
+
+  it('allows sending a reply via composer', async () => {
+    const user = userEvent.setup();
+    render(<ThreadPanel rootMessage={ROOT_MESSAGE} userId="u-current" onClose={onCloseMock} />);
+
+    const textarea = screen.getByPlaceholderText('Reply...');
+    await user.type(textarea, 'Here is my reply in thread{enter}');
+
+    expect(sendMock).toHaveBeenCalledWith('Here is my reply in thread');
+  });
+
+  it('allows author to edit a reply inline', async () => {
+    const user = userEvent.setup();
+    const myReply = makeReply('r-mine', 'Original reply content', 'u-current');
+
+    threadState.value = {
+      status: 'ready',
+      messages: [myReply],
+      hasMore: false,
+      nextCursor: null,
+    };
+
+    render(<ThreadPanel rootMessage={ROOT_MESSAGE} userId="u-current" onClose={onCloseMock} />);
+
+    const editBtn = screen.getByRole('button', { name: 'Edit message' });
+    await user.click(editBtn);
+
+    const editTextarea = screen.getByDisplayValue('Original reply content');
+    await user.clear(editTextarea);
+    await user.type(editTextarea, 'Updated reply content');
+
+    const saveBtn = screen.getByRole('button', { name: /save/i });
+    await user.click(saveBtn);
+
+    expect(editMock).toHaveBeenCalledWith('r-mine', 'Updated reply content');
+  });
+
+  it('allows author to delete a reply with confirmation dialog', async () => {
+    const user = userEvent.setup();
+    const myReply = makeReply('r-mine', 'Content to delete', 'u-current');
+
+    threadState.value = {
+      status: 'ready',
+      messages: [myReply],
+      hasMore: false,
+      nextCursor: null,
+    };
+
+    render(<ThreadPanel rootMessage={ROOT_MESSAGE} userId="u-current" onClose={onCloseMock} />);
+
+    const deleteBtn = screen.getByRole('button', { name: 'Delete message' });
+    await user.click(deleteBtn);
+
+    // Confirmation dialog appears — confirm scoped to the dialog because
+    // the row toolbar carries the same accessible name.
+    const confirmDeleteBtn = within(screen.getByRole('alertdialog')).getByRole('button', {
+      name: /delete message/i,
+    });
+    await user.click(confirmDeleteBtn);
+
+    expect(removeMock).toHaveBeenCalledWith('r-mine');
+  });
+
+  it('closes thread panel when Close button is clicked', async () => {
+    const user = userEvent.setup();
+    render(<ThreadPanel rootMessage={ROOT_MESSAGE} userId="u-current" onClose={onCloseMock} />);
+
+    const closeBtn = screen.getByRole('button', { name: /close thread/i });
+    await user.click(closeBtn);
+
+    expect(onCloseMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('closes thread panel on Escape key when no dialog or editor is open', async () => {
+    const user = userEvent.setup();
+    render(<ThreadPanel rootMessage={ROOT_MESSAGE} userId="u-current" onClose={onCloseMock} />);
+
+    await user.keyboard('{Escape}');
+
+    expect(onCloseMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('cancels inline edit on Escape key without closing thread panel', async () => {
+    const user = userEvent.setup();
+    const myReply = makeReply('r-mine', 'Original reply', 'u-current');
+
+    threadState.value = {
+      status: 'ready',
+      messages: [myReply],
+      hasMore: false,
+      nextCursor: null,
+    };
+
+    render(<ThreadPanel rootMessage={ROOT_MESSAGE} userId="u-current" onClose={onCloseMock} />);
+
+    const editBtn = screen.getByRole('button', { name: 'Edit message' });
+    await user.click(editBtn);
+
+    expect(screen.getByDisplayValue('Original reply')).toBeInTheDocument();
+
+    // Escape cancels the edit
+    await user.keyboard('{Escape}');
+
+    // Edit cancelled
+    expect(screen.queryByDisplayValue('Original reply')).toBeNull();
+    // Panel was NOT closed
+    expect(onCloseMock).not.toHaveBeenCalled();
+  });
+
+  it('passes rootMessage.id and rootMessage.channelId to useThreadMessages', () => {
+    render(<ThreadPanel rootMessage={ROOT_MESSAGE} userId="u-current" onClose={onCloseMock} />);
+
+    expect(useThreadMessagesMock).toHaveBeenCalledWith('m-root-1', 'ch-1');
+  });
+
+  it('pages back thread history for a deep-linked reply until loaded', async () => {
+    threadState.value = {
+      status: 'ready',
+      messages: [],
+      hasMore: true,
+      nextCursor: 'cursor-1',
+    };
+    render(
+      <ThreadPanel
+        rootMessage={ROOT_MESSAGE}
+        userId="u-current"
+        onClose={onCloseMock}
+        highlightedReplyId="r-9"
+      />,
+    );
+
+    await waitFor(() => {
+      expect(loadOlderMock).toHaveBeenCalled();
+    });
+  });
+
+  it('highlights a deep-linked reply once loaded without extra paging', () => {
+    threadState.value = {
+      status: 'ready',
+      messages: [makeReply('r-9', 'Linked reply')],
+      hasMore: false,
+      nextCursor: null,
+    };
+    const { container } = render(
+      <ThreadPanel
+        rootMessage={ROOT_MESSAGE}
+        userId="u-current"
+        onClose={onCloseMock}
+        highlightedReplyId="r-9"
+      />,
+    );
+
+    expect(container.querySelector('[data-message-id="r-9"]')?.className).toContain(
+      'ring-amber-300',
+    );
+    expect(loadOlderMock).not.toHaveBeenCalled();
+  });
+
+  describe('thread typing (container-scoped)', () => {
+    const DM_ROOT: Message = {
+      ...ROOT_MESSAGE,
+      id: 'm-dm-root',
+      channelId: null,
+      directMessageConversationId: 'dm-9',
+    };
+
+    function renderThread(root: Message = ROOT_MESSAGE) {
+      return render(
+        <ThreadPanel
+          rootMessage={root}
+          userId="u-current"
+          onClose={onCloseMock}
+          typingMembers={TYPING_MEMBERS}
+        />,
+      );
+    }
+
+    function fireStarted(
+      userId: string,
+      container: { channelId?: string; conversationId?: string },
+    ) {
+      act(() => {
+        for (const handler of [...typingStartedHandlers]) {
+          handler({ type: 'typing:started', userId, ...container });
+        }
+      });
+    }
+
+    function fireStopped(
+      userId: string,
+      container: { channelId?: string; conversationId?: string },
+    ) {
+      act(() => {
+        for (const handler of [...typingStoppedHandlers]) {
+          handler({ type: 'typing:stopped', userId, ...container });
+        }
+      });
+    }
+
+    it('shows a typing user from the same channel thread', () => {
+      renderThread();
+
+      fireStarted('u-peer', { channelId: 'ch-1' });
+
+      expect(screen.getByText('Grace Hopper is typing…')).toBeInTheDocument();
+    });
+
+    it('ignores typing from another channel or conversation', () => {
+      renderThread();
+
+      fireStarted('u-peer', { channelId: 'ch-2' });
+      fireStarted('u-peer', { conversationId: 'dm-9' });
+
+      expect(screen.queryByText(/is typing/)).not.toBeInTheDocument();
+    });
+
+    it('excludes the current user', () => {
+      renderThread();
+
+      fireStarted('u-current', { channelId: 'ch-1' });
+
+      expect(screen.queryByText(/is typing/)).not.toBeInTheDocument();
+    });
+
+    it('lists multiple typing users with the existing convention', () => {
+      renderThread();
+
+      fireStarted('u-peer', { channelId: 'ch-1' });
+      fireStarted('u-friend', { channelId: 'ch-1' });
+
+      expect(screen.getByText('Grace Hopper and Ada Lovelace are typing…')).toBeInTheDocument();
+    });
+
+    it('clears typing on stop', () => {
+      renderThread();
+
+      fireStarted('u-peer', { channelId: 'ch-1' });
+      expect(screen.getByText('Grace Hopper is typing…')).toBeInTheDocument();
+
+      fireStopped('u-peer', { channelId: 'ch-1' });
+      expect(screen.queryByText(/is typing/)).not.toBeInTheDocument();
+    });
+
+    it('drops previous typing state when switching threads', () => {
+      const { rerender } = renderThread();
+
+      fireStarted('u-peer', { channelId: 'ch-1' });
+      expect(screen.getByText('Grace Hopper is typing…')).toBeInTheDocument();
+
+      rerender(
+        <ThreadPanel
+          rootMessage={{ ...ROOT_MESSAGE, id: 'm-root-2' }}
+          userId="u-current"
+          onClose={onCloseMock}
+          typingMembers={TYPING_MEMBERS}
+        />,
+      );
+      expect(screen.queryByText(/is typing/)).not.toBeInTheDocument();
+    });
+
+    it('emits typing into the parent channel from the reply composer', async () => {
+      const user = userEvent.setup();
+      renderThread();
+
+      await user.type(screen.getByRole('textbox', { name: 'Reply...' }), 'h');
+
+      expect(emitTypingStartMock).toHaveBeenCalledWith({ channelId: 'ch-1' });
+    });
+
+    it('emits typing into the parent DM conversation for DM threads', async () => {
+      const user = userEvent.setup();
+      renderThread(DM_ROOT);
+
+      await user.type(screen.getByRole('textbox', { name: 'Reply...' }), 'h');
+
+      expect(emitTypingStartMock).toHaveBeenCalledWith({ conversationId: 'dm-9' });
+    });
+  });
+});

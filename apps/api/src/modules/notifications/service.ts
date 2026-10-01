@@ -132,9 +132,12 @@ export async function generateNotificationsForMessage(
       throw new NotificationGenerationError('Thread root not found.');
     }
     threadRootMessageId = root.id;
+    // Distinct authors only: long threads must not stream every reply row
+    // just to build the THREAD_REPLY candidate set.
     const priorReplies = await prisma.message.findMany({
       where: { parentMessageId: root.id, id: { not: messageId } },
       select: { authorId: true },
+      distinct: ['authorId'],
     });
     const candidates = new Set<string>([root.authorId]);
     for (const reply of priorReplies) {

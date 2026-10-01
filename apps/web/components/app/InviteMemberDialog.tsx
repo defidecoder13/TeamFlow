@@ -12,6 +12,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { Dialog } from './dialog';
 import { AuthError } from '../auth/AuthError';
 import { AuthField } from '../auth/AuthField';
 import { AuthSubmitButton } from '../auth/AuthSubmitButton';
@@ -43,21 +44,17 @@ export function InviteMemberDialog({
   const [created, setCreated] = useState<CreatedInvitation | null>(null);
   const [copied, setCopied] = useState(false);
   const [copyFailed, setCopyFailed] = useState(false);
-  const panelRef = useRef<HTMLDivElement>(null);
+  const successHeadingRef = useRef<HTMLHeadingElement>(null);
 
   const emailError = touched ? validateEmail(email) : null;
 
+  // Move focus to the success heading when the view swaps, so screen
+  // reader users don't miss the transition sighted users see.
   useEffect(() => {
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape' && !creating) {
-        onClose();
-      }
+    if (created) {
+      successHeadingRef.current?.focus({ preventScroll: true });
     }
-    document.addEventListener('keydown', onKeyDown);
-    return () => {
-      document.removeEventListener('keydown', onKeyDown);
-    };
-  }, [creating, onClose]);
+  }, [created]);
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -104,37 +101,31 @@ export function InviteMemberDialog({
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/25 p-4"
-      onClick={() => {
-        if (!creating) {
-          onClose();
-        }
-      }}
+    <Dialog
+      open
+      onClose={onClose}
+      labelledBy="invite-dialog-title"
+      size="sm"
+      dismissable={!creating}
     >
-      <div
-        ref={panelRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="invite-dialog-title"
-        onClick={(event) => event.stopPropagation()}
-        className="w-full max-w-sm rounded-xl border border-stone-200 bg-white p-6 shadow-[0_20px_48px_-8px_rgba(24,24,27,0.12)]"
-      >
+      <div>
         {created ? (
           <div>
             <h2
               id="invite-dialog-title"
-              className="text-base font-semibold tracking-tight text-zinc-900"
+              tabIndex={-1}
+              ref={successHeadingRef}
+              className="text-[17px] font-semibold tracking-tight text-[#171A21] outline-none"
             >
               Invitation created
             </h2>
-            <p className="mt-1.5 text-sm leading-relaxed text-zinc-500">
+            <p className="mt-1 text-[13px] leading-relaxed text-[#737782]">
               {created.email} can now join {workspaceName}. Email delivery isn&apos;t configured yet
               — share this development link instead.
             </p>
             <label
               htmlFor="invitation-link"
-              className="mb-1.5 mt-4 block text-[13px] font-medium text-zinc-700"
+              className="mb-1.5 mt-4 block text-[13px] font-medium text-[#171A21]"
             >
               Development invitation link
             </label>
@@ -144,26 +135,26 @@ export function InviteMemberDialog({
               readOnly
               value={invitationUrl(created.token)}
               onFocus={(event) => event.target.select()}
-              className="h-10 w-full rounded-lg border border-stone-200 bg-stone-50 px-3 font-mono text-xs text-stone-700 outline-none focus:border-zinc-900"
+              className="h-10 w-full break-all rounded-lg border border-[#E4E2DF] bg-[#FAF9F8] px-3 text-xs text-[#171A21] outline-none focus:border-[#3157D5] focus-visible:ring-2 focus-visible:ring-[#3157D5]"
             />
             <div className="mt-4 flex gap-2">
               <button
                 type="button"
                 onClick={() => void handleCopy(invitationUrl(created.token))}
-                className="inline-flex h-10 flex-1 items-center justify-center rounded-lg bg-zinc-900 px-4 text-sm font-medium text-white transition-colors hover:bg-zinc-800"
+                className="inline-flex h-[42px] flex-1 items-center justify-center rounded-lg bg-[#2E3440] px-4 text-sm font-medium text-white transition-colors hover:bg-[#1E222A] focus-visible:outline-2 focus-visible:outline-[#3157D5] active:scale-[0.98]"
               >
                 {copied ? 'Copied' : 'Copy invitation link'}
               </button>
               <button
                 type="button"
                 onClick={onClose}
-                className="inline-flex h-10 items-center justify-center rounded-lg border border-stone-300 bg-white px-4 text-sm font-medium text-stone-700 transition-colors hover:border-stone-400"
+                className="inline-flex h-[42px] items-center justify-center rounded-lg border border-[#E4E2DF] bg-white px-4 text-sm font-medium text-[#4F5360] transition-colors hover:bg-[#F1F0EE] hover:text-[#171A21] focus-visible:outline-2 focus-visible:outline-[#3157D5]"
               >
                 Done
               </button>
             </div>
             {copyFailed ? (
-              <p role="status" className="mt-2 text-[13px] text-stone-500">
+              <p role="status" className="mt-2 text-[13px] text-[#C94A45]">
                 Copy didn&apos;t work — select the link above manually.
               </p>
             ) : null}
@@ -172,11 +163,11 @@ export function InviteMemberDialog({
           <div>
             <h2
               id="invite-dialog-title"
-              className="text-base font-semibold tracking-tight text-zinc-900"
+              className="text-[17px] font-semibold tracking-tight text-[#171A21]"
             >
               Invite a member
             </h2>
-            <p className="mt-1.5 text-sm leading-relaxed text-zinc-500">
+            <p className="mt-1 text-[13px] leading-relaxed text-[#737782]">
               They&apos;ll join {workspaceName} as a member.
             </p>
             <form onSubmit={handleSubmit} noValidate className="mt-5 space-y-4">
@@ -196,12 +187,12 @@ export function InviteMemberDialog({
                 onChange={(event) => setEmail(event.target.value)}
                 onBlur={() => setTouched(true)}
               />
-              <div className="flex gap-2 pt-1">
+              <div className="flex gap-2 pt-2 border-t border-[#E4E2DF]">
                 <button
                   type="button"
                   disabled={creating}
                   onClick={onClose}
-                  className="inline-flex h-10 items-center justify-center rounded-lg border border-stone-300 bg-white px-4 text-sm font-medium text-stone-700 transition-colors hover:border-stone-400 disabled:opacity-50"
+                  className="inline-flex h-[42px] items-center justify-center rounded-lg border border-[#E4E2DF] bg-white px-4 text-sm font-medium text-[#4F5360] transition-colors hover:bg-[#F1F0EE] hover:text-[#171A21] focus-visible:outline-2 focus-visible:outline-[#3157D5] disabled:opacity-50"
                 >
                   Cancel
                 </button>
@@ -215,6 +206,6 @@ export function InviteMemberDialog({
           </div>
         )}
       </div>
-    </div>
+    </Dialog>
   );
 }

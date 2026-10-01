@@ -172,6 +172,21 @@ describe('directory items', () => {
     render(<ChannelSearchResultItem result={group} onOpen={onOpen} />);
     expect(screen.getByText('Group message')).toBeInTheDocument();
   });
+
+  it('renders a channel result without a slug as static content, never a dead button', () => {
+    const onOpen = vi.fn();
+    const slugless: ChannelSearchResult = {
+      kind: 'channel',
+      id: 'ch-9',
+      name: 'General',
+      score: 1,
+    };
+    render(<ChannelSearchResultItem result={slugless} onOpen={onOpen} />);
+
+    expect(screen.getByText('#General')).toBeInTheDocument();
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+    expect(screen.queryByRole('link')).not.toBeInTheDocument();
+  });
 });
 
 describe('SearchResultList', () => {
@@ -195,14 +210,29 @@ describe('SearchResultList', () => {
 });
 
 describe('state panels', () => {
-  it('guides no-result searches and retries errors accessibly', () => {
-    const { rerender } = render(<SearchNoResultsState hasFilters={true} />);
-    expect(screen.getByRole('status')).toHaveTextContent('remove a filter');
+  it('names the query and offers a clear exit on no results', () => {
+    const onClear = vi.fn();
+    render(<SearchNoResultsState query="database" hasFilters={true} onClear={onClear} />);
+    expect(screen.getByRole('status')).toHaveTextContent(/no results for/i);
+    expect(screen.getByText('database')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Clear search' }));
+    expect(onClear).toHaveBeenCalledTimes(1);
+  });
 
+  it('retries errors accessibly', () => {
     const onRetry = vi.fn();
-    rerender(<SearchErrorState message="boom" onRetry={onRetry} />);
+    render(<SearchErrorState message="boom" onRetry={onRetry} />);
     expect(screen.getByRole('alert')).toHaveTextContent('boom');
-    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(onRetry).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders a custom action label for expired sessions', () => {
+    const onRetry = vi.fn();
+    render(
+      <SearchErrorState message="expired" onRetry={onRetry} actionLabel="Go to sign in" />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Go to sign in' }));
     expect(onRetry).toHaveBeenCalledTimes(1);
   });
 });

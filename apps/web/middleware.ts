@@ -24,6 +24,7 @@ export async function middleware(request: NextRequest) {
     request.nextUrl.pathname,
     authenticated,
     request.nextUrl.searchParams.get('next'),
+    request.nextUrl.search,
   );
   if (decision.kind === 'redirect') {
     return NextResponse.redirect(new URL(decision.to, request.url));

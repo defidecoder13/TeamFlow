@@ -42,7 +42,7 @@ vi.mock('./realtime-client', () => ({
 type PresenceHandler = (event: {
   type: 'presence:changed';
   userId: string;
-  status: 'ONLINE' | 'OFFLINE' | 'AWAY';
+  status: 'ONLINE' | 'OFFLINE';
   lastSeenAt: string | null;
 }) => void;
 

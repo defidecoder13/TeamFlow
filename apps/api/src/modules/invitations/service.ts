@@ -91,9 +91,15 @@ export interface AcceptedMembership {
  */
 export async function createInvitation(
   prisma: PrismaClient,
-  input: { workspaceId: string; inviterUserId: string; email: string },
+  input: {
+    workspaceId: string;
+    inviterUserId: string;
+    email: string;
+    role?: WorkspaceRole;
+  },
 ): Promise<CreatedInvitation> {
   const email = normalizeEmail(input.email);
+  const role: WorkspaceRole = input.role === 'ADMIN' ? 'ADMIN' : 'MEMBER';
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
       return await prisma.$transaction(async (tx) => {
@@ -140,6 +146,7 @@ export async function createInvitation(
             email,
             tokenHash: hashInvitationToken(token),
             invitedById: input.inviterUserId,
+            role,
             expiresAt: new Date(now.getTime() + INVITATION_TTL_MS),
           },
         });
@@ -190,6 +197,45 @@ export async function listPendingInvitations(
     orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
   });
   return invitations;
+}
+
+/**
+ * Revoke a pending invitation. The caller must have verified the requester's
+ * OWNER/ADMIN membership beforehand. The invitation must belong to the
+ * workspace and still be pending — missing, foreign, accepted, revoked, or
+ * expired rows all surface as `InvitationInvalidError` (mapped to 404) so
+ * invitation existence never leaks across workspace boundaries. No token
+ * material is touched: revocation needs only the invitation id.
+ */
+export async function revokeInvitation(
+  prisma: PrismaClient,
+  input: { workspaceId: string; invitationId: string },
+): Promise<{ id: string }> {
+  const invitation = await prisma.invitation.findUnique({
+    where: { id: input.invitationId },
+    select: {
+      id: true,
+      workspaceId: true,
+      acceptedAt: true,
+      revokedAt: true,
+      expiresAt: true,
+    },
+  });
+  if (!invitation || invitation.workspaceId !== input.workspaceId) {
+    throw new InvitationInvalidError();
+  }
+  if (
+    invitation.acceptedAt !== null ||
+    invitation.revokedAt !== null ||
+    invitation.expiresAt <= new Date()
+  ) {
+    throw new InvitationInvalidError();
+  }
+  await prisma.invitation.update({
+    where: { id: invitation.id },
+    data: { revokedAt: new Date() },
+  });
+  return { id: invitation.id };
 }
 
 /**
@@ -249,7 +295,7 @@ export async function acceptInvitation(
           id: randomUUID(),
           workspaceId: invitation.workspaceId,
           userId: input.userId,
-          role: 'MEMBER',
+          role: invitation.role === 'ADMIN' ? 'ADMIN' : 'MEMBER',
         },
       });
       await tx.invitation.update({

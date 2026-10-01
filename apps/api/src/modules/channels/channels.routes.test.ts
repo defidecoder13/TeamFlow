@@ -391,18 +391,29 @@ liveDescribe('channel API (live database)', () => {
     });
     const slug = created.body.channel.slug as string;
     const detail = await member.get(`/api/workspaces/${ws1}/channels/${slug}`);
+    // Intentional exception: the authenticated detail response carries
+    // createdById so the channel page can implement the backend's existing
+    // creator branch of canUpdateChannel. Nothing else sensitive is exposed.
     expect(Object.keys(detail.body.channel).sort()).toEqual([
       'createdAt',
+      'createdById',
       'description',
       'id',
       'name',
       'slug',
+      'topic',
       'type',
       'updatedAt',
     ]);
+    expect(detail.body.channel.createdById).toBe(await userIdFor('owner'));
     const serialized = JSON.stringify(detail.body).toLowerCase();
-    for (const leaked of ['createdby', 'password', 'token', 'secret', 'membership']) {
+    for (const leaked of ['password', 'token', 'secret', 'membership']) {
       expect(serialized).not.toContain(leaked);
+    }
+    // The list response intentionally omits createdById (narrow exposure).
+    const listed = await member.get(`/api/workspaces/${ws1}/channels`);
+    for (const row of listed.body.channels as Record<string, unknown>[]) {
+      expect(row).not.toHaveProperty('createdById');
     }
   });
 

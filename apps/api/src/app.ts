@@ -13,11 +13,14 @@ import {
   createWorkspaceInvitationsRouter,
 } from './modules/invitations/index';
 import { createSearchRouter } from './modules/search/index';
+import { createWorkspaceMentionsRouter } from './modules/mentions/index';
+import { createWorkspaceDraftsRouter } from './modules/drafts/index';
 import {
   createNotificationsRouter,
   createNotificationPreferencesRouter,
 } from './modules/notifications/index';
 import { createAttachmentsRouter, createMessageAttachmentsRouter } from './modules/storage/index';
+import { createWorkspaceThreadsRouter } from './modules/threads/index';
 import { createWorkspacesRouter } from './modules/workspaces/index';
 
 /** Optional overrides for tests (e.g. a memory-adapter auth instance). */
@@ -52,7 +55,8 @@ export function createApp(deps: AppDeps = {}): Express {
       .catch(next);
   });
 
-  app.use(express.json());
+  // 1mb: default 100kb rejects inline avatar data URLs on PATCH /api/me.
+  app.use(express.json({ limit: '1mb' }));
 
   app.get('/health', (_req: Request, res: Response) => {
     res.status(200).json({ status: 'ok' });
@@ -71,6 +75,9 @@ export function createApp(deps: AppDeps = {}): Express {
   );
   app.use('/api/direct-messages', createDirectMessagesRouter(resolveAuth));
   app.use('/api/workspaces/:workspaceId/search', createSearchRouter(resolveAuth));
+  app.use('/api/workspaces/:workspaceId/threads', createWorkspaceThreadsRouter(resolveAuth));
+  app.use('/api/workspaces/:workspaceId/mentions', createWorkspaceMentionsRouter(resolveAuth));
+  app.use('/api/workspaces/:workspaceId/drafts', createWorkspaceDraftsRouter(resolveAuth));
   app.use('/api/workspaces/:workspaceId/notifications', createNotificationsRouter(resolveAuth));
   app.use(
     '/api/users/me/notification-preferences',

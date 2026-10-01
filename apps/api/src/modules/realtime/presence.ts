@@ -4,13 +4,12 @@
  * Tracks ephemeral online/offline state across multiple sockets/tabs per user.
  * Zero database persistence for heartbeats/presence transitions.
  *
- * Conceptual states: 'ONLINE' | 'AWAY' | 'OFFLINE'.
- * In 4I.1:
+ * States: 'ONLINE' | 'OFFLINE'.
  * - socket count > 0 => ONLINE
  * - socket count === 0 => OFFLINE
  */
 
-export type PresenceStatus = 'ONLINE' | 'AWAY' | 'OFFLINE';
+export type PresenceStatus = 'ONLINE' | 'OFFLINE';
 
 export interface UserPresence {
   userId: string;

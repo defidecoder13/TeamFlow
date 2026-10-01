@@ -52,8 +52,16 @@ export type AcceptInvitationResult =
   | { ok: false; kind: 'forbidden'; message: string }
   | { ok: false; kind: 'failed' };
 
+export type RevokeInvitationResult =
+  | { ok: true; invitationId: string }
+  | { ok: false; kind: 'unauthenticated' }
+  | { ok: false; kind: 'forbidden' }
+  | { ok: false; kind: 'notFound' }
+  | { ok: false; kind: 'failed'; message?: string };
+
 const CREATE_FALLBACK_MESSAGE = "We couldn't create the invitation. Please try again.";
 const ACCEPT_FALLBACK_MESSAGE = "We couldn't accept the invitation. Please try again.";
+const REVOKE_FALLBACK_MESSAGE = "We couldn't revoke the invitation. Please try again.";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
@@ -127,13 +135,15 @@ export function formatInvitationDate(isoDate: string): string {
 }
 
 /**
- * Create an invitation for an email address. Sends ONLY `{ email }` —
- * ownership, role, and expiry stay server-side.
+ * Create an invitation for an email address. Sends ONLY `{ email }` and
+ * optional `role` (MEMBER|ADMIN) — ownership, token, and expiry stay
+ * server-side.
  */
 export async function createInvitation(
   apiBaseUrl: string,
   workspaceId: string,
   email: string,
+  role?: 'MEMBER' | 'ADMIN',
 ): Promise<CreateInvitationResult> {
   let response: Response;
   try {
@@ -143,7 +153,7 @@ export async function createInvitation(
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify(role ? { email, role } : { email }),
       },
     );
   } catch {
@@ -203,47 +213,104 @@ export async function fetchPendingInvitations(
   return { ok: true, invitations: body.invitations };
 }
 
-/** Accept an invitation by raw token. Identity comes from the session. */
-export async function acceptInvitation(
+/**
+ * Revoke a pending invitation. Only pending rows can be revoked; anything
+ * else surfaces as not found, matching the backend's non-enumerating shape.
+ */
+export async function revokeInvitation(
   apiBaseUrl: string,
-  token: string,
-): Promise<AcceptInvitationResult> {
+  workspaceId: string,
+  invitationId: string,
+): Promise<RevokeInvitationResult> {
   let response: Response;
   try {
-    response = await fetch(`${apiBaseUrl}/api/invitations/accept`, {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token }),
-    });
+    response = await fetch(
+      `${apiBaseUrl}/api/workspaces/${encodeURIComponent(workspaceId)}/invitations/${encodeURIComponent(invitationId)}`,
+      { method: 'DELETE', credentials: 'include' },
+    );
   } catch {
     return { ok: false, kind: 'failed' };
   }
   if (response.status === 401) {
     return { ok: false, kind: 'unauthenticated' };
   }
-  const body = await readJson(response);
   if (response.status === 200) {
-    const workspace = isRecord(body) ? (body.workspace as Record<string, unknown>) : null;
-    if (
-      workspace &&
-      isNonEmptyString(workspace.id) &&
-      isNonEmptyString(workspace.name) &&
-      isNonEmptyString(workspace.slug)
-    ) {
-      return {
-        ok: true,
-        workspace: { id: workspace.id, name: workspace.name, slug: workspace.slug },
-        alreadyMember: (body as { alreadyMember?: unknown }).alreadyMember === true,
-      };
+    const body = await readJson(response);
+    const id =
+      isRecord(body) && isRecord(body.invitation) && isNonEmptyString(body.invitation.id)
+        ? body.invitation.id
+        : null;
+    if (!id) {
+      return { ok: false, kind: 'failed' };
+    }
+    return { ok: true, invitationId: id };
+  }
+  if (response.status === 403) {
+    return { ok: false, kind: 'forbidden' };
+  }
+  if (response.status === 404) {
+    return { ok: false, kind: 'notFound' };
+  }
+  const body = await readJson(response);
+  return { ok: false, kind: 'failed', message: serverMessage(body, REVOKE_FALLBACK_MESSAGE) };
+}
+
+/** Accept an invitation by raw token. Identity comes from the session. */
+export async function acceptInvitation(
+  apiBaseUrl: string,
+  token: string,
+): Promise<AcceptInvitationResult> {
+  async function attempt(): Promise<AcceptInvitationResult | 'conflict'> {
+    let response: Response;
+    try {
+      response = await fetch(`${apiBaseUrl}/api/invitations/accept`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token }),
+      });
+    } catch {
+      return { ok: false, kind: 'failed' };
+    }
+    if (response.status === 401) {
+      return { ok: false, kind: 'unauthenticated' };
+    }
+    const body = await readJson(response);
+    if (response.status === 200) {
+      const workspace = isRecord(body) ? (body.workspace as Record<string, unknown>) : null;
+      if (
+        workspace &&
+        isNonEmptyString(workspace.id) &&
+        isNonEmptyString(workspace.name) &&
+        isNonEmptyString(workspace.slug)
+      ) {
+        return {
+          ok: true,
+          workspace: { id: workspace.id, name: workspace.name, slug: workspace.slug },
+          alreadyMember: (body as { alreadyMember?: unknown }).alreadyMember === true,
+        };
+      }
+      return { ok: false, kind: 'failed' };
+    }
+    if (response.status === 404) {
+      return { ok: false, kind: 'invalid' };
+    }
+    if (response.status === 403) {
+      return { ok: false, kind: 'forbidden', message: serverMessage(body, ACCEPT_FALLBACK_MESSAGE) };
+    }
+    if (response.status === 409) {
+      return 'conflict';
     }
     return { ok: false, kind: 'failed' };
   }
-  if (response.status === 404) {
-    return { ok: false, kind: 'invalid' };
+
+  const first = await attempt();
+  if (first !== 'conflict') {
+    return first;
   }
-  if (response.status === 403) {
-    return { ok: false, kind: 'forbidden', message: serverMessage(body, ACCEPT_FALLBACK_MESSAGE) };
-  }
-  return { ok: false, kind: 'failed' };
+  // 409 = concurrent-accept race: the loser's transaction rolled back, so the
+  // single-use token is unconsumed. One idempotent retry deterministically
+  // resolves to the already-member path instead of a generic failure.
+  const second = await attempt();
+  return second === 'conflict' ? { ok: false, kind: 'failed' } : second;
 }

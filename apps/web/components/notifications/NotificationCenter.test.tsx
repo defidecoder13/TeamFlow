@@ -8,6 +8,7 @@
  * message safety, and accessibility semantics.
  */
 import { fireEvent, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NotificationBell, NotificationCenter } from './NotificationCenter';
 import type { NotificationItem } from '../../lib/notifications';
@@ -24,7 +25,7 @@ vi.mock('next/navigation', () => ({
 }));
 
 vi.mock('../../lib/use-notifications', () => ({
-  useNotifications: (ws: string | null) => useNotificationsMock(ws),
+  useNotifications: (ws: string | null, filter?: unknown) => useNotificationsMock(ws, filter),
 }));
 
 vi.mock('../../lib/use-workspace-channels', () => ({
@@ -146,6 +147,92 @@ describe('NotificationBell', () => {
     const bell = screen.getByRole('button', { name: 'Notifications' });
     expect(bell).toBeDisabled();
   });
+
+  it('renders the compact filter bar when the panel opens', async () => {
+    const user = userEvent.setup();
+    useNotificationsMock.mockReturnValue(
+      createMockNotifications({
+        state: {
+          status: 'ready',
+          items: [createItem({ id: 'n-1' })],
+          hasMore: false,
+          nextCursor: null,
+        },
+        hasUnread: true,
+      }),
+    );
+    render(<NotificationBell workspaceId="ws-1" />);
+
+    await user.click(screen.getByRole('button', { name: /notifications/i }));
+    expect(screen.getByRole('group', { name: 'Read status filter' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'All' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Unread' })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByLabelText('Filter by notification type')).toBeInTheDocument();
+  });
+
+  it('refetches with backend params when filters change', async () => {
+    const user = userEvent.setup();
+    useNotificationsMock.mockReturnValue(
+      createMockNotifications({
+        state: {
+          status: 'ready',
+          items: [createItem({ id: 'n-1' })],
+          hasMore: false,
+          nextCursor: null,
+        },
+        hasUnread: true,
+      }),
+    );
+    render(<NotificationBell workspaceId="ws-1" />);
+    await user.click(screen.getByRole('button', { name: /notifications/i }));
+
+    await user.click(screen.getByRole('button', { name: 'Unread' }));
+    expect(useNotificationsMock).toHaveBeenCalledWith('ws-1', { unreadOnly: true });
+
+    await user.selectOptions(screen.getByLabelText('Filter by notification type'), 'THREAD_REPLY');
+    expect(useNotificationsMock).toHaveBeenCalledWith('ws-1', {
+      unreadOnly: true,
+      type: 'THREAD_REPLY',
+    });
+  });
+
+  it('shows a filtered empty state instead of the generic one', async () => {
+    const user = userEvent.setup();
+    useNotificationsMock.mockReturnValue(
+      createMockNotifications({
+        state: { status: 'ready', items: [], hasMore: false, nextCursor: null },
+      }),
+    );
+    render(<NotificationBell workspaceId="ws-1" />);
+    await user.click(screen.getByRole('button', { name: /notifications/i }));
+    await user.click(screen.getByRole('button', { name: 'Unread' }));
+
+    expect(screen.getByText('No unread notifications')).toBeInTheDocument();
+    expect(screen.queryByText(/all caught up/i)).not.toBeInTheDocument();
+  });
+
+  it('keeps mark-read wired while a filter is active', async () => {
+    const user = userEvent.setup();
+    const markRead = vi.fn();
+    useNotificationsMock.mockReturnValue(
+      createMockNotifications({
+        state: {
+          status: 'ready',
+          items: [createItem({ id: 'n-1', readAt: null })],
+          hasMore: false,
+          nextCursor: null,
+        },
+        hasUnread: true,
+        markRead,
+      }),
+    );
+    render(<NotificationBell workspaceId="ws-1" />);
+    await user.click(screen.getByRole('button', { name: /notifications/i }));
+    await user.click(screen.getByRole('button', { name: 'Unread' }));
+
+    await user.click(screen.getByRole('button', { name: /mark as read/i }));
+    expect(markRead).toHaveBeenCalledWith('n-1');
+  });
 });
 
 describe('NotificationCenter', () => {
@@ -200,7 +287,7 @@ describe('NotificationCenter', () => {
     expect(screen.getByText("Couldn't load notifications")).toBeInTheDocument();
     expect(screen.getByText('Failed to reach server')).toBeInTheDocument();
 
-    const retryButton = screen.getByRole('button', { name: 'Retry' });
+    const retryButton = screen.getByRole('button', { name: 'Try again' });
     fireEvent.click(retryButton);
     expect(retry).toHaveBeenCalledTimes(1);
   });
@@ -263,7 +350,7 @@ describe('NotificationCenter', () => {
     expect(screen.queryByRole('button', { name: 'Mark all as read' })).not.toBeInTheDocument();
   });
 
-  it('renders Load older button when hasMore is true and invokes loadMore', () => {
+  it('renders Load more button when hasMore is true and invokes loadMore', () => {
     const loadMore = vi.fn();
     const notifications = createMockNotifications({
       state: { status: 'ready', items: [createItem()], hasMore: true, nextCursor: 'cursor-1' },
@@ -277,7 +364,7 @@ describe('NotificationCenter', () => {
       />,
     );
 
-    const button = screen.getByRole('button', { name: 'Load older' });
+    const button = screen.getByRole('button', { name: 'Load more' });
     expect(button).toBeInTheDocument();
     fireEvent.click(button);
     expect(loadMore).toHaveBeenCalledTimes(1);
@@ -353,11 +440,32 @@ describe('NotificationCenter', () => {
       />,
     );
 
-    const itemButton = screen.getByRole('button', { name: /Grace Hopper mentioned you/ });
+    const itemButton = screen.getAllByRole('button', { name: /Grace Hopper mentioned you/ })[0];
     fireEvent.click(itemButton);
 
     expect(onNavigate).toHaveBeenCalledWith('/app/channels/general?message=m-1');
     expect(markRead).toHaveBeenCalledWith('n-1');
+  });
+
+  it('marks a single notification read without navigating', () => {
+    const markRead = vi.fn();
+    const onNavigate = vi.fn();
+    const item = createItem({ id: 'n-1', messageId: 'm-1', channelId: 'ch-1', readAt: null });
+    const notifications = createMockNotifications({
+      state: { status: 'ready', items: [item], hasMore: false, nextCursor: null },
+      markRead,
+    });
+    render(
+      <NotificationCenter
+        notifications={notifications}
+        channelSlugById={channelSlugById}
+        onNavigate={onNavigate}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /mark as read/i }));
+    expect(markRead).toHaveBeenCalledWith('n-1');
+    expect(onNavigate).not.toHaveBeenCalled();
   });
 
   it('does not navigate for deleted notification where messageId is null', () => {
@@ -375,9 +483,12 @@ describe('NotificationCenter', () => {
     );
 
     expect(screen.getByText('Original message unavailable')).toBeInTheDocument();
-    expect(
-      screen.queryByRole('button', { name: /Grace Hopper mentioned you/ }),
-    ).not.toBeInTheDocument();
+    // No navigation action — only the explicit mark-read control.
+    const buttons = screen.getAllByRole('button');
+    expect(buttons.length).toBeGreaterThan(0);
+    for (const button of buttons) {
+      expect(button.getAttribute('aria-label')).toMatch(/^mark as read:/i);
+    }
     expect(onNavigate).not.toHaveBeenCalled();
   });
 });

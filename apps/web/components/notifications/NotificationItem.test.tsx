@@ -92,7 +92,9 @@ describe('NotificationItem', () => {
     render(<NotificationItem item={item} navigable={true} onOpen={vi.fn()} />);
 
     expect(screen.getByText('Unread')).toBeInTheDocument();
-    const button = screen.getByRole('button');
+    const button = screen.getByRole('button', {
+      name: /Grace Hopper mentioned you, in #general/i,
+    });
     expect(button).toHaveAccessibleName(expect.stringContaining('unread'));
   });
 
@@ -113,7 +115,7 @@ describe('NotificationItem', () => {
   });
 
   it('renders deleted or non-navigable source as plain non-clickable list item', () => {
-    const item = createItem({ messageId: null });
+    const item = createItem({ messageId: null, readAt: new Date('2026-09-06T12:05:00.000Z') });
     const onOpen = vi.fn();
     render(<NotificationItem item={item} navigable={false} onOpen={onOpen} />);
 
@@ -127,7 +129,9 @@ describe('NotificationItem', () => {
     const onOpen = vi.fn();
     render(<NotificationItem item={item} navigable={true} onOpen={onOpen} />);
 
-    const button = screen.getByRole('button');
+    const button = screen.getByRole('button', {
+      name: /Grace Hopper mentioned you, in #general/i,
+    });
     fireEvent.click(button);
     expect(onOpen).toHaveBeenCalledWith(item);
   });
@@ -140,9 +144,43 @@ describe('NotificationItem', () => {
     });
     render(<NotificationItem item={item} navigable={true} onOpen={vi.fn()} />);
 
-    const button = screen.getByRole('button');
+    const button = screen.getByRole('button', {
+      name: /Grace Hopper mentioned you, in #general/i,
+    });
     expect(button).toHaveAccessibleName(
       expect.stringMatching(/Grace Hopper mentioned you, in #general, .+?, unread/),
     );
+  });
+
+  it('exposes an explicit mark-read action for unread rows without navigating', () => {
+    const item = createItem({ readAt: null });
+    const onOpen = vi.fn();
+    const onMarkRead = vi.fn();
+    render(
+      <NotificationItem item={item} navigable={true} onOpen={onOpen} onMarkRead={onMarkRead} />,
+    );
+
+    const markButton = screen.getByRole('button', { name: /mark as read/i });
+    fireEvent.click(markButton);
+    expect(onMarkRead).toHaveBeenCalledWith(item);
+    expect(onOpen).not.toHaveBeenCalled();
+  });
+
+  it('shows mark-read on non-navigable unread rows and hides it once read', () => {
+    const unread = createItem({ messageId: null, readAt: null });
+    const { rerender } = render(
+      <NotificationItem item={unread} navigable={false} onOpen={vi.fn()} onMarkRead={vi.fn()} />,
+    );
+    expect(screen.getByRole('button', { name: /mark as read/i })).toBeInTheDocument();
+
+    rerender(
+      <NotificationItem
+        item={{ ...unread, readAt: new Date('2026-09-06T12:05:00.000Z') }}
+        navigable={false}
+        onOpen={vi.fn()}
+        onMarkRead={vi.fn()}
+      />,
+    );
+    expect(screen.queryByRole('button', { name: /mark as read/i })).toBeNull();
   });
 });

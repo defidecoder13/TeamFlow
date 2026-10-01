@@ -3,9 +3,11 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { UserMenu } from './UserMenu';
 
-const { replaceMock, signOutMock } = vi.hoisted(() => ({
+const { replaceMock, signOutMock, disconnectRealtimeMock, clearCacheMock } = vi.hoisted(() => ({
   replaceMock: vi.fn(),
   signOutMock: vi.fn(),
+  disconnectRealtimeMock: vi.fn(),
+  clearCacheMock: vi.fn(),
 }));
 
 vi.mock('next/navigation', () => ({
@@ -15,6 +17,18 @@ vi.mock('next/navigation', () => ({
 vi.mock('../../lib/auth-client', () => ({
   getAuthClient: () => ({ signOut: signOutMock }),
 }));
+
+vi.mock('../../lib/realtime-client', () => ({
+  disconnectRealtime: disconnectRealtimeMock,
+}));
+
+vi.mock('../../lib/attachments', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../lib/attachments')>();
+  return {
+    ...actual,
+    clearAttachmentDownloadUrlCache: clearCacheMock,
+  };
+});
 
 const USER = {
   id: 'user-1',
@@ -27,6 +41,8 @@ const USER = {
 beforeEach(() => {
   replaceMock.mockReset();
   signOutMock.mockReset();
+  disconnectRealtimeMock.mockReset();
+  clearCacheMock.mockReset();
 });
 
 describe('UserMenu', () => {
@@ -43,7 +59,7 @@ describe('UserMenu', () => {
     );
     expect(screen.getByRole('menuitem', { name: /settings/i })).toHaveAttribute(
       'href',
-      '/app/settings/notifications',
+      '/app/settings',
     );
   });
 
@@ -57,6 +73,30 @@ describe('UserMenu', () => {
 
     expect(signOutMock).toHaveBeenCalledTimes(1);
     expect(replaceMock).toHaveBeenCalledWith('/sign-in');
+  });
+
+  it('disconnects realtime and clears cached download URLs on sign-out', async () => {
+    const user = userEvent.setup();
+    signOutMock.mockResolvedValue({ data: { success: true }, error: null });
+    render(<UserMenu user={USER} />);
+
+    await user.click(screen.getByRole('button', { name: /account: ada lovelace/i }));
+    await user.click(screen.getByRole('menuitem', { name: /sign out/i }));
+
+    expect(disconnectRealtimeMock).toHaveBeenCalledTimes(1);
+    expect(clearCacheMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the socket connected when sign-out fails', async () => {
+    const user = userEvent.setup();
+    signOutMock.mockResolvedValue({ data: null, error: { code: 'FAILED' } });
+    render(<UserMenu user={USER} />);
+
+    await user.click(screen.getByRole('button', { name: /account: ada lovelace/i }));
+    await user.click(screen.getByRole('menuitem', { name: /sign out/i }));
+
+    expect(disconnectRealtimeMock).not.toHaveBeenCalled();
+    expect(replaceMock).not.toHaveBeenCalled();
   });
 
   it('reports sign-out failures safely', async () => {

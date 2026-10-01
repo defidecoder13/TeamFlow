@@ -82,6 +82,48 @@ export type RealtimeParticipantRemovedEvent = {
   userId: string;
 };
 
+export type RealtimeChannelMembershipRemovedEvent = {
+  type: 'channel:membership-removed';
+  workspaceId: string;
+  channelId: string;
+  userId: string;
+};
+
+export type RealtimeChannelUpdatedEvent = {
+  type: 'channel:updated';
+  workspaceId: string;
+  channel: unknown;
+};
+
+export type RealtimeChannelDeletedEvent = {
+  type: 'channel:deleted';
+  workspaceId: string;
+  channelId: string;
+};
+
+export type RealtimeChannelCreatedEvent = {
+  type: 'channel:created';
+  workspaceId: string;
+  channel: unknown;
+};
+
+export type RealtimeConversationCreatedEvent = {
+  type: 'conversation:created';
+  workspaceId: string;
+  conversation: unknown;
+};
+
+export type RealtimeWorkspaceMembershipRemovedEvent = {
+  type: 'workspace:membership-removed';
+  workspaceId: string;
+  userId: string;
+};
+
+export type RealtimeWorkspaceDeletedEvent = {
+  type: 'workspace:deleted';
+  workspaceId: string;
+};
+
 export type RealtimeNotificationNewEvent = {
   type: 'notification:new';
   notification: {
@@ -120,7 +162,7 @@ export type RealtimeNotificationReadAllEvent = {
 export type RealtimePresenceChangedEvent = {
   type: 'presence:changed';
   userId: string;
-  status: 'ONLINE' | 'OFFLINE' | 'AWAY';
+  status: 'ONLINE' | 'OFFLINE';
   lastSeenAt: string | null;
 };
 
@@ -139,6 +181,33 @@ export type RealtimeTypingStoppedEvent = {
 };
 
 let socketInstance: Socket | null = null;
+
+/**
+ * Upper bound for a server acknowledgement. Without this, a transport drop
+ * between emit and ack leaves the awaiting promise pending forever — the
+ * shell's badge-join loop awaits joins sequentially, so one hung join would
+ * starve every channel after it.
+ */
+export const REALTIME_ACK_TIMEOUT_MS = 5000;
+
+function withAckTimeout<T>(
+  work: Promise<T>,
+  ms = REALTIME_ACK_TIMEOUT_MS,
+): Promise<T | { ok: false; error: string }> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => resolve({ ok: false, error: 'TIMEOUT' }), ms);
+    work.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
 
 export function getRealtimeSocket(): Socket {
   if (!socketInstance) {
@@ -176,15 +245,17 @@ export function joinRealtimeChannel(channelId: string): Promise<{ ok: boolean; e
     socket.connect();
   }
 
-  return new Promise((resolve) => {
-    socket.emit('channel:join', { channelId }, (res?: { ok: boolean; error?: string }) => {
-      if (!res) {
-        resolve({ ok: false, error: 'NO_RESPONSE' });
-        return;
-      }
-      resolve(res);
-    });
-  });
+  return withAckTimeout(
+    new Promise<{ ok: boolean; error?: string }>((resolve) => {
+      socket.emit('channel:join', { channelId }, (res?: { ok: boolean; error?: string }) => {
+        if (!res) {
+          resolve({ ok: false, error: 'NO_RESPONSE' });
+          return;
+        }
+        resolve(res);
+      });
+    }),
+  );
 }
 
 export function leaveRealtimeChannel(channelId: string): Promise<{ ok: boolean }> {
@@ -204,19 +275,21 @@ export function joinRealtimeDirectConversation(
     socket.connect();
   }
 
-  return new Promise((resolve) => {
-    socket.emit(
-      'join_direct_conversation',
-      { conversationId },
-      (res?: { ok: boolean; error?: string }) => {
-        if (!res) {
-          resolve({ ok: false, error: 'NO_RESPONSE' });
-          return;
-        }
-        resolve(res);
-      },
-    );
-  });
+  return withAckTimeout(
+    new Promise<{ ok: boolean; error?: string }>((resolve) => {
+      socket.emit(
+        'join_direct_conversation',
+        { conversationId },
+        (res?: { ok: boolean; error?: string }) => {
+          if (!res) {
+            resolve({ ok: false, error: 'NO_RESPONSE' });
+            return;
+          }
+          resolve(res);
+        },
+      );
+    }),
+  );
 }
 
 export function leaveRealtimeDirectConversation(conversationId: string): Promise<{ ok: boolean }> {
@@ -327,6 +400,76 @@ export function onRealtimeParticipantRemoved(
   };
 }
 
+export function onRealtimeChannelMembershipRemoved(
+  handler: (event: RealtimeChannelMembershipRemovedEvent) => void,
+): () => void {
+  const socket = getRealtimeSocket();
+  socket.on('channel:membership-removed', handler);
+  return () => {
+    socket.off('channel:membership-removed', handler);
+  };
+}
+
+export function onRealtimeChannelUpdated(
+  handler: (event: RealtimeChannelUpdatedEvent) => void,
+): () => void {
+  const socket = getRealtimeSocket();
+  socket.on('channel:updated', handler);
+  return () => {
+    socket.off('channel:updated', handler);
+  };
+}
+
+export function onRealtimeChannelDeleted(
+  handler: (event: RealtimeChannelDeletedEvent) => void,
+): () => void {
+  const socket = getRealtimeSocket();
+  socket.on('channel:deleted', handler);
+  return () => {
+    socket.off('channel:deleted', handler);
+  };
+}
+
+export function onRealtimeChannelCreated(
+  handler: (event: RealtimeChannelCreatedEvent) => void,
+): () => void {
+  const socket = getRealtimeSocket();
+  socket.on('channel:created', handler);
+  return () => {
+    socket.off('channel:created', handler);
+  };
+}
+
+export function onRealtimeConversationCreated(
+  handler: (event: RealtimeConversationCreatedEvent) => void,
+): () => void {
+  const socket = getRealtimeSocket();
+  socket.on('conversation:created', handler);
+  return () => {
+    socket.off('conversation:created', handler);
+  };
+}
+
+export function onRealtimeWorkspaceMembershipRemoved(
+  handler: (event: RealtimeWorkspaceMembershipRemovedEvent) => void,
+): () => void {
+  const socket = getRealtimeSocket();
+  socket.on('workspace:membership-removed', handler);
+  return () => {
+    socket.off('workspace:membership-removed', handler);
+  };
+}
+
+export function onRealtimeWorkspaceDeleted(
+  handler: (event: RealtimeWorkspaceDeletedEvent) => void,
+): () => void {
+  const socket = getRealtimeSocket();
+  socket.on('workspace:deleted', handler);
+  return () => {
+    socket.off('workspace:deleted', handler);
+  };
+}
+
 /**
  * Notification realtime subscribers (Phase 4H.6, non-visual).
  *
@@ -394,11 +537,13 @@ export function emitTypingStart(container: {
     socket.connect();
   }
 
-  return new Promise((resolve) => {
-    socket.emit('typing:start', container, (res?: { ok: boolean; error?: string }) => {
-      resolve(res ?? { ok: true });
-    });
-  });
+  return withAckTimeout(
+    new Promise<{ ok: boolean; error?: string }>((resolve) => {
+      socket.emit('typing:start', container, (res?: { ok: boolean; error?: string }) => {
+        resolve(res ?? { ok: true });
+      });
+    }),
+  );
 }
 
 export function emitTypingStop(container: {

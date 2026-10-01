@@ -15,7 +15,6 @@ interface MessageEditorProps {
   setEditingBody: (v: string) => void;
   cancelEdit: () => void;
   submitEdit: (body: string) => Promise<unknown>;
-  deleteMessage?: (messageId: string) => Promise<{ ok: boolean; error?: string }>;
   submitting: boolean;
 }
 
@@ -61,7 +60,11 @@ export function MessageEditor({
     async (e: React.FormEvent) => {
       e.preventDefault();
       const trimmed = editingBody.trim();
-      if (!trimmed || submitting) return;
+      if (!trimmed) {
+        setSubmitError('Message cannot be empty.');
+        return;
+      }
+      if (submitting) return;
       setSubmitError(null);
       try {
         const res = await submitEdit(trimmed);
@@ -105,21 +108,23 @@ export function MessageEditor({
   }
 
   return (
-    <div className="group relative flex items-start gap-3 bg-stone-50/70 px-4 py-2 sm:px-6">
+    <div className="group relative flex items-start gap-3 rounded-lg bg-[#f4f2fd]/70 px-2 py-2 ring-1 ring-inset ring-[#e3e1ec] sm:mx-2">
       <div className="shrink-0 pt-0.5">
         <UserAvatar name={authorName} image={authorImage} size="md" />
       </div>
 
       <div className="min-w-0 flex-1">
         <div className="mb-1 flex items-baseline gap-2 leading-none">
-          <span className="truncate text-[13px] font-semibold text-stone-900">{authorName}</span>
+          <span className="truncate text-[13px] font-semibold text-[#1a1b22]" title={authorName}>
+            {authorName}
+          </span>
           {showTimestampActual && (
-            <span className="shrink-0 text-[11px] font-normal text-stone-400">
+            <span className="shrink-0 text-[11px] font-normal tabular-nums text-[#5f5e61]">
               {formatMessageTime(message.createdAt)}
             </span>
           )}
           {isCurrentUser && (
-            <span className="shrink-0 rounded bg-stone-100 px-1.5 py-0.5 text-[10px] font-medium text-stone-500">
+            <span className="shrink-0 rounded bg-[#f4f2fd] px-1.5 py-0.5 text-[11px] font-medium text-[#47464b]">
               You
             </span>
           )}
@@ -134,8 +139,9 @@ export function MessageEditor({
             rows={size}
             placeholder="Edit message…"
             autoFocus
+            disabled={submitting}
             aria-label="Edit message"
-            className="w-full resize-none rounded-lg border border-stone-300 bg-white px-3 py-2 text-[14px] leading-relaxed text-stone-900 placeholder:text-stone-400 shadow-xs focus:border-stone-500 focus:outline-none focus:ring-1 focus:ring-stone-500"
+            className="w-full resize-none rounded-lg border border-[#c8c5cb] bg-white px-3 py-2 text-[14px] leading-relaxed text-[#1a1b22] outline-none placeholder:text-[#5f5e61] focus:border-[#1f44e4] focus-visible:outline-2 focus-visible:outline-[#1f44e4] disabled:cursor-not-allowed disabled:opacity-50"
             style={{ minHeight: '36px', height: `${Math.max(36, size * 24)}px` }}
           />
           <div className="flex items-center gap-2">
@@ -143,7 +149,7 @@ export function MessageEditor({
               type="button"
               onClick={cancelEdit}
               disabled={submitting}
-              className="rounded-md border border-stone-200 bg-white px-2.5 py-1 text-[12px] font-medium text-stone-600 shadow-xs transition-colors hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-md border border-[#e3e1ec] bg-white px-2.5 py-1 text-[12px] font-medium text-[#47464b] transition-colors hover:bg-[#f4f2fd] focus-visible:outline-2 focus-visible:outline-[#1f44e4] disabled:cursor-not-allowed disabled:opacity-50"
             >
               Cancel
             </button>
@@ -152,16 +158,17 @@ export function MessageEditor({
                 {submitError}
               </span>
             ) : (
-              <span className="hidden text-[11px] text-stone-400 sm:inline">
+              <span className="hidden text-[11px] text-[#5f5e61] sm:inline">
                 escape to cancel · enter to save · shift+enter for new line
               </span>
             )}
             <button
               type="submit"
-              disabled={submitting || !editingBody.trim()}
-              className="ml-auto rounded-md bg-stone-900 px-3 py-1 text-[12px] font-medium text-white shadow-xs transition-colors hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={submitting}
+              aria-busy={submitting}
+              className="ml-auto rounded-md bg-[#000000] px-3 py-1 text-[12px] font-medium text-white transition-colors hover:bg-[#1a1b22] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1f44e4] disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {submitting ? 'Saving…' : 'Save'}
+              {submitting ? 'Saving…' : 'Save changes'}
             </button>
           </div>
         </form>

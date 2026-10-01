@@ -5,12 +5,17 @@ interface ConversationEmptyStateProps {
 }
 
 export function ConversationEmptyState({ channelName }: ConversationEmptyStateProps) {
+  const cleanName = channelName.replace(/^#/, '');
   return (
-    <div className="flex flex-1 flex-col items-center justify-center p-6 text-center">
-      <div className="max-w-sm space-y-1.5">
-        <h2 className="text-base font-semibold text-stone-900">Welcome to {channelName}</h2>
-        <p className="text-[13px] text-stone-500">
-          Start the conversation by sending the first message.
+    <div className="flex flex-1 flex-col justify-end px-4 py-3 sm:px-6">
+      <div className="border-b border-[#e3e1ec]/60 px-2 pb-4 pt-2">
+        <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-xl bg-[#f4f2fd] text-[18px] font-bold text-[#1a1b22]">
+          #
+        </div>
+        <h2 className="text-base font-bold text-[#1a1b22]">Welcome to #{cleanName}</h2>
+        <p className="mt-0.5 text-xs text-[#5f5e61]">
+          This is the start of the #{cleanName} channel. Start the conversation by sending the first
+          message.
         </p>
       </div>
     </div>

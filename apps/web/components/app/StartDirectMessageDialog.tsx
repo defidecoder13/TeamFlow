@@ -8,7 +8,8 @@
 
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
+import { Dialog } from './dialog';
 import { getApiBaseUrl } from '../../lib/config';
 import { useSessionUser } from '../../lib/use-session-user';
 import { useWorkspaceMembers } from '../../lib/use-workspace-members';
@@ -18,6 +19,7 @@ import {
   type DirectConversation,
 } from '../../lib/messages';
 import { AuthError } from '../auth/AuthError';
+import { CloseIcon } from './icons';
 
 export interface StartDirectMessageDialogProps {
   workspaceId: string;
@@ -45,18 +47,6 @@ export function StartDirectMessageDialog({
   const currentUserId = session.status === 'authenticated' ? session.user.id : null;
 
   const { state: membersState, retry: retryMembers } = useWorkspaceMembers(workspaceId);
-
-  useEffect(() => {
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape' && !isSubmitting) {
-        onClose();
-      }
-    }
-    document.addEventListener('keydown', onKeyDown);
-    return () => {
-      document.removeEventListener('keydown', onKeyDown);
-    };
-  }, [isSubmitting, onClose]);
 
   const otherMembers = useMemo(() => {
     if (membersState.status !== 'ready') return [];
@@ -118,7 +108,11 @@ export function StartDirectMessageDialog({
   }
 
   async function handleCreateGroup() {
-    if (isSubmitting || selectedUserIds.length < 2) return;
+    if (isSubmitting) return;
+    if (selectedUserIds.length < 2) {
+      setError('Select at least 2 other members to create a group.');
+      return;
+    }
     setIsSubmitting(true);
     setError(null);
 
@@ -152,88 +146,69 @@ export function StartDirectMessageDialog({
   }
 
   return (
-    <div
-      role="presentation"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/40 p-4 backdrop-blur-[2px]"
-      onClick={() => {
-        if (!isSubmitting) {
-          onClose();
-        }
-      }}
+    <Dialog
+      open
+      onClose={onClose}
+      labelledBy="start-dm-title"
+      size="md"
+      dismissable={!isSubmitting}
     >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="start-dm-title"
-        onClick={(event) => event.stopPropagation()}
-        className="w-full max-w-md rounded-xl border border-stone-200 bg-white p-6 shadow-[0_20px_48px_-8px_rgba(24,24,27,0.12)]"
-      >
+      <div>
         <div className="flex items-start justify-between">
           <div>
             <h2
               id="start-dm-title"
-              className="text-base font-semibold tracking-tight text-zinc-900"
+              className="text-[17px] font-semibold tracking-tight text-[#171A21]"
             >
-              New direct message
+              Start direct message
             </h2>
-            <p className="mt-1 text-sm text-zinc-500">in {workspaceName}</p>
+            <p className="mt-1 text-[13px] text-[#737782]">in {workspaceName}</p>
           </div>
           <button
             type="button"
             disabled={isSubmitting}
             onClick={onClose}
             aria-label="Close dialog"
-            className="rounded-lg p-1 text-stone-400 transition-colors hover:bg-stone-100 hover:text-stone-600 disabled:opacity-50"
+            className="touch-hit rounded-lg p-1.5 text-[#737782] transition-colors hover:bg-[#F1F0EE] hover:text-[#171A21] focus-visible:outline-2 focus-visible:outline-[#3157D5] disabled:opacity-50"
           >
-            <svg
-              className="h-5 w-5"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth="1.5"
-              stroke="currentColor"
-              aria-hidden="true"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            <CloseIcon className="h-4 w-4" />
           </button>
         </div>
 
         <div
-          className="mt-3 flex rounded-lg bg-stone-100 p-0.5"
-          role="tablist"
+          className="mt-3 flex rounded-[8px] bg-[#FAF9F8] border border-[#E4E2DF] p-0.5"
+          role="group"
           aria-label="Conversation mode"
         >
           <button
             type="button"
-            role="tab"
-            aria-selected={mode === 'direct'}
+            aria-pressed={mode === 'direct'}
             onClick={() => {
               setMode('direct');
               setError(null);
             }}
-            className={`flex-1 rounded-md py-1.5 text-xs font-medium transition-colors ${
+            className={`flex-1 rounded-[6px] py-1.5 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-[#3157D5] ${
               mode === 'direct'
-                ? 'bg-white text-zinc-900 shadow-xs'
-                : 'text-stone-600 hover:text-zinc-900'
+                ? 'bg-white text-[#171A21] shadow-2xs font-semibold'
+                : 'text-[#737782] hover:text-[#171A21]'
             }`}
           >
-            Direct Message
+            Direct message
           </button>
           <button
             type="button"
-            role="tab"
-            aria-selected={mode === 'group'}
+            aria-pressed={mode === 'group'}
             onClick={() => {
               setMode('group');
               setError(null);
             }}
-            className={`flex-1 rounded-md py-1.5 text-xs font-medium transition-colors ${
+            className={`flex-1 rounded-[6px] py-1.5 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-[#3157D5] ${
               mode === 'group'
-                ? 'bg-white text-zinc-900 shadow-xs'
-                : 'text-stone-600 hover:text-zinc-900'
+                ? 'bg-white text-[#171A21] shadow-2xs font-semibold'
+                : 'text-[#737782] hover:text-[#171A21]'
             }`}
           >
-            Group Message
+            Group message
           </button>
         </div>
 
@@ -244,9 +219,9 @@ export function StartDirectMessageDialog({
             <div>
               <label
                 htmlFor="group-name-input"
-                className="block text-xs font-medium text-stone-700 mb-1"
+                className="block text-xs font-medium text-[#171A21] mb-1"
               >
-                Group name <span className="text-stone-400 font-normal">(optional)</span>
+                Group name <span className="text-[#737782] font-normal">(optional)</span>
               </label>
               <input
                 id="group-name-input"
@@ -256,7 +231,7 @@ export function StartDirectMessageDialog({
                 maxLength={100}
                 value={groupName}
                 onChange={(e) => setGroupName(e.target.value)}
-                className="w-full rounded-lg border border-stone-300 px-3 py-1.5 text-sm text-zinc-900 placeholder:text-stone-400 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 disabled:opacity-50"
+                className="w-full rounded-[8px] border border-[#E4E2DF] bg-white px-3 py-1.5 text-sm text-[#171A21] outline-none placeholder:text-[#737782] focus:border-[#3157D5] focus-visible:outline-2 focus-visible:outline-[#3157D5] disabled:opacity-50"
               />
             </div>
           )}
@@ -273,12 +248,12 @@ export function StartDirectMessageDialog({
               placeholder="Search members by name or email…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm text-zinc-900 placeholder:text-stone-400 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 disabled:opacity-50"
+              className="w-full rounded-[8px] border border-[#E4E2DF] bg-white px-3 py-2 text-sm text-[#171A21] outline-none placeholder:text-[#737782] focus:border-[#3157D5] focus-visible:outline-2 focus-visible:outline-[#3157D5] disabled:opacity-50"
             />
           </div>
 
           {mode === 'group' && (
-            <div className="flex items-center justify-between text-xs text-stone-500">
+            <div className="flex items-center justify-between text-xs text-[#737782]">
               <span>Selected: {selectedUserIds.length} / 19</span>
               <span>(min 2 others required)</span>
             </div>
@@ -286,36 +261,45 @@ export function StartDirectMessageDialog({
 
           <div
             tabIndex={0}
+            role="region"
             aria-label="Members"
-            className="max-h-64 overflow-y-auto rounded-lg border border-stone-100 bg-stone-50/50 p-1 focus:outline-none"
+            className="max-h-64 overflow-y-auto rounded-[10px] border border-[#E4E2DF] bg-white p-1 divide-y divide-[#E4E2DF] focus-visible:outline-2 focus-visible:outline-[#3157D5]"
           >
             {membersState.status === 'loading' ? (
-              <div className="space-y-2 p-3">
-                <div className="h-8 animate-pulse rounded bg-stone-200" />
-                <div className="h-8 animate-pulse rounded bg-stone-200" />
-                <div className="h-8 animate-pulse rounded bg-stone-200" />
+              <div className="space-y-2 p-3" role="status" aria-label="Loading members">
+                <span className="sr-only">Loading members…</span>
+                <div aria-hidden="true" className="h-8 animate-pulse rounded bg-[#E4E2DF]" />
+                <div aria-hidden="true" className="h-8 animate-pulse rounded bg-[#E4E2DF]" />
+                <div aria-hidden="true" className="h-8 animate-pulse rounded bg-[#E4E2DF]" />
               </div>
             ) : membersState.status === 'error' ? (
               <div className="p-4 text-center">
-                <p className="text-sm text-stone-500">Failed to load members.</p>
+                <p className="text-sm text-[#C94A45]">Failed to load members.</p>
                 <button
                   type="button"
                   onClick={retryMembers}
-                  className="mt-2 text-xs font-medium text-zinc-900 underline"
+                  className="mt-2 rounded text-xs font-medium text-[#171A21] underline transition-colors focus-visible:outline-2 focus-visible:outline-[#3157D5]"
                 >
                   Try again
                 </button>
               </div>
             ) : otherMembers.length === 0 ? (
-              <p className="p-4 text-center text-sm text-stone-500">
+              <p className="p-4 text-center text-sm text-[#737782]">
                 No other members in this workspace to message.
               </p>
             ) : filteredMembers.length === 0 ? (
-              <p className="p-4 text-center text-sm text-stone-500">
-                No members match &quot;{search}&quot;.
-              </p>
+              <div className="space-y-1 p-4 text-center">
+                <p className="text-sm text-[#737782]">No results for &ldquo;{search}&rdquo;.</p>
+                <button
+                  type="button"
+                  onClick={() => setSearch('')}
+                  className="rounded text-xs font-medium text-[#171A21] underline decoration-[#E4E2DF] underline-offset-4 transition-colors hover:decoration-[#171A21] focus-visible:outline-2 focus-visible:outline-[#3157D5]"
+                >
+                  Clear search
+                </button>
+              </div>
             ) : (
-              <ul className="space-y-1" role="listbox">
+              <ul className="space-y-1">
                 {filteredMembers.map((m) => {
                   const initial =
                     m.user.name.trim().charAt(0).toUpperCase() ||
@@ -323,55 +307,68 @@ export function StartDirectMessageDialog({
                     '?';
                   const isSelected = selectedUserIds.includes(m.user.id);
                   return (
-                    <li key={m.id} role="option" aria-selected={isSelected}>
+                    <li key={m.id}>
                       {mode === 'direct' ? (
                         <button
                           type="button"
                           disabled={isSubmitting}
                           onClick={() => void handleSelect(m.user.id)}
-                          className="flex w-full items-center gap-3 rounded-md px-2.5 py-2 text-left transition-colors hover:bg-white hover:shadow-xs disabled:opacity-50"
+                          className="flex w-full items-center gap-3 rounded-[6px] px-2.5 py-2 text-left transition-colors hover:bg-[#FAF9F8] focus-visible:outline-2 focus-visible:outline-[#3157D5] disabled:opacity-50"
                         >
                           <span
                             aria-hidden="true"
-                            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-stone-200 text-xs font-medium text-stone-700"
+                            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#ECEAE7] text-xs font-medium text-[#171A21]"
                           >
                             {initial}
                           </span>
                           <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-medium text-zinc-900">
+                            <p
+                              className="truncate text-sm font-medium text-[#171A21]"
+                              title={m.user.name}
+                            >
                               {m.user.name}
                             </p>
-                            <p className="truncate text-xs text-stone-500">{m.user.email}</p>
+                            <p className="truncate text-xs text-[#737782]" title={m.user.email}>
+                              {m.user.email}
+                            </p>
                           </div>
                         </button>
                       ) : (
                         <button
                           type="button"
                           disabled={isSubmitting}
+                          aria-pressed={isSelected}
                           onClick={() => toggleMemberSelection(m.user.id)}
-                          className={`flex w-full items-center gap-3 rounded-md px-2.5 py-2 text-left transition-colors hover:bg-white hover:shadow-xs disabled:opacity-50 ${
-                            isSelected ? 'bg-white shadow-xs ring-1 ring-zinc-900/10' : ''
+                          className={`flex w-full items-center gap-3 rounded-[6px] px-2.5 py-2 text-left transition-colors hover:bg-[#FAF9F8] focus-visible:outline-2 focus-visible:outline-[#3157D5] disabled:opacity-50 ${
+                            isSelected ? 'bg-[#EEF2FF]/50 ring-1 ring-[#3157D5]/20' : ''
                           }`}
                         >
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            readOnly
-                            tabIndex={-1}
-                            aria-label={`Select ${m.user.name}`}
-                            className="h-4 w-4 rounded border-stone-300 text-zinc-900 focus:ring-zinc-900"
-                          />
                           <span
                             aria-hidden="true"
-                            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-stone-200 text-xs font-medium text-stone-700"
+                            className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[11px] leading-none ${
+                              isSelected
+                                ? 'border-[#171A21] bg-[#171A21] text-white'
+                                : 'border-[#E4E2DF] bg-white text-transparent'
+                            }`}
+                          >
+                            ✓
+                          </span>
+                          <span
+                            aria-hidden="true"
+                            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#ECEAE7] text-xs font-medium text-[#171A21]"
                           >
                             {initial}
                           </span>
                           <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-medium text-zinc-900">
+                            <p
+                              className="truncate text-sm font-medium text-[#171A21]"
+                              title={m.user.name}
+                            >
                               {m.user.name}
                             </p>
-                            <p className="truncate text-xs text-stone-500">{m.user.email}</p>
+                            <p className="truncate text-xs text-[#737782]" title={m.user.email}>
+                              {m.user.email}
+                            </p>
                           </div>
                         </button>
                       )}
@@ -383,27 +380,28 @@ export function StartDirectMessageDialog({
           </div>
         </div>
 
-        <div className="mt-5 flex justify-end gap-2">
+        <div className="mt-5 flex justify-end gap-2 pt-2 border-t border-[#E4E2DF]">
           <button
             type="button"
             disabled={isSubmitting}
             onClick={onClose}
-            className="inline-flex h-9 items-center justify-center rounded-lg border border-stone-300 bg-white px-4 text-sm font-medium text-stone-700 transition-colors hover:border-stone-400 disabled:opacity-50"
+            className="inline-flex h-9 items-center justify-center rounded-[8px] border border-[#E4E2DF] bg-white px-4 text-sm font-medium text-[#4F5360] transition-colors hover:bg-[#F1F0EE] hover:text-[#171A21] focus-visible:outline-2 focus-visible:outline-[#3157D5] disabled:opacity-50"
           >
             Cancel
           </button>
           {mode === 'group' && (
             <button
               type="button"
-              disabled={isSubmitting || selectedUserIds.length < 2}
+              disabled={isSubmitting}
+              aria-busy={isSubmitting}
               onClick={() => void handleCreateGroup()}
-              className="inline-flex h-9 items-center justify-center rounded-lg bg-zinc-900 px-4 text-sm font-medium text-white shadow-xs transition-colors hover:bg-zinc-800 disabled:opacity-50"
+              className="inline-flex h-9 items-center justify-center rounded-[8px] bg-[#2E3440] px-4 text-sm font-medium text-white transition-colors hover:bg-[#1E222A] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3157D5] disabled:opacity-50"
             >
-              {isSubmitting ? 'Creating…' : 'Create Group'}
+              {isSubmitting ? 'Creating…' : 'Create group'}
             </button>
           )}
         </div>
       </div>
-    </div>
+    </Dialog>
   );
 }

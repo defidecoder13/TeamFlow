@@ -1,0 +1,97 @@
+import { render, screen, within } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { SessionState } from '../../../lib/use-session-user';
+import type { WorkspacesState } from '../../../lib/use-workspaces';
+import SettingsIndexPage from './page';
+
+const { replaceMock, retryMock, addWorkspaceMock, sessionState, workspacesState } = vi.hoisted(
+  () => ({
+    replaceMock: vi.fn(),
+    retryMock: vi.fn(),
+    addWorkspaceMock: vi.fn(),
+    sessionState: { value: { status: 'loading' } as SessionState },
+    workspacesState: { value: { status: 'idle' } as WorkspacesState },
+  }),
+);
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ replace: replaceMock, refresh: vi.fn() }),
+  usePathname: () => '/app/settings',
+}));
+
+vi.mock('../../../lib/use-session-user', () => ({
+  useSessionUser: () => sessionState.value,
+}));
+
+vi.mock('../../../lib/use-workspaces', () => ({
+  useWorkspaces: () => ({
+    state: workspacesState.value,
+    retry: retryMock,
+    addWorkspace: addWorkspaceMock,
+  }),
+}));
+
+const USER = {
+  id: 'u-1',
+  name: 'Ada Lovelace',
+  email: 'ada@example.com',
+  image: null,
+  emailVerified: true,
+};
+const WORKSPACE = {
+  id: 'ws-1',
+  name: 'Real Workspace',
+  slug: 'real-workspace',
+  role: 'OWNER' as const,
+  createdAt: '2026-09-06T00:00:00.000Z',
+  updatedAt: '2026-09-06T00:00:00.000Z',
+};
+
+function authenticate() {
+  sessionState.value = { status: 'authenticated', user: USER };
+  workspacesState.value = { status: 'ready', workspaces: [WORKSPACE], current: WORKSPACE };
+}
+
+beforeEach(() => {
+  replaceMock.mockReset();
+  sessionState.value = { status: 'loading' };
+  workspacesState.value = { status: 'idle' };
+});
+
+describe('/app/settings', () => {
+  it('renders a loading state while resolving', () => {
+    render(<SettingsIndexPage />);
+    expect(screen.getByRole('status', { name: 'Loading TeamFlow' })).toBeInTheDocument();
+  });
+
+  it('maps all four settings surfaces with real destinations', () => {
+    authenticate();
+    render(<SettingsIndexPage />);
+
+    expect(screen.getByRole('heading', { level: 1, name: 'Settings' })).toBeInTheDocument();
+    // Scope to page content: the sidebar carries its own nav links.
+    const main = screen.getByRole('main');
+    expect(within(main).getByRole('link', { name: /profile/i })).toHaveAttribute(
+      'href',
+      '/app/settings/profile',
+    );
+    expect(within(main).getByRole('link', { name: /members/i })).toHaveAttribute(
+      'href',
+      '/app/settings/members',
+    );
+    expect(within(main).getByRole('link', { name: /workspace/i })).toHaveAttribute(
+      'href',
+      '/app/settings/workspace',
+    );
+    expect(within(main).getByRole('link', { name: /notifications/i })).toHaveAttribute(
+      'href',
+      '/app/settings/notifications',
+    );
+  });
+
+  it('redirects unauthenticated visitors to sign-in', () => {
+    sessionState.value = { status: 'unauthenticated' };
+    render(<SettingsIndexPage />);
+    expect(replaceMock).toHaveBeenCalledWith('/sign-in');
+  });
+});

@@ -16,23 +16,53 @@ export type ChannelType = (typeof CHANNEL_TYPES)[number];
  */
 export const MAX_CHANNEL_NAME_LENGTH = 80;
 export const MAX_CHANNEL_DESCRIPTION_LENGTH = 250;
+export const MAX_CHANNEL_TOPIC_LENGTH = 250;
 
-/** Channel summary as returned by the API. No membership data is exposed. */
+/** Per-caller UI state attached to list rows (unread/star/mute). */
+export interface ChannelUserState {
+  unreadCount: number;
+  hasUnread: boolean;
+  lastReadMessageId: string | null;
+  isStarred: boolean;
+  isMuted: boolean;
+}
+
+/**
+ * Channel summary as returned by the API. No membership data is exposed.
+ *
+ * `createdById` is present on the authenticated detail response only (list
+ * payloads omit it); absent means unknown and must fail closed.
+ * `userState` is present on list payloads when the server includes it.
+ */
 export interface Channel {
   id: string;
   name: string;
   slug: string;
   description: string | null;
+  topic?: string | null;
   type: ChannelType;
+  createdById?: string;
   createdAt: string;
   updatedAt: string;
+  userState?: ChannelUserState;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
-function isChannel(value: unknown): value is Channel {
+export function isChannelUserState(value: unknown): value is ChannelUserState {
+  if (!isRecord(value)) return false;
+  return (
+    typeof value.unreadCount === 'number' &&
+    typeof value.hasUnread === 'boolean' &&
+    (value.lastReadMessageId === null || typeof value.lastReadMessageId === 'string') &&
+    typeof value.isStarred === 'boolean' &&
+    typeof value.isMuted === 'boolean'
+  );
+}
+
+export function isChannel(value: unknown): value is Channel {
   if (!isRecord(value)) {
     return false;
   }
@@ -44,10 +74,13 @@ function isChannel(value: unknown): value is Channel {
     typeof value.slug === 'string' &&
     value.slug.length > 0 &&
     (value.description === null || typeof value.description === 'string') &&
+    (value.topic === undefined || value.topic === null || typeof value.topic === 'string') &&
     typeof value.type === 'string' &&
     (CHANNEL_TYPES as readonly string[]).includes(value.type) &&
+    (value.createdById === undefined || typeof value.createdById === 'string') &&
     typeof value.createdAt === 'string' &&
-    typeof value.updatedAt === 'string'
+    typeof value.updatedAt === 'string' &&
+    (value.userState === undefined || isChannelUserState(value.userState))
   );
 }
 
@@ -129,6 +162,9 @@ export async function fetchChannel(
   if (response.status === 404) {
     return { ok: false, kind: 'notFound' };
   }
+  if (response.status === 403) {
+    return { ok: false, kind: 'notFound' };
+  }
   if (!response.ok) {
     return { ok: false, kind: 'failed' };
   }
@@ -142,6 +178,7 @@ export async function fetchChannel(
 export interface CreateChannelInput {
   name: string;
   description?: string;
+  topic?: string;
   type: ChannelType;
 }
 
@@ -150,6 +187,7 @@ export type CreateChannelResult =
   | { ok: false; kind: 'unauthenticated' }
   | { ok: false; kind: 'validation'; message: string }
   | { ok: false; kind: 'conflict'; message: string }
+  | { ok: false; kind: 'forbidden' }
   | { ok: false; kind: 'failed' };
 
 const CREATE_FALLBACK_MESSAGE = "We couldn't create the channel. Please try again.";
@@ -169,13 +207,21 @@ export async function createChannel(
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: input.name, description: input.description, type: input.type }),
+      body: JSON.stringify({
+        name: input.name,
+        description: input.description,
+        topic: input.topic,
+        type: input.type,
+      }),
     });
   } catch {
     return { ok: false, kind: 'failed' };
   }
   if (response.status === 401) {
     return { ok: false, kind: 'unauthenticated' };
+  }
+  if (response.status === 403) {
+    return { ok: false, kind: 'forbidden' };
   }
   const body = await readJson(response);
   if (response.status === 201) {
@@ -336,6 +382,7 @@ export async function removeChannelMember(
 export interface UpdateChannelInput {
   name?: string;
   description?: string | null;
+  topic?: string | null;
 }
 
 export type UpdateChannelResult =
@@ -359,12 +406,15 @@ export async function updateChannel(
   slug: string,
   input: UpdateChannelInput,
 ): Promise<UpdateChannelResult> {
-  const body: { name?: string; description?: string | null } = {};
+  const body: { name?: string; description?: string | null; topic?: string | null } = {};
   if (input.name !== undefined) {
     body.name = input.name;
   }
   if (input.description !== undefined) {
     body.description = input.description;
+  }
+  if (input.topic !== undefined) {
+    body.topic = input.topic;
   }
   let response: Response;
   try {
@@ -447,7 +497,8 @@ export async function deleteChannel(
 }
 
 export type LeaveChannelResult =
-  { ok: true } | { ok: false; kind: 'unauthenticated' | 'notFound' | 'failed'; message?: string };
+  | { ok: true }
+  | { ok: false; kind: 'unauthenticated' | 'notFound' | 'forbidden' | 'failed'; message?: string };
 
 /**
  * Leave a channel via DELETE /api/workspaces/:workspaceId/channels/:slug/members/me.
@@ -471,10 +522,83 @@ export async function leaveChannel(
   if (response.status === 401) return { ok: false, kind: 'unauthenticated' };
   if (response.status === 204) return { ok: true };
   const body = await readJson(response);
+  if (response.status === 403) return { ok: false, kind: 'forbidden' };
   if (response.status === 404) return { ok: false, kind: 'notFound' };
   return {
     ok: false,
     kind: 'failed',
     message: serverMessage(body, "We couldn't leave the channel. Please try again."),
   };
+}
+
+export type UpdateChannelUserStateResult =
+  | { ok: true; userState: ChannelUserState }
+  | { ok: false; kind: 'unauthenticated' | 'notFound' | 'validation' | 'failed'; message?: string };
+
+/** PATCH .../channels/:slug/user-state — star/mute flags for the caller. */
+export async function updateChannelUserState(
+  apiBaseUrl: string,
+  workspaceId: string,
+  slug: string,
+  input: { isStarred?: boolean; isMuted?: boolean },
+): Promise<UpdateChannelUserStateResult> {
+  let response: Response;
+  try {
+    response = await fetch(`${channelsUrl(apiBaseUrl, workspaceId, slug)}/user-state`, {
+      method: 'PATCH',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+  } catch {
+    return { ok: false, kind: 'failed' };
+  }
+  if (response.status === 401) return { ok: false, kind: 'unauthenticated' };
+  const body = await readJson(response);
+  if (response.status === 200) {
+    const userState =
+      isRecord(body) && isChannelUserState(body.userState) ? body.userState : null;
+    if (!userState) return { ok: false, kind: 'failed' };
+    return { ok: true, userState };
+  }
+  if (response.status === 400)
+    return { ok: false, kind: 'validation', message: serverMessage(body, 'Invalid request.') };
+  if (response.status === 404) return { ok: false, kind: 'notFound' };
+  return { ok: false, kind: 'failed' };
+}
+
+export type MarkChannelReadResult =
+  | { ok: true; userState: ChannelUserState }
+  | { ok: false; kind: 'unauthenticated' | 'notFound' | 'validation' | 'failed'; message?: string };
+
+/** POST .../channels/:slug/read — stamp lastRead for the caller. */
+export async function markChannelRead(
+  apiBaseUrl: string,
+  workspaceId: string,
+  slug: string,
+  input: { lastReadMessageId?: string } = {},
+): Promise<MarkChannelReadResult> {
+  let response: Response;
+  try {
+    response = await fetch(`${channelsUrl(apiBaseUrl, workspaceId, slug)}/read`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+  } catch {
+    return { ok: false, kind: 'failed' };
+  }
+  if (response.status === 401) return { ok: false, kind: 'unauthenticated' };
+  const body = await readJson(response);
+  if (response.status === 200) {
+    const userState =
+      isRecord(body) && isChannelUserState(body.userState) ? body.userState : null;
+    if (!userState) return { ok: false, kind: 'failed' };
+    return { ok: true, userState };
+  }
+  if (response.status === 400)
+    return { ok: false, kind: 'validation', message: serverMessage(body, 'Invalid request.') };
+  if (response.status === 404) return { ok: false, kind: 'notFound' };
+  return { ok: false, kind: 'failed' };
 }

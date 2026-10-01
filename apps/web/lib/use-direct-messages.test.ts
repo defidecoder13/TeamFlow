@@ -745,4 +745,105 @@ describe('useDirectMessages', () => {
       expect(markDirectConversationReadMock).toHaveBeenCalledTimes(1);
     });
   });
+
+  describe('removeAttachment', () => {
+    const att = (id: string) => ({
+      id,
+      messageId: 'msg-1',
+      originalName: `${id}.png`,
+      mimeType: 'image/png',
+      size: 10,
+      createdAt: new Date('2026-09-08T00:00:00.000Z'),
+    });
+
+    it('removes only the targeted attachment from DM state', async () => {
+      fetchDirectMessagesMock.mockResolvedValue({
+        ok: true,
+        data: {
+          messages: [{ ...MESSAGE_1, attachments: [att('a-1'), att('a-2')] }],
+          pageInfo: { hasMore: false, nextCursor: null },
+        },
+      });
+      const { result } = renderHook(() => useDirectMessages('dm-1'));
+      await waitFor(() => {
+        expect(result.current.state.status).toBe('ready');
+      });
+
+      act(() => {
+        result.current.removeAttachment('msg-1', 'a-1');
+      });
+
+      const state = result.current.state;
+      if (state.status !== 'ready') throw new Error('not ready');
+      expect(state.messages[0].attachments?.map((a) => a.id)).toEqual(['a-2']);
+    });
+
+    it('empties the collection when the final attachment is removed', async () => {
+      fetchDirectMessagesMock.mockResolvedValue({
+        ok: true,
+        data: {
+          messages: [{ ...MESSAGE_1, attachments: [att('a-1')] }],
+          pageInfo: { hasMore: false, nextCursor: null },
+        },
+      });
+      const { result } = renderHook(() => useDirectMessages('dm-1'));
+      await waitFor(() => {
+        expect(result.current.state.status).toBe('ready');
+      });
+
+      act(() => {
+        result.current.removeAttachment('msg-1', 'a-1');
+      });
+
+      const state = result.current.state;
+      if (state.status !== 'ready') throw new Error('not ready');
+      expect(state.messages[0].attachments).toEqual([]);
+    });
+  });
+
+  describe('refresh', () => {
+    it('silently merges refetched messages without flipping to loading', async () => {
+      fetchDirectMessagesMock.mockResolvedValue({
+        ok: true,
+        data: {
+          messages: [MESSAGE_1],
+          pageInfo: { hasMore: false, nextCursor: null },
+        },
+      });
+      const { result } = renderHook(() => useDirectMessages('dm-1'));
+      await waitFor(() => {
+        expect(result.current.state.status).toBe('ready');
+      });
+
+      const withAttachment: Message = {
+        ...MESSAGE_1,
+        attachments: [
+          {
+            id: 'a-1',
+            messageId: 'msg-1',
+            originalName: 'photo.png',
+            mimeType: 'image/png',
+            size: 10,
+            createdAt: new Date('2026-09-08T00:00:00.000Z'),
+          },
+        ],
+      };
+      fetchDirectMessagesMock.mockResolvedValue({
+        ok: true,
+        data: {
+          messages: [withAttachment],
+          pageInfo: { hasMore: false, nextCursor: null },
+        },
+      });
+
+      await act(async () => {
+        await result.current.refresh();
+      });
+
+      expect(result.current.state.status).toBe('ready');
+      const state = result.current.state;
+      if (state.status !== 'ready') throw new Error('not ready');
+      expect(state.messages[0].attachments).toHaveLength(1);
+    });
+  });
 });

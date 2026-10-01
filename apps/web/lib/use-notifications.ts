@@ -17,8 +17,11 @@ import {
   fetchNotifications,
   markAllNotificationsRead,
   markNotificationRead,
-  notificationFromJson,
+  matchesNotificationFilter,
+  notificationFilterKey,
+  type NotificationFilter,
   type NotificationItem,
+  notificationFromJson,
 } from './notifications';
 import {
   connectRealtime,
@@ -62,6 +65,14 @@ function mergeById(existing: NotificationItem[], incoming: NotificationItem[]): 
   return merged;
 }
 
+/** Server order: newest first ((createdAt, id) DESC). */
+function sortNotificationsDesc(items: NotificationItem[]): NotificationItem[] {
+  return [...items].sort(
+    (a, b) =>
+      b.createdAt.getTime() - a.createdAt.getTime() || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
+  );
+}
+
 function appendPage(
   existing: NotificationItem[],
   incoming: NotificationItem[],
@@ -77,7 +88,10 @@ function appendPage(
   return merged;
 }
 
-export function useNotifications(workspaceId: string | null): {
+export function useNotifications(
+  workspaceId: string | null,
+  filter: NotificationFilter = { unreadOnly: false },
+): {
   state: NotificationsState;
   hasUnread: boolean;
   isLoadingMore: boolean;
@@ -99,13 +113,17 @@ export function useNotifications(workspaceId: string | null): {
   stateRef.current = state;
   const workspaceRef = useRef(workspaceId);
   workspaceRef.current = workspaceId;
+  const filterKey = notificationFilterKey(filter);
+  const filterRef = useRef(filter);
+  filterRef.current = filter;
 
   const retry = useCallback(() => {
     setAttempt((count) => count + 1);
   }, []);
 
-  // Initial load + workspace switching + retry. The key below is the only
-  // identity a response is accepted for.
+  // Initial load + workspace/filter switching + retry. The workspace +
+  // filter key below is the only identity a response is accepted for; a
+  // filter change performs a full backend-filtered reload.
   useEffect(() => {
     if (!workspaceId) {
       requestIdRef.current += 1;
@@ -132,10 +150,20 @@ export function useNotifications(workspaceId: string | null): {
         }
         return;
       }
-      const result = await fetchNotifications(apiBase, activeWorkspaceId, {
-        limit: PAGE_LIMIT,
-        signal: controller.signal,
-      });
+      let result: Awaited<ReturnType<typeof fetchNotifications>>;
+      try {
+        result = await fetchNotifications(apiBase, activeWorkspaceId, {
+          limit: PAGE_LIMIT,
+          unreadOnly: filter.unreadOnly || undefined,
+          type: filter.type,
+          signal: controller.signal,
+        });
+      } catch (err) {
+        if ((err as Error)?.name === 'AbortError') {
+          return;
+        }
+        throw err;
+      }
       if (requestIdRef.current !== myId) {
         return;
       }
@@ -161,7 +189,7 @@ export function useNotifications(workspaceId: string | null): {
     return () => {
       controller.abort();
     };
-  }, [workspaceId, attempt]);
+  }, [workspaceId, attempt, filterKey]);
 
   const loadMore = useCallback(() => {
     const current = stateRef.current;
@@ -190,9 +218,12 @@ export function useNotifications(workspaceId: string | null): {
         }
         return;
       }
+      const activeFilter = filterRef.current;
       const result = await fetchNotifications(apiBase, activeWorkspaceId, {
         limit: PAGE_LIMIT,
         cursor,
+        unreadOnly: activeFilter.unreadOnly || undefined,
+        type: activeFilter.type,
         signal: controller.signal,
       });
       if (requestIdRef.current !== myId) {
@@ -237,7 +268,7 @@ export function useNotifications(workspaceId: string | null): {
         return;
       }
       const item = notificationFromJson(event.notification);
-      if (!item) {
+      if (!item || !matchesNotificationFilter(item, filterRef.current)) {
         return;
       }
       requestIdRef.current += 1;
@@ -248,6 +279,8 @@ export function useNotifications(workspaceId: string | null): {
         return { ...current, items: mergeById(current.items, [item]) };
       });
     };
+    // Server-confirmed reads: under an unreadOnly filter the rows leave the
+    // visible list (a refetch would exclude them); otherwise they stamp.
     const handleRead = (event: RealtimeNotificationReadEvent) => {
       if (event.workspaceId !== activeWorkspaceId) {
         return;
@@ -255,6 +288,9 @@ export function useNotifications(workspaceId: string | null): {
       setState((current) => {
         if (current.status !== 'ready') {
           return current;
+        }
+        if (filterRef.current.unreadOnly) {
+          return { ...current, items: current.items.filter((item) => item.id !== event.id) };
         }
         return {
           ...current,
@@ -272,6 +308,12 @@ export function useNotifications(workspaceId: string | null): {
       setState((current) => {
         if (current.status !== 'ready') {
           return current;
+        }
+        if (filterRef.current.unreadOnly) {
+          return {
+            ...current,
+            items: current.items.filter((item) => item.readAt !== null),
+          };
         }
         return {
           ...current,
@@ -294,8 +336,11 @@ export function useNotifications(workspaceId: string | null): {
         } catch {
           return;
         }
+        const activeFilter = filterRef.current;
         const result = await fetchNotifications(apiBase, activeWorkspaceId, {
           limit,
+          unreadOnly: activeFilter.unreadOnly || undefined,
+          type: activeFilter.type,
           signal: controller.signal,
         });
         if (requestIdRef.current !== myId || !result.ok || !('data' in result)) {
@@ -305,9 +350,14 @@ export function useNotifications(workspaceId: string | null): {
           if (previous.status !== 'ready') {
             return previous;
           }
+          const merged = mergeById(previous.items, result.data.notifications);
           return {
             status: 'ready',
-            items: mergeById(previous.items, result.data.notifications),
+            // A filtered resync must not resurrect rows the filter excludes
+            // (e.g. items read while offline under unreadOnly).
+            items: filterRef.current.unreadOnly
+              ? merged.filter((item) => item.readAt === null)
+              : merged,
             hasMore: result.data.pageInfo.hasMore,
             nextCursor: result.data.pageInfo.nextCursor,
           };
@@ -380,19 +430,33 @@ export function useNotifications(workspaceId: string | null): {
         return;
       }
       const now = new Date();
+      // Under unreadOnly the row leaves the list optimistically; rollback
+      // re-inserts it in server order.
+      let removed: NotificationItem | null = null;
       void mutateRead(
         notificationId,
         (apiBase) => markNotificationRead(apiBase, activeWorkspaceId, notificationId),
-        (items) =>
-          items.map((item) =>
-            item.id === notificationId && item.readAt === null ? { ...item, readAt: now } : item,
-          ),
-        (items) =>
-          items.map((item) =>
+        (items) => {
+          if (!filterRef.current.unreadOnly) {
+            return items.map((item) =>
+              item.id === notificationId && item.readAt === null ? { ...item, readAt: now } : item,
+            );
+          }
+          removed =
+            items.find((item) => item.id === notificationId && item.readAt === null) ?? null;
+          return items.filter((item) => item.id !== notificationId);
+        },
+        (items) => {
+          const restored = removed;
+          if (restored && !items.some((item) => item.id === restored.id)) {
+            return sortNotificationsDesc([...items, restored]);
+          }
+          return items.map((item) =>
             item.id === notificationId && item.readAt?.getTime() === now.getTime()
               ? { ...item, readAt: null }
               : item,
-          ),
+          );
+        },
       );
     },
     [mutateRead],
@@ -406,23 +470,34 @@ export function useNotifications(workspaceId: string | null): {
     const now = new Date();
     // Snapshot which rows we flip so rollback restores exactly those.
     const snapshot = new Set<string>();
+    let removed: NotificationItem[] = [];
     void mutateRead(
       '__all__',
       (apiBase) => markAllNotificationsRead(apiBase, activeWorkspaceId),
-      (items) =>
-        items.map((item) => {
+      (items) => {
+        if (filterRef.current.unreadOnly) {
+          removed = items.filter((item) => item.readAt === null);
+          return items.filter((item) => item.readAt !== null);
+        }
+        return items.map((item) => {
           if (item.readAt === null) {
             snapshot.add(item.id);
             return { ...item, readAt: now };
           }
           return item;
-        }),
-      (items) =>
-        items.map((item) =>
+        });
+      },
+      (items) => {
+        if (removed.length > 0) {
+          const ids = new Set(items.map((item) => item.id));
+          return sortNotificationsDesc([...items, ...removed.filter((item) => !ids.has(item.id))]);
+        }
+        return items.map((item) =>
           snapshot.has(item.id) && item.readAt?.getTime() === now.getTime()
             ? { ...item, readAt: null }
             : item,
-        ),
+        );
+      },
     );
   }, [mutateRead]);
 

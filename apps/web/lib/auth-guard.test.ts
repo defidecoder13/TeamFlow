@@ -112,6 +112,9 @@ describe('fetchSessionUser', () => {
 describe('getSafeReturnTo', () => {
   it('accepts same-origin app paths including query strings', () => {
     expect(getSafeReturnTo('/app')).toBe('/app');
+    expect(getSafeReturnTo('/app/channels/general')).toBe('/app/channels/general');
+    expect(getSafeReturnTo('/app/search?q=hello')).toBe('/app/search?q=hello');
+    expect(getSafeReturnTo('/app/dms/123')).toBe('/app/dms/123');
     expect(getSafeReturnTo('/invite/accept?token=abc123')).toBe('/invite/accept?token=abc123');
   });
 
@@ -122,6 +125,9 @@ describe('getSafeReturnTo', () => {
     expect(getSafeReturnTo('//evil.example/app')).toBeNull();
     expect(getSafeReturnTo('/\\evil')).toBeNull();
     expect(getSafeReturnTo('app')).toBeNull();
+    expect(getSafeReturnTo('javascript:alert(1)')).toBeNull();
+    expect(getSafeReturnTo('/sign-in')).toBeNull();
+    expect(getSafeReturnTo('/settings')).toBeNull();
   });
 });
 
@@ -135,10 +141,18 @@ describe('decideAuthPageDestination', () => {
       kind: 'redirect',
       to: '/app',
     });
+    expect(decideAuthPageDestination('/sign-in', true, '/app/channels/general')).toEqual({
+      kind: 'redirect',
+      to: '/app/channels/general',
+    });
   });
 
   it('ignores unsafe or self-referential ?next= values', () => {
     expect(decideAuthPageDestination('/sign-in', true, 'https://evil.example/')).toEqual({
+      kind: 'redirect',
+      to: '/app',
+    });
+    expect(decideAuthPageDestination('/sign-in', true, '//evil.example/')).toEqual({
       kind: 'redirect',
       to: '/app',
     });
@@ -150,5 +164,29 @@ describe('decideAuthPageDestination', () => {
 
   it('leaves unauthenticated auth pages alone', () => {
     expect(decideAuthPageDestination('/sign-in', false, '/app')).toEqual({ kind: 'allow' });
+  });
+
+  it('bounces unauthenticated /app visitors through sign-in with path and query', () => {
+    expect(decideAuthPageDestination('/app', false, null)).toEqual({
+      kind: 'redirect',
+      to: '/sign-in?next=%2Fapp',
+    });
+    expect(decideAuthPageDestination('/app/channels/general', false, null)).toEqual({
+      kind: 'redirect',
+      to: `/sign-in?next=${encodeURIComponent('/app/channels/general')}`,
+    });
+    expect(decideAuthPageDestination('/app/search', false, null, '?q=hello')).toEqual({
+      kind: 'redirect',
+      to: `/sign-in?next=${encodeURIComponent('/app/search?q=hello')}`,
+    });
+    expect(decideAuthPageDestination('/app/dms/123', false, null, '?focus=1')).toEqual({
+      kind: 'redirect',
+      to: `/sign-in?next=${encodeURIComponent('/app/dms/123?focus=1')}`,
+    });
+  });
+
+  it('allows authenticated /app visitors and leaves other routes alone', () => {
+    expect(decideAuthPageDestination('/app', true, null)).toEqual({ kind: 'allow' });
+    expect(decideAuthPageDestination('/', false, null)).toEqual({ kind: 'allow' });
   });
 });

@@ -83,6 +83,19 @@ describe('fetchNotifications', () => {
     expect(init.credentials).toBe('include');
   });
 
+  it('serializes the backend type filter and combines it with unreadOnly', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        jsonResponse(200, { notifications: [], pageInfo: { hasMore: false, nextCursor: null } }),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+    await fetchNotifications(API_BASE, 'ws-1', { unreadOnly: true, type: 'THREAD_REPLY' });
+    const [url] = fetchMock.mock.calls[0] as [string];
+    expect(url).toContain('unreadOnly=true');
+    expect(url).toContain('type=THREAD_REPLY');
+  });
+
   it('omits unset options and maps error outcomes', async () => {
     const fetchMock = vi
       .fn()

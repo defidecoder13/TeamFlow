@@ -146,12 +146,13 @@ function serverMessage(body: unknown, fallback: string): string {
 
 /**
  * Create a workspace via `POST /api/workspaces` with ONLY the supported
- * field (`name`). Ownership and slug stay server-side. Never throws —
- * failures are values with safe, displayable messages.
+ * fields (`name`, optional `slug`). Ownership stays server-side. Never
+ * throws — failures are values with safe, displayable messages.
  */
 export async function createWorkspace(
   apiBaseUrl: string,
   name: string,
+  slug?: string,
 ): Promise<CreateWorkspaceResult> {
   let response: Response;
   try {
@@ -159,7 +160,7 @@ export async function createWorkspace(
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name }),
+      body: JSON.stringify(slug ? { name, slug } : { name }),
     });
   } catch {
     return { ok: false, kind: 'failed' };

@@ -27,6 +27,16 @@ describe('validateProfileImage', () => {
   });
   it('accepts https', () =>
     expect(validateProfileImage('https://example.com/avatar.jpg')).toBeNull());
+  it('accepts a well-formed jpeg data URL under the cap', () => {
+    const payload = 'data:image/jpeg;base64,' + 'AAAA'.repeat(10);
+    expect(validateProfileImage(payload)).toBeNull();
+  });
+  it('rejects malformed or oversized data URLs', () => {
+    expect(validateProfileImage('data:image/svg+xml;base64,AAAA')).toBe('Enter a valid image.');
+    expect(validateProfileImage('data:image/jpeg;base64,not base64!!')).toBe('Enter a valid image.');
+    const huge = 'data:image/jpeg;base64,' + 'A'.repeat(400_001);
+    expect(validateProfileImage(huge)).toBe('Profile photo is too large.');
+  });
 });
 
 describe('updateProfile', () => {

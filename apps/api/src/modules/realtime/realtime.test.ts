@@ -7,6 +7,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import { createApp } from '../../app';
 import {
   closeRealtime,
+  emitChannelMembershipRemoved,
   emitDirectConversationRead,
   emitDirectMessageCreated,
   emitDirectMessageDeleted,
@@ -17,6 +18,7 @@ import {
   emitNotificationNew,
   emitNotificationRead,
   emitNotificationReadAll,
+  emitWorkspaceMembershipRemoved,
   initRealtime,
 } from './index';
 
@@ -696,6 +698,60 @@ describe('Realtime Gateway (Socket.IO)', () => {
     ]);
     expect(readA).toHaveLength(0);
     expect(readAllA).toHaveLength(0);
+
+    clientA.disconnect();
+    clientB.disconnect();
+  });
+
+  it('delivers membership-removal events only to the removed user room', async () => {
+    const second = await signUpSecondUser(app);
+    const clientA = createClient(authCookie);
+    const clientB = createClient(second.cookie);
+
+    await Promise.all([
+      new Promise<void>((resolve) => {
+        clientA.on('connect', () => resolve());
+        clientA.connect();
+      }),
+      new Promise<void>((resolve) => {
+        clientB.on('connect', () => resolve());
+        clientB.connect();
+      }),
+    ]);
+
+    const channelA: unknown[] = [];
+    const channelB: unknown[] = [];
+    const workspaceA: unknown[] = [];
+    const workspaceB: unknown[] = [];
+    clientA.on('channel:membership-removed', (ev) => channelA.push(ev));
+    clientB.on('channel:membership-removed', (ev) => channelB.push(ev));
+    clientA.on('workspace:membership-removed', (ev) => workspaceA.push(ev));
+    clientB.on('workspace:membership-removed', (ev) => workspaceB.push(ev));
+
+    emitChannelMembershipRemoved('ws-1', 'ch-private', second.userId);
+    emitWorkspaceMembershipRemoved('ws-1', second.userId);
+
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    // Victim receives both, with ids only and no content.
+    expect(channelB).toEqual([
+      {
+        type: 'channel:membership-removed',
+        workspaceId: 'ws-1',
+        channelId: 'ch-private',
+        userId: second.userId,
+      },
+    ]);
+    expect(workspaceB).toEqual([
+      {
+        type: 'workspace:membership-removed',
+        workspaceId: 'ws-1',
+        userId: second.userId,
+      },
+    ]);
+    // Unrelated connected user receives nothing.
+    expect(channelA).toHaveLength(0);
+    expect(workspaceA).toHaveLength(0);
 
     clientA.disconnect();
     clientB.disconnect();

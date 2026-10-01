@@ -47,9 +47,11 @@ export function notificationPreferencesFromJson(value: unknown): NotificationPre
   };
 }
 
-export async function fetchNotificationPreferences(): Promise<ApiResult<NotificationPreferences>> {
+export async function fetchNotificationPreferences(
+  apiBase: string,
+): Promise<ApiResult<NotificationPreferences>> {
   try {
-    const res = await fetch('/api/users/me/notification-preferences', {
+    const res = await fetch(`${apiBase}/api/users/me/notification-preferences`, {
       method: 'GET',
       headers: { Accept: 'application/json' },
       credentials: 'include',
@@ -98,10 +100,11 @@ export async function fetchNotificationPreferences(): Promise<ApiResult<Notifica
 }
 
 export async function updateNotificationPreferences(
+  apiBase: string,
   patch: UpdateNotificationPreferencesInput,
 ): Promise<ApiResult<NotificationPreferences>> {
   try {
-    const res = await fetch('/api/users/me/notification-preferences', {
+    const res = await fetch(`${apiBase}/api/users/me/notification-preferences`, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',

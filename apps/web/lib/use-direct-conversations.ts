@@ -10,11 +10,16 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getApiBaseUrl } from './config';
-import { fetchDirectConversations, type DirectConversation } from './messages';
+import {
+  directConversationFromJson,
+  fetchDirectConversations,
+  type DirectConversation,
+} from './messages';
 import {
   connectRealtime,
   joinRealtimeDirectConversation,
   leaveRealtimeDirectConversation,
+  onRealtimeConversationCreated,
   onRealtimeConversationRead,
   onRealtimeConversationUpdated,
   onRealtimeMessageNew,
@@ -162,6 +167,17 @@ export function useDirectConversations(
     if (!workspaceId) return;
 
     connectRealtime();
+
+    // Server-pushed creation (another session created a conversation this
+    // user participates in): merge via addConversation, which dedupes by id,
+    // prepends, and joins the realtime room. The server only emits to
+    // participant rooms, so nothing unauthorized can arrive here.
+    const unsubscribeCreated = onRealtimeConversationCreated((event) => {
+      if (event.workspaceId !== workspaceId) return;
+      const conversation = directConversationFromJson(event.conversation);
+      if (!conversation) return;
+      addConversation(conversation);
+    });
 
     const unsubscribeNew = onRealtimeMessageNew((event) => {
       if (event.channelId) return;
@@ -319,6 +335,7 @@ export function useDirectConversations(
     });
 
     return () => {
+      unsubscribeCreated();
       unsubscribeNew();
       unsubscribeRead();
       unsubscribeUpdated();
@@ -326,7 +343,7 @@ export function useDirectConversations(
       unsubscribePartRemoved();
       unsubscribeReconnect();
     };
-  }, [workspaceId, currentUserId]);
+  }, [workspaceId, currentUserId, addConversation]);
 
   return { state, retry, addConversation, markConversationLocallyRead };
 }

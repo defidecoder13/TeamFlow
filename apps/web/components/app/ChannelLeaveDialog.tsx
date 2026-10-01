@@ -4,7 +4,8 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import { Dialog } from './dialog';
 import { getApiBaseUrl } from '../../lib/config';
 import { leaveChannel, type Channel } from '../../lib/channels';
 
@@ -25,6 +26,7 @@ export function ChannelLeaveDialog({
 }: ChannelLeaveDialogProps) {
   const [leaving, setLeaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const cancelBtnRef = useRef<HTMLButtonElement>(null);
 
   async function handleLeave() {
     if (leaving) return;
@@ -57,6 +59,10 @@ export function ChannelLeaveDialog({
       onUnauthenticated();
       return;
     }
+    if (result.kind === 'forbidden') {
+      setError('You do not have permission to leave this channel.');
+      return;
+    }
     if (result.kind === 'notFound') {
       setError('Channel not found or you are no longer a member.');
       return;
@@ -65,39 +71,38 @@ export function ChannelLeaveDialog({
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/25 p-4"
-      onClick={onClose}
+    <Dialog
+      open
+      onClose={onClose}
+      labelledBy="leave-channel-title"
+      size="sm"
+      dismissable={!leaving}
+      initialFocusRef={cancelBtnRef}
     >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="leave-channel-title"
-        onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-sm rounded-xl border border-stone-200 bg-white p-6 shadow-[0_20px_48px_-8px_rgba(24,24,27,0.12)]"
-      >
+      <div>
         <h2
           id="leave-channel-title"
-          className="text-base font-semibold tracking-tight text-zinc-900"
+          className="text-[17px] font-semibold tracking-tight text-[#171A21]"
         >
           Leave #{channel.name}?
         </h2>
-        <p className="mt-1.5 text-sm leading-relaxed text-zinc-500">
+        <p className="mt-1 text-[13px] leading-relaxed text-[#737782]">
           You will no longer see this channel in your sidebar. You can rejoin if someone adds you
           back
           {channel.type === 'PRIVATE' ? ' (private channel).' : '.'}
         </p>
         {error ? (
-          <p role="alert" className="mt-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+          <p role="alert" className="mt-3 rounded-[8px] bg-rose-50 border border-rose-200 px-3 py-2 text-xs text-[#C94A45]">
             {error}
           </p>
         ) : null}
-        <div className="mt-5 flex gap-2">
+        <div className="mt-5 flex gap-2 pt-2 border-t border-[#E4E2DF]">
           <button
+            ref={cancelBtnRef}
             type="button"
             onClick={onClose}
             disabled={leaving}
-            className="inline-flex h-9 flex-1 items-center justify-center rounded-lg border border-stone-300 bg-white px-4 text-sm font-medium text-stone-700 transition-colors hover:border-stone-400 disabled:opacity-50"
+            className="inline-flex h-[42px] flex-1 items-center justify-center rounded-lg border border-[#E4E2DF] bg-white px-4 text-sm font-medium text-[#4F5360] transition-colors hover:bg-[#F1F0EE] hover:text-[#171A21] focus-visible:outline-2 focus-visible:outline-[#3157D5] disabled:opacity-50"
           >
             Cancel
           </button>
@@ -105,12 +110,12 @@ export function ChannelLeaveDialog({
             type="button"
             onClick={() => void handleLeave()}
             disabled={leaving}
-            className="inline-flex h-9 flex-1 items-center justify-center rounded-lg bg-zinc-900 px-4 text-sm font-medium text-white transition-colors hover:bg-zinc-800 disabled:opacity-50"
+            className="inline-flex h-[42px] flex-1 items-center justify-center rounded-lg bg-[#C94A45] px-4 text-sm font-medium text-white transition-colors hover:bg-[#B33E3A] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#C94A45] disabled:opacity-50"
           >
             {leaving ? 'Leaving…' : 'Leave channel'}
           </button>
         </div>
       </div>
-    </div>
+    </Dialog>
   );
 }

@@ -1048,4 +1048,78 @@ describe('useMessages reconnect reconciliation (offline window)', () => {
       expect(result.current.state.messages[0].body).toBe('hello edited');
     });
   });
+
+  describe('removeAttachment', () => {
+    const att = (id: string) => ({
+      id,
+      messageId: 'm-1',
+      originalName: `${id}.png`,
+      mimeType: 'image/png',
+      size: 100,
+      createdAt: new Date('2026-09-06T12:00:00.000Z'),
+    });
+
+    async function readyWithAttachments() {
+      const message = makeMessage({ attachments: [att('a-1'), att('a-2')] });
+      fetchMessagesMock.mockResolvedValue({
+        ok: true,
+        data: { messages: [message], pageInfo: { hasMore: false, nextCursor: null } },
+      });
+      const { result } = renderHook(() => useMessages('ch-1'));
+      await waitFor(() => {
+        expect(result.current.state.status).toBe('ready');
+      });
+      return result;
+    }
+
+    it('removes only the targeted attachment and preserves the rest', async () => {
+      const result = await readyWithAttachments();
+
+      act(() => {
+        result.current.removeAttachment('m-1', 'a-1');
+      });
+
+      const state = result.current.state;
+      if (state.status !== 'ready') throw new Error('not ready');
+      expect(state.messages).toHaveLength(1);
+      expect(state.messages[0].attachments?.map((a) => a.id)).toEqual(['a-2']);
+      expect(state.messages[0].body).toBe('Hello team');
+    });
+
+    it('leaves an empty collection when the final attachment is removed', async () => {
+      const result = await readyWithAttachments();
+
+      act(() => {
+        result.current.removeAttachment('m-1', 'a-1');
+      });
+      act(() => {
+        result.current.removeAttachment('m-1', 'a-2');
+      });
+
+      const state = result.current.state;
+      if (state.status !== 'ready') throw new Error('not ready');
+      expect(state.messages[0].attachments).toEqual([]);
+    });
+
+    it('is a no-op for unknown messages, unknown attachments, and non-ready state', async () => {
+      const result = await readyWithAttachments();
+
+      act(() => {
+        result.current.removeAttachment('m-1', 'a-9');
+      });
+      act(() => {
+        result.current.removeAttachment('m-9', 'a-1');
+      });
+      const state = result.current.state;
+      if (state.status !== 'ready') throw new Error('not ready');
+      expect(state.messages[0].attachments?.map((a) => a.id)).toEqual(['a-1', 'a-2']);
+
+      const idle = renderHook(() => useMessages(null));
+      act(() => {
+        idle.result.current.removeAttachment('m-1', 'a-1');
+      });
+      expect(idle.result.current.state).toEqual({ status: 'idle' });
+      idle.unmount();
+    });
+  });
 });

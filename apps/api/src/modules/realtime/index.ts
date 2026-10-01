@@ -23,6 +23,8 @@ import { getPrisma } from '../auth/prisma';
 import { authorizeChannelAccess } from '../messages/authorization';
 import { authorizeDirectConversationAccess } from '../direct-messages/authorization';
 import type { MessageResponse } from '../messages/service';
+import type { ChannelResponse } from '../channels/service';
+import type { DirectConversationResponse } from '../direct-messages/service';
 import { presenceRegistry, type PresenceStatus } from './presence';
 import { typingRegistry, type TypingContainerType, type TypingTransition } from './typing';
 
@@ -98,6 +100,77 @@ export interface ServerToClientEvents {
     conversationId: string;
     userId: string;
   }) => void;
+  /**
+   * Targeted at the removed user's private room (they were just evicted
+   * from the channel room, so room broadcast would miss them). Clients drop
+   * the channel from lists and mark open views inaccessible.
+   */
+  'channel:membership-removed': (payload: {
+    type: 'channel:membership-removed';
+    workspaceId: string;
+    channelId: string;
+    userId: string;
+  }) => void;
+  /**
+   * A channel was created. Fanned out per recipient room (never a shared
+   * workspace room): public channels reach all workspace members, private
+   * channels reach channel members only, so names/metadata never leak to
+   * unauthorized clients. The channel shape matches the list contract
+   * (no createdById). Clients dedupe by id against REST state.
+   */
+  'channel:created': (payload: {
+    type: 'channel:created';
+    workspaceId: string;
+    channel: ChannelResponse;
+  }) => void;
+  /**
+   * A DM/group conversation was created. Fanned out to participant rooms
+   * only, with per-recipient peer/role fields. Emitted only when the
+   * conversation is actually created (1:1 open-or-get on an existing
+   * conversation emits nothing). Clients dedupe by id.
+   */
+  'conversation:created': (payload: {
+    type: 'conversation:created';
+    workspaceId: string;
+    conversation: DirectConversationResponse;
+  }) => void;
+  /**
+   * A channel was renamed/edited. Same recipient rule as channel:created
+   * (public: workspace members; private: channel members). Payload matches
+   * the list contract (no createdById). Clients merge by id; viewers on a
+   * renamed slug fall through to the existing not-found view.
+   */
+  'channel:updated': (payload: {
+    type: 'channel:updated';
+    workspaceId: string;
+    channel: ChannelResponse;
+  }) => void;
+  /**
+   * A channel was deleted. Ids only (like channel:membership-removed), so
+   * even a misdelivery exposes nothing. Clients drop the row and mark open
+   * views inaccessible.
+   */
+  'channel:deleted': (payload: {
+    type: 'channel:deleted';
+    workspaceId: string;
+    channelId: string;
+  }) => void;
+  /**
+   * Targeted at the removed user's private room. Clients refresh workspace
+   * membership truth (list + selection) so no stale workspace remains.
+   */
+  'workspace:membership-removed': (payload: {
+    type: 'workspace:membership-removed';
+    workspaceId: string;
+    userId: string;
+  }) => void;
+  /**
+   * A workspace was deleted. Fanned out to the private rooms of users who
+   * were members immediately before deletion — never broadcast, so no
+   * workspace identifier reaches non-members. Payload carries the id only;
+   * clients drop it from navigation and leave workspace-scoped routes.
+   */
+  'workspace:deleted': (payload: { type: 'workspace:deleted'; workspaceId: string }) => void;
   'typing:started': (payload: {
     type: 'typing:started';
     userId: string;
@@ -783,6 +856,210 @@ export function emitDirectParticipantRemoved(
     type: 'conversation:participant-removed',
     conversationId: payload.conversationId,
     userId: payload.userId,
+  });
+}
+
+/**
+ * Notify a user removed from a private channel. Sent to their private user
+ * room (they no longer receive channel-room broadcasts). Call only after the
+ * membership deletion has committed. Payload carries ids only — no content.
+ */
+export function emitChannelMembershipRemoved(
+  workspaceId: string,
+  channelId: string,
+  userId: string,
+): void {
+  if (!ioInstance) return;
+  ioInstance.to(userRoomName(userId)).emit('channel:membership-removed', {
+    type: 'channel:membership-removed',
+    workspaceId,
+    channelId,
+    userId,
+  });
+}
+
+/**
+ * Recipient rule shared by all channel lifecycle fan-outs (created,
+ * updated, deleted): public channels reach every workspace member, private
+ * channels reach channel members only. There is no shared workspace room,
+ * so per-user delivery is the only safe mechanism.
+ */
+export async function resolveChannelBroadcastRecipients(input: {
+  workspaceId: string;
+  channelId: string;
+  channelType: string;
+}): Promise<string[]> {
+  const prisma = getPrisma();
+  if (!prisma?.workspaceMembership || !prisma?.channelMembership) return [];
+  const rows =
+    input.channelType === 'PRIVATE'
+      ? await prisma.channelMembership.findMany({
+          where: { channelId: input.channelId },
+          select: { userId: true },
+        })
+      : await prisma.workspaceMembership.findMany({
+          where: { workspaceId: input.workspaceId },
+          select: { userId: true },
+        });
+  return rows.map((row) => row.userId);
+}
+
+/**
+ * Notify authorized clients of a newly created channel. Fans out to
+ * private user rooms only (there is no shared workspace room): public
+ * channels reach every workspace member, private channels reach channel
+ * members only. Call only after the creation transaction has committed.
+ * Never throws — delivery is best-effort; clients reconcile via REST.
+ */
+export async function notifyChannelCreated(input: {
+  workspaceId: string;
+  channel: ChannelResponse;
+}): Promise<void> {
+  try {
+    if (!ioInstance) return;
+    const recipients = await resolveChannelBroadcastRecipients({
+      workspaceId: input.workspaceId,
+      channelId: input.channel.id,
+      channelType: input.channel.type,
+    });
+    const payload = {
+      type: 'channel:created' as const,
+      workspaceId: input.workspaceId,
+      channel: input.channel,
+    };
+    for (const userId of recipients) {
+      ioInstance.to(userRoomName(userId)).emit('channel:created', payload);
+    }
+  } catch (error) {
+    console.error('[realtime] failed to notify channel created', {
+      workspaceId: input.workspaceId,
+      channelId: input.channel.id,
+      error,
+    });
+  }
+}
+
+/**
+ * Notify authorized clients of a channel edit. Same recipient rule and
+ * payload contract as channel:created. Call only after the update has
+ * committed. Never throws.
+ */
+export async function notifyChannelUpdated(input: {
+  workspaceId: string;
+  channel: ChannelResponse;
+}): Promise<void> {
+  try {
+    if (!ioInstance) return;
+    const recipients = await resolveChannelBroadcastRecipients({
+      workspaceId: input.workspaceId,
+      channelId: input.channel.id,
+      channelType: input.channel.type,
+    });
+    const payload = {
+      type: 'channel:updated' as const,
+      workspaceId: input.workspaceId,
+      channel: input.channel,
+    };
+    for (const userId of recipients) {
+      ioInstance.to(userRoomName(userId)).emit('channel:updated', payload);
+    }
+  } catch (error) {
+    console.error('[realtime] failed to notify channel updated', {
+      workspaceId: input.workspaceId,
+      channelId: input.channel.id,
+      error,
+    });
+  }
+}
+
+/**
+ * Notify authorized clients of a channel deletion. Recipients must be
+ * resolved BEFORE the delete commits (cascades remove the membership rows).
+ * Ids only — no content to leak. Call only after the deletion has
+ * committed. Never throws.
+ */
+export async function notifyChannelDeleted(input: {
+  workspaceId: string;
+  channelId: string;
+  memberUserIds: string[];
+}): Promise<void> {
+  try {
+    if (!ioInstance) return;
+    const payload = {
+      type: 'channel:deleted' as const,
+      workspaceId: input.workspaceId,
+      channelId: input.channelId,
+    };
+    for (const userId of input.memberUserIds) {
+      ioInstance.to(userRoomName(userId)).emit('channel:deleted', payload);
+    }
+  } catch (error) {
+    console.error('[realtime] failed to notify channel deleted', {
+      workspaceId: input.workspaceId,
+      channelId: input.channelId,
+      error,
+    });
+  }
+}
+
+/**
+ * Notify participants of a newly created DM/group conversation. One payload
+ * per recipient room (peer/role fields are recipient-relative). Call only
+ * after the creation transaction has committed.
+ * Never throws — delivery is best-effort; clients reconcile via REST.
+ */
+export async function notifyConversationCreated(input: {
+  deliveries: Array<{ recipientUserId: string; conversation: DirectConversationResponse }>;
+}): Promise<void> {
+  try {
+    if (!ioInstance) return;
+    for (const delivery of input.deliveries) {
+      ioInstance.to(userRoomName(delivery.recipientUserId)).emit('conversation:created', {
+        type: 'conversation:created' as const,
+        workspaceId: delivery.conversation.workspaceId,
+        conversation: delivery.conversation,
+      });
+    }
+  } catch (error) {
+    console.error('[realtime] failed to notify conversation created', { error });
+  }
+}
+
+/**
+ * Notify pre-deletion workspace members that the workspace is gone. Sent to
+ * each affected user's private room (there is no shared workspace room, and
+ * membership rows no longer exist to query). Call only after the workspace
+ * deletion has committed. Never throws — delivery is best-effort; clients
+ * reconcile via REST.
+ */
+export async function notifyWorkspaceDeleted(input: {
+  workspaceId: string;
+  memberUserIds: string[];
+}): Promise<void> {
+  try {
+    if (!ioInstance) return;
+    const payload = { type: 'workspace:deleted' as const, workspaceId: input.workspaceId };
+    for (const userId of input.memberUserIds) {
+      ioInstance.to(userRoomName(userId)).emit('workspace:deleted', payload);
+    }
+  } catch (error) {
+    console.error('[realtime] failed to notify workspace deleted', {
+      workspaceId: input.workspaceId,
+      error,
+    });
+  }
+}
+
+/**
+ * Notify a user removed from a workspace. Sent to their private user room.
+ * Call only after the membership deletion has committed.
+ */
+export function emitWorkspaceMembershipRemoved(workspaceId: string, userId: string): void {
+  if (!ioInstance) return;
+  ioInstance.to(userRoomName(userId)).emit('workspace:membership-removed', {
+    type: 'workspace:membership-removed',
+    workspaceId,
+    userId,
   });
 }
 

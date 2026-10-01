@@ -427,11 +427,12 @@ liveDescribe('invitation API (live database)', () => {
 
   // ---------- Security ----------
 
-  it('ignores body attempts to override inviter, workspace, and role', async () => {
+  it('rejects body attempts to override inviter, workspace, and invalid roles', async () => {
     for (const payload of [
       { email: `sec-a-${RUN}@example.invalid`, invitedById: 'someone-else' },
       { email: `sec-b-${RUN}@example.invalid`, workspaceId: ws2 },
-      { email: `sec-c-${RUN}@example.invalid`, role: 'ADMIN' },
+      { email: `sec-c2-${RUN}@example.invalid`, role: 'OWNER' },
+      { email: `sec-c3-${RUN}@example.invalid`, role: 'GUEST' },
       { email: `sec-d-${RUN}@example.invalid`, token: 'chosen' },
       { email: `sec-e-${RUN}@example.invalid`, expiresAt: new Date().toISOString() },
     ]) {
@@ -449,10 +450,97 @@ liveDescribe('invitation API (live database)', () => {
     expect(row.workspaceId).toBe(ws1);
   });
 
+  it('persists an explicit ADMIN invitation role and grants it on accept', async () => {
+    const targetEmail = `role-admin-${RUN}@example.invalid`;
+    const created = await owner
+      .post(`/api/workspaces/${ws1}/invitations`)
+      .set('Origin', ORIGIN)
+      .send({ email: targetEmail, role: 'ADMIN' });
+    expect(created.status).toBe(201);
+
+    const row = await getPrisma().invitation.findUniqueOrThrow({
+      where: { id: created.body.invitation.id as string },
+    });
+    expect(row.role).toBe('ADMIN');
+
+    const acceptor = request.agent(app);
+    const signed = await acceptor
+      .post('/api/auth/sign-up/email')
+      .set('Origin', ORIGIN)
+      .send({ name: 'Role Admin', email: targetEmail, password: PASSWORD });
+    expect(signed.status).toBeLessThan(300);
+    createdEmails.push(targetEmail);
+
+    const accepted = await acceptor
+      .post('/api/invitations/accept')
+      .set('Origin', ORIGIN)
+      .send({ token: created.body.invitation.token });
+    expect(accepted.status).toBe(200);
+    expect(accepted.body.membership.role).toBe('ADMIN');
+  });
+
   it('denies cross-workspace invitation access', async () => {
     expect((await inviteAs(admin, ws2, `x-${RUN}@example.invalid`)).status).toBe(404);
     expect((await admin.get(`/api/workspaces/${ws2}/invitations`)).status).toBe(404);
     expect((await second.get(`/api/workspaces/${ws1}/invitations`)).status).toBe(404);
+  });
+
+  it('lets OWNER and ADMIN revoke a pending invitation', async () => {
+    const created = await inviteAs(owner, ws1, `revoke-ok-${RUN}@example.invalid`);
+    expect(created.status).toBe(201);
+    const invitationId = created.body.invitation.id as string;
+
+    const revoked = await owner
+      .delete(`/api/workspaces/${ws1}/invitations/${invitationId}`)
+      .set('Origin', ORIGIN);
+    expect(revoked.status).toBe(200);
+    expect(revoked.body.invitation).toEqual({ id: invitationId });
+
+    const row = await getPrisma().invitation.findUniqueOrThrow({ where: { id: invitationId } });
+    expect(row.revokedAt).not.toBeNull();
+
+    // Revoked rows disappear from the pending list.
+    const listed = await owner.get(`/api/workspaces/${ws1}/invitations`);
+    const ids = (listed.body.invitations as { id: string }[]).map((i) => i.id);
+    expect(ids).not.toContain(invitationId);
+
+    // Second revoke reports not found rather than failing open.
+    expect(
+      (
+        await admin
+          .delete(`/api/workspaces/${ws1}/invitations/${invitationId}`)
+          .set('Origin', ORIGIN)
+      ).status,
+    ).toBe(404);
+  });
+
+  it('rejects revoke for MEMBER, outsiders, strangers, and foreign workspaces', async () => {
+    const created = await inviteAs(owner, ws1, `revoke-auth-${RUN}@example.invalid`);
+    expect(created.status).toBe(201);
+    const invitationId = created.body.invitation.id as string;
+    const url = `/api/workspaces/${ws1}/invitations/${invitationId}`;
+
+    expect((await member.delete(url).set('Origin', ORIGIN)).status).toBe(403);
+    expect((await outsider.delete(url).set('Origin', ORIGIN)).status).toBe(404);
+    expect((await api().delete(url).set('Origin', ORIGIN)).status).toBe(401);
+    // Existing id, wrong workspace → 404 without leaking.
+    expect(
+      (
+        await second
+          .delete(`/api/workspaces/${ws2}/invitations/${invitationId}`)
+          .set('Origin', ORIGIN)
+      ).status,
+    ).toBe(404);
+    expect(
+      (
+        await owner
+          .delete(`/api/workspaces/${ws1}/invitations/${randomUUID()}`)
+          .set('Origin', ORIGIN)
+      ).status,
+    ).toBe(404);
+
+    // Cleanup: revoke the fixture.
+    expect((await owner.delete(url).set('Origin', ORIGIN)).status).toBe(200);
   });
 
   it('never exposes tokenHash or credential material', async () => {

@@ -10,6 +10,8 @@ export default tseslint.config(
       '**/coverage/**',
       '**/build/**',
       '**/next-env.d.ts',
+      'apps/web/components/mock-ui/**',
+      'apps/web/components/mock-views/**',
     ],
   },
   js.configs.recommended,

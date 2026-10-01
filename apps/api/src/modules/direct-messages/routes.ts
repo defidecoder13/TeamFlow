@@ -27,6 +27,7 @@ import {
   markDirectConversationRead,
   removeConversationParticipant,
   renameGroupConversation,
+  toConversationCreatedPayload,
 } from './service';
 import {
   addConversationParticipantSchema,
@@ -39,7 +40,11 @@ import {
   renameGroupConversationSchema,
 } from './validation';
 import { messageListQuerySchema } from '../messages/validation';
-import { emitDirectConversationRead, emitDirectMessageCreated } from '../realtime/index';
+import {
+  emitDirectConversationRead,
+  emitDirectMessageCreated,
+  notifyConversationCreated,
+} from '../realtime/index';
 
 function validationError(res: Response, message: string): void {
   res.status(400).json({ error: { code: 'VALIDATION_ERROR', message } });
@@ -101,11 +106,22 @@ export function createWorkspaceDirectMessagesRouter(resolveAuth: () => AuthConte
 
       const prisma = getPrisma();
       try {
-        const conversation = await getOrCreateDirectConversation(prisma, {
+        const { conversation, created } = await getOrCreateDirectConversation(prisma, {
           workspaceId,
           userId: req.authUser!.id,
           recipientId: parsed.data.recipientId,
         });
+        // Emit only when this request actually created the conversation;
+        // opening an existing one is already visible to both participants.
+        if (created) {
+          const recipientId = parsed.data.recipientId;
+          await notifyConversationCreated({
+            deliveries: [req.authUser!.id, recipientId].map((recipientUserId) => ({
+              recipientUserId,
+              conversation: toConversationCreatedPayload(conversation, recipientUserId),
+            })),
+          });
+        }
         res.status(200).json({ conversation });
       } catch (error) {
         mapDirectMessageError(res, error);
@@ -136,6 +152,12 @@ export function createWorkspaceDirectMessagesRouter(resolveAuth: () => AuthConte
           userId: req.authUser!.id,
           participantIds: parsed.data.participantIds,
           name: parsed.data.name,
+        });
+        await notifyConversationCreated({
+          deliveries: [req.authUser!.id, ...parsed.data.participantIds].map((recipientUserId) => ({
+            recipientUserId,
+            conversation: toConversationCreatedPayload(conversation, recipientUserId),
+          })),
         });
         res.status(201).json({ conversation });
       } catch (error) {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { MessageReactionSummary } from '../../lib/messages';
 import { useMessageReactions } from '../../lib/use-message-reactions';
 import { EmojiPicker } from './EmojiPicker';
@@ -40,6 +40,7 @@ export function MessageReactions({
   const clearError = controlledClearError ?? hookResult.clearError;
 
   const [isPickerOpen, setIsPickerOpen] = useState(false);
+  const pickerTriggerRef = useRef<HTMLButtonElement>(null);
 
   if (isDeleted && reactions.length === 0) {
     return null;
@@ -68,14 +69,18 @@ export function MessageReactions({
             disabled={isDeleted}
             aria-label={ariaLabel}
             aria-pressed={hasReacted}
-            className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition-colors focus:outline-none focus:ring-1 focus:ring-stone-400 ${
+            className={`inline-flex items-center gap-1 rounded-[6px] border px-2 py-0.5 text-xs transition-colors focus-visible:outline-2 focus-visible:outline-[#3157D5] ${
               hasReacted
-                ? 'border-blue-300 bg-blue-50 font-semibold text-blue-700 hover:bg-blue-100'
-                : 'border-stone-200 bg-stone-50 font-normal text-stone-700 hover:bg-stone-100'
+                ? 'border-[#3157D5]/30 bg-[#EEF2FF] font-semibold text-[#3157D5]'
+                : 'border-[#E4E2DF] bg-white font-normal text-[#4F5360] hover:bg-[#F6F5F3]'
             } ${isDeleted ? 'opacity-60 cursor-default' : 'cursor-pointer'}`}
           >
-            <span className="text-[13px] leading-none select-none">{r.emoji}</span>
-            <span className="text-[11px] leading-none text-stone-600">{r.count}</span>
+            <span className="select-none text-[13px] leading-none">{r.emoji}</span>
+            <span
+              className={`text-[11px] leading-none tabular-nums ${hasReacted ? 'text-[#3157D5]' : 'text-[#4F5360]'}`}
+            >
+              {r.count}
+            </span>
           </button>
         );
       })}
@@ -83,12 +88,13 @@ export function MessageReactions({
       {!isDeleted && (reactions.length > 0 || showAddWhenEmpty) && (
         <div className="relative inline-flex items-center">
           <button
+            ref={pickerTriggerRef}
             type="button"
             onClick={() => setIsPickerOpen((prev) => !prev)}
             aria-label="Add reaction"
             aria-haspopup="dialog"
             aria-expanded={isPickerOpen}
-            className="inline-flex h-5 w-6 items-center justify-center rounded-full border border-stone-200 bg-stone-50 text-[11px] text-stone-400 transition-colors hover:bg-stone-100 hover:text-stone-600 focus:outline-none focus:ring-1 focus:ring-stone-400"
+            className="inline-flex h-6 min-w-7 items-center justify-center rounded-[6px] border border-[#E4E2DF] bg-[#FAF9F8] px-1 text-[11px] text-[#737782] transition-colors hover:bg-[#F1F0EE] hover:text-[#171A21] focus-visible:outline-2 focus-visible:outline-[#3157D5]"
           >
             +
           </button>
@@ -99,7 +105,8 @@ export function MessageReactions({
               void addReaction(emoji);
             }}
             onClose={() => setIsPickerOpen(false)}
-            className="bottom-full left-0 mb-1"
+            triggerRef={pickerTriggerRef}
+            className="bottom-full left-0 mb-1 origin-bottom-left"
           />
         </div>
       )}
@@ -111,7 +118,7 @@ export function MessageReactions({
             type="button"
             onClick={clearError}
             aria-label="Dismiss error"
-            className="font-bold text-red-700 hover:text-red-900"
+            className="rounded font-bold text-red-700 transition-colors hover:text-red-900 focus-visible:outline-2 focus-visible:outline-red-600"
           >
             ×
           </button>

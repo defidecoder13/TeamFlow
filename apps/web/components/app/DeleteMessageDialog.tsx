@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useRef } from 'react';
+import { Dialog } from './dialog';
 
 interface DeleteMessageDialogProps {
   isOpen: boolean;
@@ -19,72 +20,50 @@ export function DeleteMessageDialog({
 }: DeleteMessageDialogProps) {
   const cancelBtnRef = useRef<HTMLButtonElement>(null);
 
-  useEffect(() => {
-    if (!isOpen) return;
-    cancelBtnRef.current?.focus();
-
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape' && !deleting) {
-        onClose();
-      }
-    }
-    document.addEventListener('keydown', onKeyDown);
-    return () => {
-      document.removeEventListener('keydown', onKeyDown);
-    };
-  }, [isOpen, deleting, onClose]);
-
-  if (!isOpen) return null;
-
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/25 p-4"
-      onClick={() => {
-        if (!deleting) onClose();
-      }}
+    <Dialog
+      open={isOpen}
+      onClose={onClose}
+      role="alertdialog"
+      labelledBy="delete-message-title"
+      describedBy="delete-message-desc"
+      size="sm"
+      dismissable={!deleting}
+      initialFocusRef={cancelBtnRef}
     >
-      <div
-        role="alertdialog"
-        aria-modal="true"
-        aria-labelledby="delete-message-title"
-        aria-describedby="delete-message-desc"
-        onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-sm rounded-xl border border-stone-200 bg-white p-6 shadow-[0_20px_48px_-8px_rgba(24,24,27,0.12)]"
+      <h2
+        id="delete-message-title"
+        className="text-[17px] font-semibold tracking-tight text-[#171A21]"
       >
-        <h2
-          id="delete-message-title"
-          className="text-base font-semibold tracking-tight text-zinc-900"
-        >
-          Delete message?
-        </h2>
-        <p id="delete-message-desc" className="mt-2 text-[13px] leading-relaxed text-stone-600">
-          Are you sure you want to delete this message? This action cannot be undone.
-        </p>
-        {error && (
-          <div role="alert" className="mt-3 rounded-lg bg-red-50 p-2 text-[12px] text-red-700">
-            {error}
-          </div>
-        )}
-        <div className="mt-5 flex items-center justify-end gap-2.5">
-          <button
-            ref={cancelBtnRef}
-            type="button"
-            onClick={onClose}
-            disabled={deleting}
-            className="rounded-lg border border-stone-200 px-3 py-1.5 text-[13px] font-medium text-stone-700 transition-colors hover:bg-stone-50 disabled:opacity-50"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={onConfirm}
-            disabled={deleting}
-            className="rounded-lg bg-red-600 px-3 py-1.5 text-[13px] font-medium text-white transition-colors hover:bg-red-700 disabled:opacity-50"
-          >
-            {deleting ? 'Deleting…' : 'Delete'}
-          </button>
+        Delete message?
+      </h2>
+      <p id="delete-message-desc" className="mt-1.5 text-[13px] leading-relaxed text-[#737782]">
+        Are you sure you want to delete this message? This action cannot be undone.
+      </p>
+      {error && (
+        <div role="alert" className="mt-3 rounded-[8px] bg-rose-50 border border-rose-200 p-2.5 text-[12px] text-[#C94A45]">
+          {error}
         </div>
+      )}
+      <div className="mt-5 flex items-center justify-end gap-2.5 pt-2 border-t border-[#E4E2DF]">
+        <button
+          ref={cancelBtnRef}
+          type="button"
+          onClick={onClose}
+          disabled={deleting}
+          className="rounded-[8px] border border-[#E4E2DF] px-3.5 py-2 text-[13px] font-medium text-[#4F5360] transition-colors hover:bg-[#F1F0EE] hover:text-[#171A21] focus-visible:outline-2 focus-visible:outline-[#3157D5] disabled:opacity-50"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={onConfirm}
+          disabled={deleting}
+          className="rounded-[8px] bg-[#C94A45] px-3.5 py-2 text-[13px] font-medium text-white transition-colors hover:bg-[#B33E3A] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#C94A45] disabled:opacity-50"
+        >
+          {deleting ? 'Deleting message…' : 'Delete message'}
+        </button>
       </div>
-    </div>
+    </Dialog>
   );
 }

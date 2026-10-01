@@ -406,3 +406,52 @@ export async function fetchAttachmentDownloadUrl(
 export function clearAttachmentDownloadUrlCache(): void {
   downloadUrlCache.clear();
 }
+
+/**
+ * Delete an attachment record (and its stored object, best-effort server-side).
+ * The backend permits only the uploader or the message author; anything else
+ * surfaces as a permission error. Never throws — failures are values.
+ */
+export async function deleteAttachment(
+  attachmentId: string,
+  apiBase?: string,
+  signal?: AbortSignal,
+): Promise<{ ok: true } | { ok: false; error: string; unauthorized?: boolean }> {
+  const base = apiBase || getApiBaseUrl();
+  try {
+    const res = await fetch(`${base}/api/attachments/${encodeURIComponent(attachmentId)}`, {
+      method: 'DELETE',
+      headers: { Accept: 'application/json' },
+      credentials: 'include',
+      signal,
+    });
+
+    if (res.ok) {
+      return { ok: true };
+    }
+    if (res.status === 401) {
+      return { ok: false, error: 'Session expired. Please sign in again.', unauthorized: true };
+    }
+    let errorMsg = 'Could not delete attachment.';
+    try {
+      const json = await res.json();
+      if (json?.error?.message) {
+        errorMsg = json.error.message;
+      }
+    } catch {
+      // ignore
+    }
+    if (res.status === 403) {
+      return { ok: false, error: 'You do not have permission to delete this attachment.' };
+    }
+    if (res.status === 404) {
+      return { ok: false, error: 'Attachment not found. It may have been deleted already.' };
+    }
+    return { ok: false, error: errorMsg };
+  } catch (err: unknown) {
+    if (err instanceof Error && err.name === 'AbortError') {
+      return { ok: false, error: 'Delete cancelled.' };
+    }
+    return { ok: false, error: 'Network error deleting attachment.' };
+  }
+}

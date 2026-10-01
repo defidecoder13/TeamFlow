@@ -16,7 +16,7 @@ export function AuthSubmitButton({ pending, pendingLabel, children }: AuthSubmit
       type="submit"
       disabled={pending}
       aria-busy={pending}
-      className="flex h-[42px] w-full items-center justify-center gap-2 rounded-lg bg-zinc-900 text-sm font-medium text-white transition-colors hover:bg-zinc-800 active:bg-black focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 disabled:cursor-not-allowed disabled:opacity-60"
+      className="group flex h-[42px] w-full items-center justify-center gap-2 rounded-lg bg-[#2E3440] text-sm font-medium text-white transition-all duration-150 hover:bg-[#1F242C] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3157D5] active:scale-[0.98] motion-reduce:active:scale-100 disabled:cursor-not-allowed disabled:opacity-60"
     >
       {pending ? (
         <>
@@ -35,8 +35,10 @@ export function AuthSubmitButton({ pending, pendingLabel, children }: AuthSubmit
         </>
       ) : (
         <>
-          {children}
-          <span aria-hidden="true">→</span>
+          <span>{children}</span>
+          <span aria-hidden="true" className="transition-transform group-hover:translate-x-0.5">
+            &rarr;
+          </span>
         </>
       )}
     </button>

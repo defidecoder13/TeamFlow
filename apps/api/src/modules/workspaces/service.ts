@@ -94,14 +94,16 @@ function toResponse(
 
 /**
  * Create a workspace with the creator as OWNER, atomically in one
- * transaction. Slug collisions retry with numeric suffixes; the database
- * unique constraint is the final authority.
+ * transaction. When a custom `slug` is provided it is used as the base
+ * (slugified once); otherwise the base comes from the name. Collisions
+ * retry with numeric suffixes; the database unique constraint is the final
+ * authority.
  */
 export async function createWorkspace(
   prisma: PrismaClient,
-  input: { userId: string; name: string },
+  input: { userId: string; name: string; slug?: string },
 ): Promise<WorkspaceWithRole> {
-  const base = slugify(input.name);
+  const base = input.slug ? slugify(input.slug) : slugify(input.name);
   for (let attempt = 0; attempt <= MAX_SLUG_ATTEMPTS; attempt += 1) {
     const slug = attempt === 0 ? base : withSlugSuffix(base, attempt + 1);
     try {

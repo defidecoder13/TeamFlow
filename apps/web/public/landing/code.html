@@ -1,0 +1,1427 @@
+<!doctype html>
+
+<html class="scroll-smooth" lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      @layer base {
+        html,
+        body {
+          margin: 0;
+          padding: 0;
+        }
+        body {
+          overscroll-behavior: none;
+        }
+        main > :first-child {
+          margin-top: 0 !important;
+        }
+        main > :last-child {
+          margin-bottom: 0 !important;
+        }
+      }
+      ::-webkit-scrollbar {
+        display: none;
+      }
+    </style>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script id="tailwind-config">
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              'surface-container': '#eeedf7',
+              background: '#fbf8ff',
+              'secondary-container': '#4261fe',
+              outline: '#77767b',
+              'surface-tint': '#5f5e61',
+              'surface-container-highest': '#e3e1ec',
+              'primary-fixed': '#e4e1e6',
+              'on-secondary-fixed': '#00105a',
+              'surface-bright': '#fbf8ff',
+              'on-primary-fixed': '#1b1b1e',
+              'surface-dim': '#dad9e3',
+              'on-tertiary-fixed-variant': '#494640',
+              'on-tertiary-fixed': '#1d1b16',
+              'on-primary-container': '#858387',
+              'on-surface-variant': '#47464b',
+              'tertiary-fixed-dim': '#cbc6bd',
+              'inverse-primary': '#c8c5ca',
+              'on-secondary-container': '#faf7ff',
+              'on-tertiary': '#ffffff',
+              'on-tertiary-container': '#88837c',
+              'inverse-on-surface': '#f1effa',
+              error: '#ba1a1a',
+              tertiary: '#000000',
+              'on-surface': '#1a1b22',
+              'on-error-container': '#93000a',
+              'on-error': '#ffffff',
+              'inverse-surface': '#2f3038',
+              'tertiary-fixed': '#e8e2d9',
+              'on-secondary': '#ffffff',
+              'surface-variant': '#e3e1ec',
+              'surface-container-low': '#f4f2fd',
+              'on-background': '#1a1b22',
+              'error-container': '#ffdad6',
+              'on-primary-fixed-variant': '#47464a',
+              'primary-fixed-dim': '#c8c5ca',
+              primary: '#000000',
+              'on-secondary-fixed-variant': '#0030c8',
+              'on-primary': '#ffffff',
+              secondary: '#1f44e4',
+              surface: '#fbf8ff',
+              'surface-container-high': '#e8e7f1',
+              'surface-container-lowest': '#ffffff',
+              'outline-variant': '#c8c5cb',
+              'secondary-fixed': '#dee0ff',
+              'tertiary-container': '#1d1b16',
+              'secondary-fixed-dim': '#bac3ff',
+              'primary-container': '#1b1b1e',
+            },
+            borderRadius: {
+              DEFAULT: '0.25rem',
+              lg: '0.5rem',
+              xl: '0.75rem',
+              full: '9999px',
+            },
+            spacing: {
+              'space-2xl': '3rem',
+              'space-xl': '2rem',
+              'space-2xs': '0.25rem',
+              'space-3xl': '4rem',
+              'space-md': '1rem',
+              'window-frame-padding': '1.5rem',
+              'space-sm': '0.75rem',
+              'app-max-width': '80rem',
+              'space-lg': '1.5rem',
+              'sidebar-width': '16rem',
+              'space-xs': '0.5rem',
+            },
+            fontFamily: {
+              'body-md': ['Inter'],
+              'label-md': ['Inter'],
+              'headline-lg': ['Inter'],
+              'display-lg': ['Inter'],
+              caption: ['Inter'],
+              'headline-md': ['Inter'],
+              'body-sm': ['Inter'],
+              'headline-xl': ['Inter'],
+              'label-sm': ['Inter'],
+              'body-lg': ['Inter'],
+            },
+            fontSize: {
+              'body-md': ['14px', { lineHeight: '20px', letterSpacing: '0em', fontWeight: '400' }],
+              'label-md': ['13px', { lineHeight: '18px', letterSpacing: '0em', fontWeight: '500' }],
+              'headline-lg': [
+                '24px',
+                { lineHeight: '32px', letterSpacing: '-0.015em', fontWeight: '600' },
+              ],
+              'display-lg': [
+                '40px',
+                { lineHeight: '48px', letterSpacing: '-0.025em', fontWeight: '600' },
+              ],
+              caption: ['12px', { lineHeight: '16px', letterSpacing: '0em', fontWeight: '400' }],
+              'headline-md': [
+                '18px',
+                { lineHeight: '24px', letterSpacing: '-0.01em', fontWeight: '600' },
+              ],
+              'body-sm': ['13px', { lineHeight: '18px', letterSpacing: '0em', fontWeight: '400' }],
+              'headline-xl': [
+                '32px',
+                { lineHeight: '38px', letterSpacing: '-0.02em', fontWeight: '600' },
+              ],
+              'label-sm': [
+                '11px',
+                { lineHeight: '16px', letterSpacing: '0.06em', fontWeight: '600' },
+              ],
+              'body-lg': [
+                '16px',
+                { lineHeight: '24px', letterSpacing: '-0.005em', fontWeight: '400' },
+              ],
+            },
+          },
+        },
+      };
+    </script>
+  </head>
+  <body
+    class="bg-background font-body-md text-on-surface antialiased selection:bg-secondary-fixed selection:text-on-secondary-fixed"
+  >
+    <header
+      class="fixed top-0 inset-x-0 z-50 bg-surface-bright/80 backdrop-blur-xl shadow-[0_1px_8px_rgba(0,0,0,0.03)]"
+    >
+      <div class="h-16 max-w-7xl mx-auto px-6 lg:px-12 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <img
+            alt="Brand logo. - Primary color: #18181b
+- Font: inter
+- Mode: light
+- Roundness: rounded-md
+"
+            class="h-8 w-auto object-contain"
+            src="https://lh3.googleusercontent.com/aida/AEtjO1W3NiVk_RQDsaPQ8wAP822RTexJpkw-MMhVaM_aIeN63PtTqNDLYUy7GWetVcidXbW1NyIOFuN-VxFVgQP_4z49bui1wNIlb1Ba2dEidNPmTai6ST393jVFeONu26dtkfwi3Nb5cVWFcR89M3KSQdcdQa80_1AHGyQ3zdGec_pqlgJpI76DVNN-9IZUCrq7fTZKQx6mdo1K_IhgxhfEG4CpIqX5_rCAu40bwb5jd7_yVvNnCsYZfwNdcw"
+          /><span class="font-headline-md text-headline-md text-on-surface tracking-tight"
+            >TeamFlow</span
+          >
+        </div>
+        <nav
+          class="hidden md:flex items-center gap-1 lg:gap-2"
+          data-active-classes="bg-surface-container-high text-on-surface rounded-lg"
+        >
+          <a
+            aria-current="page"
+            class="font-label-md px-3 py-1.5 transition-colors bg-surface-container-high text-on-surface rounded-lg"
+            data-path="product"
+            href="#"
+            >Product</a
+          ><a
+            class="font-label-md text-label-md px-3 py-1.5 rounded-lg text-on-surface-variant hover:text-on-surface transition-colors"
+            data-path="features"
+            href="#"
+            >Features</a
+          ><a
+            class="font-label-md text-label-md px-3 py-1.5 rounded-lg text-on-surface-variant hover:text-on-surface transition-colors"
+            data-path="solutions"
+            href="#"
+            >Solutions</a
+          ><a
+            class="font-label-md text-label-md px-3 py-1.5 rounded-lg text-on-surface-variant hover:text-on-surface transition-colors"
+            data-path="pricing"
+            href="#"
+            >Pricing</a
+          ><a
+            class="font-label-md text-label-md px-3 py-1.5 rounded-lg text-on-surface-variant hover:text-on-surface transition-colors"
+            data-path="docs"
+            href="#"
+            >Docs</a
+          >
+        </nav>
+        <div class="flex items-center gap-4">
+          <a
+            class="font-label-md text-label-md text-on-surface-variant hover:text-on-surface transition-colors px-2 py-1"
+            data-path="sign-in"
+            href="#"
+            >Sign In</a
+          ><a
+            class="font-label-md text-label-md bg-primary text-on-primary hover:bg-primary-container hover:text-on-primary px-4 py-2 rounded-full shadow-[0_1px_2px_rgba(24,24,27,0.04),0_4px_12px_rgba(24,24,27,0.02)] transition-all"
+            data-path="start-free"
+            href="#"
+            >Start Free</a
+          >
+          <div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center">
+            <span class="material-symbols-outlined text-on-primary text-[18px]">person</span>
+          </div>
+        </div>
+      </div>
+    </header>
+    <main class="w-full pt-16 bg-surface-bright">
+      <div class="flex flex-col w-full">
+        <!-- HERO SECTION -->
+        <section
+          class="relative w-full overflow-hidden px-6 lg:px-12 pt-12 pb-24 lg:pt-20 lg:pb-32 flex flex-col items-center text-center"
+        >
+          <!-- Ambient subtle background glow -->
+          <div
+            class="absolute top-0 left-1/2 -translate-x-1/2 w-[720px] h-[360px] bg-gradient-to-b from-secondary-fixed/40 via-surface-container-low to-transparent rounded-full blur-3xl pointer-events-none -z-10"
+          ></div>
+          <!-- Eyebrow Pill -->
+          <div
+            class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-surface-container-lowest shadow-sm mb-8 transition-transform hover:scale-[1.01] cursor-default"
+          >
+            <span class="inline-block w-2 h-2 rounded-full bg-secondary animate-pulse"></span>
+            <span
+              class="font-label-sm text-label-sm uppercase tracking-wider text-on-surface font-semibold"
+              >Introducing TeamFlow 2.0</span
+            >
+            <span class="text-on-surface-variant font-body-sm text-[12px]">·</span>
+            <span class="font-body-sm text-body-sm text-on-surface-variant"
+              >Built for deep team focus</span
+            >
+          </div>
+          <!-- Main Headline -->
+          <h1
+            class="font-display-lg text-display-lg sm:text-[54px] sm:leading-[1.15] text-on-surface max-w-4xl tracking-tight mb-6 font-semibold"
+          >
+            A calmer way to <br class="hidden sm:inline" />
+            <span
+              class="text-transparent bg-clip-text bg-gradient-to-r from-on-surface via-on-surface-variant to-secondary"
+              >work together.</span
+            >
+          </h1>
+          <!-- Subheadline -->
+          <p
+            class="font-body-lg text-body-lg text-on-surface-variant max-w-2xl mx-auto mb-10 leading-relaxed"
+          >
+            TeamFlow unites conversations, channels, project spaces, and grounded AI intelligence
+            into one tranquil desktop workspace — without the notification fatigue.
+          </p>
+          <!-- CTAs -->
+          <div
+            class="flex flex-col sm:flex-row items-center justify-center gap-3.5 w-full sm:w-auto mb-4"
+          >
+            <a
+              class="w-full sm:w-auto px-6 py-3.5 rounded-xl bg-primary text-on-primary font-label-md text-label-md hover:bg-primary-container shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2"
+              data-path="start-free"
+              href="#"
+            >
+              <span>Start for free</span>
+              <span class="material-symbols-outlined text-[18px]">arrow_forward</span>
+            </a>
+            <a
+              class="w-full sm:w-auto px-6 py-3.5 rounded-xl bg-surface-container-lowest text-on-surface font-label-md text-label-md hover:bg-surface-container shadow-sm transition-all flex items-center justify-center gap-2"
+              data-path="demo"
+              href="#"
+            >
+              <span>Book a demo</span>
+              <span class="material-symbols-outlined text-[18px] text-on-surface-variant"
+                >calendar_today</span
+              >
+            </a>
+          </div>
+          <p class="font-caption text-caption text-on-surface-variant mb-16">
+            No credit card required · Free for teams up to 10 · Instant 30-second setup
+          </p>
+          <!-- Interactive Native Desktop Window Preview Mockup -->
+          <div
+            class="w-full max-w-6xl mx-auto rounded-2xl bg-surface-container-lowest shadow-2xl overflow-hidden text-left relative transition-all"
+          >
+            <!-- Window Title Bar -->
+            <div
+              class="h-11 bg-surface-container-low px-4 flex items-center justify-between select-none"
+            >
+              <div class="flex items-center gap-2">
+                <div class="w-3 h-3 rounded-full bg-[#ff5f56]"></div>
+                <div class="w-3 h-3 rounded-full bg-[#ffbd2e]"></div>
+                <div class="w-3 h-3 rounded-full bg-[#27c93f]"></div>
+                <span
+                  class="ml-3 font-caption text-caption text-on-surface-variant font-medium flex items-center gap-1.5"
+                >
+                  <span class="material-symbols-outlined text-[14px]">lock</span>
+                  TeamFlow Workspace — Studio Acme
+                </span>
+              </div>
+              <!-- Center Search Capsule -->
+              <div
+                class="hidden md:flex items-center gap-2 bg-surface-container-lowest px-3 py-1 rounded-lg text-on-surface-variant font-body-sm text-[12px] shadow-sm w-72"
+              >
+                <span class="material-symbols-outlined text-[15px]">search</span>
+                <span class="flex-1 text-on-surface-variant/70"
+                  >Jump to conversation, space, or AI prompt...</span
+                >
+                <kbd class="px-1.5 py-0.5 rounded bg-surface-container text-[10px] font-mono"
+                  >⌘K</kbd
+                >
+              </div>
+              <!-- Window Actions -->
+              <div class="flex items-center gap-2">
+                <button
+                  class="w-6 h-6 rounded flex items-center justify-center hover:bg-surface-container-high transition-colors text-on-surface-variant"
+                >
+                  <span class="material-symbols-outlined text-[16px]">notifications</span>
+                </button>
+                <div
+                  class="w-5 h-5 rounded-full bg-secondary-container text-on-secondary font-label-sm text-[10px] flex items-center justify-center font-bold"
+                >
+                  JS
+                </div>
+              </div>
+            </div>
+            <!-- App Canvas Grid -->
+            <div class="grid grid-cols-1 md:grid-cols-12 min-h-[540px] bg-surface-bright">
+              <!-- Sidebar Navigation Rail -->
+              <div
+                class="hidden md:flex md:col-span-3 bg-surface-container-low/70 flex-col p-3.5 justify-between"
+              >
+                <div class="space-y-4">
+                  <!-- Workspace Profile Dropdown -->
+                  <div
+                    class="flex items-center justify-between p-2 rounded-xl bg-surface-container-lowest shadow-sm"
+                  >
+                    <div class="flex items-center gap-2.5">
+                      <div
+                        class="w-7 h-7 rounded-lg bg-primary text-on-primary flex items-center justify-center font-label-md font-semibold text-[11px]"
+                      >
+                        AS
+                      </div>
+                      <div class="leading-none">
+                        <div class="font-label-md text-label-md text-on-surface font-semibold">
+                          Acme Studio
+                        </div>
+                        <div class="font-caption text-[11px] text-on-surface-variant mt-0.5">
+                          24 mindful teammates
+                        </div>
+                      </div>
+                    </div>
+                    <span class="material-symbols-outlined text-[18px] text-on-surface-variant"
+                      >unfold_more</span
+                    >
+                  </div>
+                  <!-- Primary Navigation List -->
+                  <div class="space-y-0.5">
+                    <div
+                      class="px-2.5 py-1 text-[11px] font-semibold text-on-surface-variant uppercase tracking-wider"
+                    >
+                      Quick Access
+                    </div>
+                    <a
+                      class="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-surface-container-high text-on-surface font-label-md text-label-md"
+                      href="#"
+                    >
+                      <div class="flex items-center gap-2.5">
+                        <span class="material-symbols-outlined text-[18px]">wb_sunny</span>
+                        <span>Daily Focus</span>
+                      </div>
+                      <span
+                        class="text-[11px] px-1.5 py-0.5 rounded bg-surface-container-lowest text-on-surface-variant font-medium"
+                        >3</span
+                      >
+                    </a>
+                    <a
+                      class="flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-surface-container text-on-surface-variant hover:text-on-surface font-label-md text-label-md transition-colors"
+                      href="#"
+                    >
+                      <div class="flex items-center gap-2.5">
+                        <span class="material-symbols-outlined text-[18px]">forum</span>
+                        <span>Threads</span>
+                      </div>
+                    </a>
+                    <a
+                      class="flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-surface-container text-on-surface-variant hover:text-on-surface font-label-md text-label-md transition-colors"
+                      href="#"
+                    >
+                      <div class="flex items-center gap-2.5">
+                        <span class="material-symbols-outlined text-[18px]">alternate_email</span>
+                        <span>Direct Mentions</span>
+                      </div>
+                      <span class="w-2 h-2 rounded-full bg-secondary"></span>
+                    </a>
+                    <a
+                      class="flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-surface-container text-on-surface-variant hover:text-on-surface font-label-md text-label-md transition-colors"
+                      href="#"
+                    >
+                      <div class="flex items-center gap-2.5">
+                        <span class="material-symbols-outlined text-[18px]">auto_awesome</span>
+                        <span>Workspace AI</span>
+                      </div>
+                      <span
+                        class="px-1.5 py-0.5 rounded bg-secondary-fixed text-on-secondary-fixed text-[10px] font-semibold"
+                        >Beta</span
+                      >
+                    </a>
+                  </div>
+                  <!-- Spaces Section -->
+                  <div class="space-y-0.5 pt-2">
+                    <div
+                      class="flex items-center justify-between px-2.5 py-1 text-[11px] font-semibold text-on-surface-variant uppercase tracking-wider"
+                    >
+                      <span>Spaces</span>
+                      <span
+                        class="material-symbols-outlined text-[16px] cursor-pointer hover:text-on-surface"
+                        >add</span
+                      >
+                    </div>
+                    <a
+                      class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg hover:bg-surface-container text-on-surface font-label-md text-label-md"
+                      href="#"
+                    >
+                      <span class="material-symbols-outlined text-[18px] text-secondary">tag</span>
+                      <span class="truncate">brand-redesign-v2</span>
+                    </a>
+                    <a
+                      class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg hover:bg-surface-container text-on-surface-variant hover:text-on-surface font-label-md text-label-md"
+                      href="#"
+                    >
+                      <span class="material-symbols-outlined text-[18px] text-outline">tag</span>
+                      <span class="truncate">engineering-sync</span>
+                    </a>
+                    <a
+                      class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg hover:bg-surface-container text-on-surface-variant hover:text-on-surface font-label-md text-label-md"
+                      href="#"
+                    >
+                      <span class="material-symbols-outlined text-[18px] text-outline">tag</span>
+                      <span class="truncate">weekly-reflections</span>
+                    </a>
+                    <a
+                      class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg hover:bg-surface-container text-on-surface-variant hover:text-on-surface font-label-md text-label-md"
+                      href="#"
+                    >
+                      <span class="material-symbols-outlined text-[18px] text-outline">tag</span>
+                      <span class="truncate">design-critique</span>
+                    </a>
+                  </div>
+                </div>
+                <!-- Bottom Status -->
+                <div
+                  class="p-3 bg-surface-container-lowest rounded-xl shadow-sm flex items-center justify-between"
+                >
+                  <div class="flex items-center gap-2">
+                    <div class="w-2 h-2 rounded-full bg-emerald-500"></div>
+                    <span class="font-caption text-caption text-on-surface font-medium"
+                      >Quiet Mode active</span
+                    >
+                  </div>
+                  <span class="font-caption text-caption text-on-surface-variant"
+                    >Until 2:00 PM</span
+                  >
+                </div>
+              </div>
+              <!-- Main Workspace Stage -->
+              <div
+                class="col-span-1 md:col-span-9 flex flex-col justify-between p-6 lg:p-8 bg-surface-container-lowest"
+              >
+                <!-- Channel Header -->
+                <div class="flex items-center justify-between pb-4">
+                  <div>
+                    <div class="flex items-center gap-2">
+                      <span class="font-headline-md text-headline-md text-on-surface font-semibold"
+                        ># brand-redesign-v2</span
+                      >
+                      <span
+                        class="px-2 py-0.5 rounded-full bg-surface-container text-[11px] font-medium text-on-surface-variant"
+                        >Quiet Channel</span
+                      >
+                    </div>
+                    <p class="font-caption text-caption text-on-surface-variant mt-0.5">
+                      Tactile exploration of modern macOS aesthetics &amp; natural daylight shadows.
+                    </p>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <div class="flex -space-x-2 overflow-hidden">
+                      <div
+                        class="inline-block h-7 w-7 rounded-full bg-secondary-fixed text-on-secondary-fixed text-[11px] flex items-center justify-center font-bold ring-2 ring-surface-container-lowest"
+                      >
+                        ER
+                      </div>
+                      <div
+                        class="inline-block h-7 w-7 rounded-full bg-primary-fixed text-on-primary-fixed text-[11px] flex items-center justify-center font-bold ring-2 ring-surface-container-lowest"
+                      >
+                        MK
+                      </div>
+                      <div
+                        class="inline-block h-7 w-7 rounded-full bg-tertiary-fixed text-on-tertiary-fixed text-[11px] flex items-center justify-center font-bold ring-2 ring-surface-container-lowest"
+                      >
+                        +4
+                      </div>
+                    </div>
+                    <button
+                      class="p-1.5 rounded-lg hover:bg-surface-container text-on-surface-variant hover:text-on-surface transition-colors"
+                    >
+                      <span class="material-symbols-outlined text-[20px]">filter_list</span>
+                    </button>
+                  </div>
+                </div>
+                <!-- Message Thread Content -->
+                <div class="space-y-6 my-4">
+                  <!-- Message 1 -->
+                  <div class="flex items-start gap-3.5 group">
+                    <div
+                      class="w-9 h-9 rounded-xl bg-surface-container-high text-on-surface flex items-center justify-center font-label-md font-bold text-xs shrink-0"
+                    >
+                      ER
+                    </div>
+                    <div class="flex-1 min-w-0">
+                      <div class="flex items-baseline gap-2 mb-1">
+                        <span class="font-label-md text-label-md font-semibold text-on-surface"
+                          >Elena Rostova</span
+                        >
+                        <span class="font-caption text-[11px] text-on-surface-variant"
+                          >10:42 AM</span
+                        >
+                        <span
+                          class="px-1.5 py-0.2 rounded bg-surface-container text-[10px] text-on-surface-variant"
+                          >Lead Design</span
+                        >
+                      </div>
+                      <p class="font-body-md text-body-md text-on-surface leading-relaxed">
+                        I removed the heavy saturated accent colors from the navigation and modal
+                        states. Check the comparative preview below. Notice how the eye immediately
+                        lands on user ideas rather than UI chrome.
+                      </p>
+                      <!-- Embedded File Card -->
+                      <div
+                        class="mt-3 p-3.5 rounded-xl bg-surface-container-low max-w-lg flex items-center justify-between"
+                      >
+                        <div class="flex items-center gap-3">
+                          <div
+                            class="w-10 h-10 rounded-lg bg-surface-container-lowest flex items-center justify-center text-secondary shadow-sm"
+                          >
+                            <span class="material-symbols-outlined text-[22px]">palette</span>
+                          </div>
+                          <div>
+                            <div class="font-label-md text-label-md font-medium text-on-surface">
+                              calm-design-system-spec-v3.fig
+                            </div>
+                            <div class="font-caption text-caption text-on-surface-variant">
+                              Figma File · 14.8 MB · 24 components updated
+                            </div>
+                          </div>
+                        </div>
+                        <span
+                          class="material-symbols-outlined text-[20px] text-on-surface-variant hover:text-on-surface cursor-pointer"
+                          >download</span
+                        >
+                      </div>
+                    </div>
+                  </div>
+                  <!-- Grounded AI Answer Card inline -->
+                  <div
+                    class="p-4 rounded-2xl bg-surface-container-low shadow-sm ml-6 sm:ml-12 relative overflow-hidden"
+                  >
+                    <div class="flex items-center justify-between mb-2">
+                      <div class="flex items-center gap-2">
+                        <span class="material-symbols-outlined text-secondary text-[18px]"
+                          >auto_awesome</span
+                        >
+                        <span
+                          class="font-label-sm text-label-sm text-secondary font-semibold uppercase tracking-wider"
+                          >TeamFlow Copilot · Workspace Synthesis</span
+                        >
+                      </div>
+                      <span class="font-caption text-[11px] text-on-surface-variant"
+                        >Synthesized from 4 active documents</span
+                      >
+                    </div>
+                    <p class="font-body-sm text-body-sm text-on-surface leading-relaxed">
+                      “Elena's change aligns with the agreed Q3 calm-first mandate: 0px thick
+                      hairline divisions, natural daylight multi-stop ambient shadows, and a 40%
+                      reduction in saturated blue surface fills.”
+                    </p>
+                    <div
+                      class="mt-2.5 flex items-center gap-2 text-on-surface-variant font-caption text-[11px]"
+                    >
+                      <span class="material-symbols-outlined text-[13px]">verified</span>
+                      <span
+                        >Sources:
+                        <em
+                          class="not-italic text-on-surface underline decoration-dotted cursor-pointer"
+                          >Design Charter Q3</em
+                        >,
+                        <em
+                          class="not-italic text-on-surface underline decoration-dotted cursor-pointer"
+                          >Sprint 14 Retro</em
+                        ></span
+                      >
+                    </div>
+                  </div>
+                  <!-- Message 2 -->
+                  <div class="flex items-start gap-3.5 group">
+                    <div
+                      class="w-9 h-9 rounded-xl bg-primary-container text-on-primary flex items-center justify-center font-label-md font-bold text-xs shrink-0"
+                    >
+                      JS
+                    </div>
+                    <div class="flex-1 min-w-0">
+                      <div class="flex items-baseline gap-2 mb-1">
+                        <span class="font-label-md text-label-md font-semibold text-on-surface"
+                          >John Smith</span
+                        >
+                        <span class="font-caption text-[11px] text-on-surface-variant"
+                          >10:48 AM</span
+                        >
+                      </div>
+                      <p class="font-body-md text-body-md text-on-surface leading-relaxed">
+                        Huge improvement. Reviewing with frontend now — local builds feel completely
+                        instantaneous. Let's merge for next release!
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <!-- Bottom Interactive Composer -->
+                <div
+                  class="mt-4 p-2.5 rounded-xl bg-surface-container-low flex items-center justify-between gap-3 shadow-inner"
+                >
+                  <div class="flex items-center gap-2 text-on-surface-variant pl-2 flex-1">
+                    <span class="material-symbols-outlined text-[20px] text-on-surface-variant"
+                      >add_circle</span
+                    >
+                    <span class="font-body-md text-body-md text-on-surface-variant/70"
+                      >Reply calmly to Elena or mention @team...</span
+                    >
+                  </div>
+                  <div class="flex items-center gap-1.5">
+                    <button
+                      class="p-1.5 rounded-lg hover:bg-surface-container text-on-surface-variant hover:text-on-surface"
+                    >
+                      <span class="material-symbols-outlined text-[20px]">mic</span>
+                    </button>
+                    <button
+                      class="px-3.5 py-1.5 rounded-lg bg-primary text-on-primary font-label-md text-label-md flex items-center gap-1 hover:bg-primary-container transition-colors"
+                    >
+                      <span>Send</span>
+                      <span class="material-symbols-outlined text-[16px]">send</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+        <!-- LOGO CLOUD / SOCIAL PROOF -->
+        <section class="w-full px-6 lg:px-12 py-12 bg-surface-bright flex flex-col items-center">
+          <p
+            class="font-label-sm text-label-sm uppercase tracking-widest text-on-surface-variant mb-8 text-center font-semibold"
+          >
+            Trusted by mindful teams building the future
+          </p>
+          <div
+            class="flex flex-wrap items-center justify-center gap-10 md:gap-16 opacity-75 grayscale hover:grayscale-0 transition-all duration-300"
+          >
+            <div
+              class="flex items-center gap-2 text-on-surface font-headline-md text-headline-md tracking-tight"
+            >
+              <span class="material-symbols-outlined text-[24px]">view_in_ar</span>
+              <span class="font-semibold">Acme Studio</span>
+            </div>
+            <div
+              class="flex items-center gap-2 text-on-surface font-headline-md text-headline-md tracking-tight"
+            >
+              <span class="material-symbols-outlined text-[24px]">all_inclusive</span>
+              <span class="font-semibold">Vesper Labs</span>
+            </div>
+            <div
+              class="flex items-center gap-2 text-on-surface font-headline-md text-headline-md tracking-tight"
+            >
+              <span class="material-symbols-outlined text-[24px]">flare</span>
+              <span class="font-semibold">Horizon OS</span>
+            </div>
+            <div
+              class="flex items-center gap-2 text-on-surface font-headline-md text-headline-md tracking-tight"
+            >
+              <span class="material-symbols-outlined text-[24px]">pentagon</span>
+              <span class="font-semibold">Monolith Core</span>
+            </div>
+            <div
+              class="flex items-center gap-2 text-on-surface font-headline-md text-headline-md tracking-tight"
+            >
+              <span class="material-symbols-outlined text-[24px]">graphic_eq</span>
+              <span class="font-semibold">Pulse Audio</span>
+            </div>
+          </div>
+        </section>
+        <!-- VALUE PROPOSITIONS & CORE PILLARS -->
+        <section class="w-full px-6 lg:px-12 py-20 lg:py-28 bg-surface-container-lowest">
+          <div class="max-w-7xl mx-auto">
+            <div class="max-w-2xl mb-16">
+              <div
+                class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-surface-container-high text-on-surface font-label-sm text-label-sm mb-4"
+              >
+                <span class="material-symbols-outlined text-[15px]">spa</span>
+                <span>Peaceful Productivity</span>
+              </div>
+              <h2
+                class="font-headline-xl text-headline-xl text-on-surface font-semibold tracking-tight"
+              >
+                Crafted to protect your team’s most precious asset: attention.
+              </h2>
+              <p class="font-body-lg text-body-lg text-on-surface-variant mt-3">
+                Eliminate fragmented chats, chaotic document updates, and ungrounded chatbot
+                hallucinations. Experience pure collaborative poise.
+              </p>
+            </div>
+            <!-- 3-Column Pillar Bento -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+              <!-- Pillar 1 -->
+              <div
+                class="p-8 rounded-2xl bg-surface-container-low shadow-sm hover:shadow-md transition-all flex flex-col justify-between group"
+              >
+                <div>
+                  <div
+                    class="w-12 h-12 rounded-xl bg-surface-container-lowest text-secondary flex items-center justify-center shadow-sm mb-6 group-hover:scale-110 transition-transform"
+                  >
+                    <span class="material-symbols-outlined text-[28px]">splitscreen</span>
+                  </div>
+                  <h3 class="font-headline-lg text-headline-lg text-on-surface font-semibold mb-3">
+                    Focused Channels &amp; Spaces
+                  </h3>
+                  <p class="font-body-md text-body-md text-on-surface-variant leading-relaxed">
+                    Structure conversations cleanly around teams, initiatives, and async standups
+                    without drowning in endless red notification badges.
+                  </p>
+                </div>
+                <div
+                  class="mt-8 pt-6 flex items-center justify-between text-on-surface font-label-md text-label-md"
+                >
+                  <span>Learn about spaces</span>
+                  <span
+                    class="material-symbols-outlined text-[18px] group-hover:translate-x-1 transition-transform"
+                    >arrow_forward</span
+                  >
+                </div>
+              </div>
+              <!-- Pillar 2 -->
+              <div
+                class="p-8 rounded-2xl bg-surface-container-low shadow-sm hover:shadow-md transition-all flex flex-col justify-between group"
+              >
+                <div>
+                  <div
+                    class="w-12 h-12 rounded-xl bg-surface-container-lowest text-on-surface flex items-center justify-center shadow-sm mb-6 group-hover:scale-110 transition-transform"
+                  >
+                    <span class="material-symbols-outlined text-[28px]">psychology</span>
+                  </div>
+                  <h3 class="font-headline-lg text-headline-lg text-on-surface font-semibold mb-3">
+                    Grounded AI Intelligence
+                  </h3>
+                  <p class="font-body-md text-body-md text-on-surface-variant leading-relaxed">
+                    Ask questions directly about ongoing discussions, decisions, and documents.
+                    Every AI response is fully cited, verifiable, and private.
+                  </p>
+                </div>
+                <div
+                  class="mt-8 pt-6 flex items-center justify-between text-on-surface font-label-md text-label-md"
+                >
+                  <span>Explore workspace copilot</span>
+                  <span
+                    class="material-symbols-outlined text-[18px] group-hover:translate-x-1 transition-transform"
+                    >arrow_forward</span
+                  >
+                </div>
+              </div>
+              <!-- Pillar 3 -->
+              <div
+                class="p-8 rounded-2xl bg-surface-container-low shadow-sm hover:shadow-md transition-all flex flex-col justify-between group"
+              >
+                <div>
+                  <div
+                    class="w-12 h-12 rounded-xl bg-surface-container-lowest text-secondary-container flex items-center justify-center shadow-sm mb-6 group-hover:scale-110 transition-transform"
+                  >
+                    <span class="material-symbols-outlined text-[28px]">offline_bolt</span>
+                  </div>
+                  <h3 class="font-headline-lg text-headline-lg text-on-surface font-semibold mb-3">
+                    Real-time &amp; Async Harmony
+                  </h3>
+                  <p class="font-body-md text-body-md text-on-surface-variant leading-relaxed">
+                    Built with instant local-first synchronization. Work on trains, flights, or
+                    flaky cafe Wi-Fi without interruption or dropped keystrokes.
+                  </p>
+                </div>
+                <div
+                  class="mt-8 pt-6 flex items-center justify-between text-on-surface font-label-md text-label-md"
+                >
+                  <span>Read architecture spec</span>
+                  <span
+                    class="material-symbols-outlined text-[18px] group-hover:translate-x-1 transition-transform"
+                    >arrow_forward</span
+                  >
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+        <!-- INTERACTIVE FEATURE DEEP DIVE -->
+        <section class="w-full px-6 lg:px-12 py-20 lg:py-28 bg-surface-bright">
+          <div class="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+            <!-- Left Editorial Pitch -->
+            <div class="lg:col-span-5 space-y-6">
+              <div
+                class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-secondary-fixed text-on-secondary-fixed font-label-sm text-label-sm font-semibold"
+              >
+                <span class="material-symbols-outlined text-[16px]">smart_toy</span>
+                <span>Zero Hallucinations</span>
+              </div>
+              <h2
+                class="font-headline-xl text-headline-xl text-on-surface font-semibold tracking-tight"
+              >
+                AI that listens, understands, and stays grounded in truth.
+              </h2>
+              <p class="font-body-lg text-body-lg text-on-surface-variant leading-relaxed">
+                Generic AI tools guess. TeamFlow Copilot queries only your explicit team spaces,
+                code branches, and meeting transcripts. It references exact messages and keeps every
+                member’s permissions strictly intact.
+              </p>
+              <ul class="space-y-4 pt-2">
+                <li class="flex items-start gap-3">
+                  <div
+                    class="w-6 h-6 rounded-full bg-surface-container-high flex items-center justify-center text-on-surface mt-0.5 shrink-0"
+                  >
+                    <span class="material-symbols-outlined text-[16px]">check</span>
+                  </div>
+                  <div>
+                    <div class="font-label-md text-label-md font-semibold text-on-surface">
+                      Source-attributed answers
+                    </div>
+                    <div class="font-body-sm text-body-sm text-on-surface-variant">
+                      Hover any sentence to inspect the exact message or document snippet.
+                    </div>
+                  </div>
+                </li>
+                <li class="flex items-start gap-3">
+                  <div
+                    class="w-6 h-6 rounded-full bg-surface-container-high flex items-center justify-center text-on-surface mt-0.5 shrink-0"
+                  >
+                    <span class="material-symbols-outlined text-[16px]">check</span>
+                  </div>
+                  <div>
+                    <div class="font-label-md text-label-md font-semibold text-on-surface">
+                      Automatic daily digests
+                    </div>
+                    <div class="font-body-sm text-body-sm text-on-surface-variant">
+                      Wake up to a succinct 3-bullet morning summary of team progress while you
+                      slept.
+                    </div>
+                  </div>
+                </li>
+                <li class="flex items-start gap-3">
+                  <div
+                    class="w-6 h-6 rounded-full bg-surface-container-high flex items-center justify-center text-on-surface mt-0.5 shrink-0"
+                  >
+                    <span class="material-symbols-outlined text-[16px]">check</span>
+                  </div>
+                  <div>
+                    <div class="font-label-md text-label-md font-semibold text-on-surface">
+                      Zero model training on your data
+                    </div>
+                    <div class="font-body-sm text-body-sm text-on-surface-variant">
+                      Your proprietary code and communication never train external models.
+                    </div>
+                  </div>
+                </li>
+              </ul>
+            </div>
+            <!-- Right Interactive Interactive UI Card Mockup -->
+            <div class="lg:col-span-7">
+              <div class="rounded-2xl bg-surface-container-lowest p-6 lg:p-8 shadow-xl relative">
+                <!-- Mockup Header -->
+                <div class="flex items-center justify-between pb-6">
+                  <div class="flex items-center gap-3">
+                    <div
+                      class="w-9 h-9 rounded-xl bg-secondary-fixed text-on-secondary-fixed flex items-center justify-center"
+                    >
+                      <span class="material-symbols-outlined text-[20px]">chat_spark</span>
+                    </div>
+                    <div>
+                      <div class="font-label-md text-label-md font-semibold text-on-surface">
+                        Workspace Assistant Query
+                      </div>
+                      <div class="font-caption text-caption text-on-surface-variant">
+                        Private query context: Engineering &amp; Product
+                      </div>
+                    </div>
+                  </div>
+                  <div
+                    class="px-2.5 py-1 rounded-lg bg-surface-container text-on-surface-variant text-[11px] font-mono"
+                  >
+                    Live index
+                  </div>
+                </div>
+                <!-- Prompt Question Capsule -->
+                <div class="p-4 rounded-xl bg-surface-container-low mb-6 flex items-start gap-3">
+                  <div
+                    class="w-7 h-7 rounded-full bg-primary text-on-primary font-bold text-[11px] flex items-center justify-center shrink-0"
+                  >
+                    ME
+                  </div>
+                  <div class="flex-1">
+                    <div class="font-caption text-[11px] text-on-surface-variant font-medium">
+                      Query to Copilot
+                    </div>
+                    <div class="font-body-md text-body-md font-semibold text-on-surface mt-0.5">
+                      “What changed in the client database sync logic this week, and who approved
+                      it?”
+                    </div>
+                  </div>
+                </div>
+                <!-- Response Payload -->
+                <div class="space-y-4">
+                  <div
+                    class="flex items-center gap-2 text-on-surface font-label-md text-label-md font-semibold"
+                  >
+                    <span class="material-symbols-outlined text-secondary text-[18px]"
+                      >psychology</span
+                    >
+                    <span>TeamFlow Synthesis</span>
+                  </div>
+                  <p class="font-body-md text-body-md text-on-surface leading-relaxed">
+                    On Wednesday at 14:15, <strong>Marcus K.</strong> updated the sync engine to
+                    SQLite-WASM local-first architecture. This resolved background battery drain on
+                    macOS.
+                  </p>
+                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                    <div
+                      class="p-3 rounded-xl bg-surface-container-low flex flex-col justify-between shadow-sm"
+                    >
+                      <div class="flex items-center gap-2 mb-2">
+                        <span class="material-symbols-outlined text-secondary text-[16px]"
+                          >commit</span
+                        >
+                        <span class="font-label-sm text-label-sm font-semibold text-on-surface"
+                          >Pull Request #412</span
+                        >
+                      </div>
+                      <div class="font-caption text-caption text-on-surface-variant line-clamp-2">
+                        “refactor(sync): switch from WebSocket polling to CRDT delta streams”
+                      </div>
+                      <div
+                        class="mt-3 flex items-center justify-between text-[11px] text-on-surface-variant font-mono"
+                      >
+                        <span>Approved by @elena</span>
+                        <span>Merged 2d ago</span>
+                      </div>
+                    </div>
+                    <div
+                      class="p-3 rounded-xl bg-surface-container-low flex flex-col justify-between shadow-sm"
+                    >
+                      <div class="flex items-center gap-2 mb-2">
+                        <span class="material-symbols-outlined text-secondary text-[16px]"
+                          >forum</span
+                        >
+                        <span class="font-label-sm text-label-sm font-semibold text-on-surface"
+                          >#dev-architecture</span
+                        >
+                      </div>
+                      <div class="font-caption text-caption text-on-surface-variant line-clamp-2">
+                        “Benchmark passes: 0ms UI blocking time even under 10k messages sync.”
+                      </div>
+                      <div
+                        class="mt-3 flex items-center justify-between text-[11px] text-on-surface-variant font-mono"
+                      >
+                        <span>Thread: 18 replies</span>
+                        <span>Wed 15:40</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <!-- Grounded Trust Footer -->
+                <div
+                  class="mt-6 pt-4 flex items-center justify-between font-caption text-caption text-on-surface-variant"
+                >
+                  <span class="flex items-center gap-1.5">
+                    <span class="material-symbols-outlined text-[15px] text-emerald-600"
+                      >verified_user</span
+                    >
+                    100% grounded in your workspace data
+                  </span>
+                  <button class="hover:text-on-surface transition-colors font-medium">
+                    Copy summary
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+        <!-- CRAFT & PERFORMANCE DETAILS (4-Metric Grid) -->
+        <section class="w-full px-6 lg:px-12 py-20 lg:py-28 bg-surface-container-lowest">
+          <div class="max-w-7xl mx-auto">
+            <div class="text-center max-w-2xl mx-auto mb-16">
+              <h2
+                class="font-headline-xl text-headline-xl text-on-surface font-semibold tracking-tight"
+              >
+                Engineered for relentless speed and tranquility
+              </h2>
+              <p class="font-body-lg text-body-lg text-on-surface-variant mt-2">
+                Sub-perceptual latency with uncompromising privacy foundations.
+              </p>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              <!-- Metric 1 -->
+              <div class="p-6 rounded-2xl bg-surface-container-low flex flex-col justify-between">
+                <span
+                  class="font-display-lg text-display-lg font-semibold text-on-surface tracking-tight"
+                  >&lt;50ms</span
+                >
+                <div class="mt-4">
+                  <div class="font-headline-md text-headline-md font-semibold text-on-surface">
+                    Instant Keyboard Speed
+                  </div>
+                  <p
+                    class="font-body-sm text-body-sm text-on-surface-variant mt-1.5 leading-relaxed"
+                  >
+                    Every keystroke, modal jump, and search query updates in less than one monitor
+                    refresh frame.
+                  </p>
+                </div>
+              </div>
+              <!-- Metric 2 -->
+              <div class="p-6 rounded-2xl bg-surface-container-low flex flex-col justify-between">
+                <span
+                  class="font-display-lg text-display-lg font-semibold text-secondary tracking-tight"
+                  >E2EE</span
+                >
+                <div class="mt-4">
+                  <div class="font-headline-md text-headline-md font-semibold text-on-surface">
+                    Enterprise Vault Security
+                  </div>
+                  <p
+                    class="font-body-sm text-body-sm text-on-surface-variant mt-1.5 leading-relaxed"
+                  >
+                    Zero-knowledge end-to-end encryption for private direct messages and
+                    confidential workspaces.
+                  </p>
+                </div>
+              </div>
+              <!-- Metric 3 -->
+              <div class="p-6 rounded-2xl bg-surface-container-low flex flex-col justify-between">
+                <span
+                  class="font-display-lg text-display-lg font-semibold text-on-surface tracking-tight"
+                  >68%</span
+                >
+                <div class="mt-4">
+                  <div class="font-headline-md text-headline-md font-semibold text-on-surface">
+                    Less Cognitive Noise
+                  </div>
+                  <p
+                    class="font-body-sm text-body-sm text-on-surface-variant mt-1.5 leading-relaxed"
+                  >
+                    Measured drop in context-switching alert fatigue compared to legacy team chat
+                    apps.
+                  </p>
+                </div>
+              </div>
+              <!-- Metric 4 -->
+              <div class="p-6 rounded-2xl bg-surface-container-low flex flex-col justify-between">
+                <span
+                  class="font-display-lg text-display-lg font-semibold text-secondary-container tracking-tight"
+                  >100%</span
+                >
+                <div class="mt-4">
+                  <div class="font-headline-md text-headline-md font-semibold text-on-surface">
+                    Offline Resilience
+                  </div>
+                  <p
+                    class="font-body-sm text-body-sm text-on-surface-variant mt-1.5 leading-relaxed"
+                  >
+                    Full local storage index allows searching, reading, and drafting with zero
+                    internet connection.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+        <!-- CUSTOMER TESTIMONIAL -->
+        <section class="w-full px-6 lg:px-12 py-20 lg:py-28 bg-surface-bright flex justify-center">
+          <div class="max-w-4xl w-full text-center">
+            <div
+              class="w-12 h-12 mx-auto rounded-full bg-surface-container flex items-center justify-center text-on-surface-variant mb-8"
+            >
+              <span class="material-symbols-outlined text-[26px]">format_quote</span>
+            </div>
+            <blockquote
+              class="font-headline-xl text-headline-xl sm:text-[34px] sm:leading-[1.3] text-on-surface font-medium tracking-tight mb-8"
+            >
+              “TeamFlow brought quiet clarity back to our company. Our developers and designers
+              actually finish their deep work before checking notifications.”
+            </blockquote>
+            <div class="flex flex-col items-center justify-center">
+              <!-- Visual photo placeholder for speaker -->
+              <div
+                class="w-14 h-14 rounded-full overflow-hidden mb-3 ring-2 ring-surface-container-high"
+              >
+                <img
+                  class="w-full h-full object-cover"
+                  data-alt="Editorial close-up portrait of Elena Rostova, VP of Product at Acme Studio, in a warm daylight minimalist design office, wearing simple black sweater, natural calm expression, muted editorial tones matching light UI design"
+                  src="https://lh3.googleusercontent.com/aida-public/AB6AXuDUPLX13hC_uje_SfPA6jEKp95oQA_iz9aE3xOgWeEvKWG763jNXl_M4DQyPEZbvK6qwtMsmDmx2N4sdpEzX_UT_5ARpNhTGFDUzTXZ0UnG-1obgupAF3v65Y8vOGozNN-pbIcUmLq6M7WBpiqbfWe78_iYosZxTbg_ICMto5qibR-x82OrlT0l0iz67sGd3zuphMryoi7y_nnAQkWgtBEM31WgBTvz4TlZMjtsI-dM9-WPxXWyV4_n"
+                />
+              </div>
+              <div class="font-headline-md text-headline-md font-semibold text-on-surface">
+                Elena Rostova
+              </div>
+              <div class="font-body-sm text-body-sm text-on-surface-variant">
+                VP of Product at Acme Studio
+              </div>
+            </div>
+          </div>
+        </section>
+        <!-- FINAL CONVERSION CTA -->
+        <section
+          class="w-full px-6 lg:px-12 py-20 lg:py-28 bg-surface-container-lowest flex justify-center"
+        >
+          <div
+            class="max-w-5xl w-full rounded-3xl bg-gradient-to-b from-surface-container-low to-surface-container-high p-8 sm:p-14 lg:p-20 text-center relative overflow-hidden shadow-xl"
+          >
+            <!-- Faint ambient glow inside card -->
+            <div
+              class="absolute -top-24 left-1/2 -translate-x-1/2 w-96 h-96 bg-secondary-fixed/50 rounded-full blur-3xl pointer-events-none"
+            ></div>
+            <div class="relative z-10 max-w-2xl mx-auto space-y-6">
+              <div
+                class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-surface-container-lowest text-on-surface font-label-sm text-label-sm shadow-sm font-semibold"
+              >
+                <span class="material-symbols-outlined text-[16px] text-secondary">bolt</span>
+                <span>Ready in under 2 minutes</span>
+              </div>
+              <h2
+                class="font-display-lg text-display-lg text-on-surface font-semibold tracking-tight"
+              >
+                Bring clarity to your workspace today.
+              </h2>
+              <p class="font-body-lg text-body-lg text-on-surface-variant">
+                Join thousands of software engineers, architects, and studio leaders who traded
+                perpetual notification anxiety for deep, tranquil progress.
+              </p>
+              <!-- Fast Conversion Form -->
+              <form
+                class="flex flex-col sm:flex-row items-center gap-2.5 max-w-md mx-auto pt-4"
+                onsubmit="event.preventDefault()"
+              >
+                <input
+                  class="w-full px-4 py-3.5 rounded-xl bg-surface-container-lowest text-on-surface font-body-md text-body-md shadow-sm placeholder:text-on-surface-variant/60 focus:outline-none"
+                  placeholder="Enter your work email"
+                  required=""
+                  type="email"
+                />
+                <button
+                  class="w-full sm:w-auto px-6 py-3.5 rounded-xl bg-primary text-on-primary font-label-md text-label-md hover:bg-primary-container shadow-md hover:shadow-lg transition-all whitespace-nowrap"
+                  type="submit"
+                >
+                  Get Started Free
+                </button>
+              </form>
+              <!-- Social OAuth Quick Connect -->
+              <div class="pt-6">
+                <div
+                  class="font-caption text-caption text-on-surface-variant uppercase tracking-wider mb-3"
+                >
+                  Or continue with
+                </div>
+                <div class="flex items-center justify-center gap-3">
+                  <button
+                    class="px-4 py-2 rounded-xl bg-surface-container-lowest hover:bg-surface-bright text-on-surface shadow-sm font-label-md text-label-md flex items-center gap-2 transition-all"
+                  >
+                    <span class="material-symbols-outlined text-[18px]">computer</span>
+                    <span>Apple</span>
+                  </button>
+                  <button
+                    class="px-4 py-2 rounded-xl bg-surface-container-lowest hover:bg-surface-bright text-on-surface shadow-sm font-label-md text-label-md flex items-center gap-2 transition-all"
+                  >
+                    <span class="material-symbols-outlined text-[18px]">token</span>
+                    <span>Google</span>
+                  </button>
+                  <button
+                    class="px-4 py-2 rounded-xl bg-surface-container-lowest hover:bg-surface-bright text-on-surface shadow-sm font-label-md text-label-md flex items-center gap-2 transition-all"
+                  >
+                    <span class="material-symbols-outlined text-[18px]">terminal</span>
+                    <span>GitHub</span>
+                  </button>
+                </div>
+              </div>
+              <!-- Compliance & Security Trust Badges -->
+              <div
+                class="pt-8 flex flex-wrap items-center justify-center gap-6 font-caption text-caption text-on-surface-variant"
+              >
+                <span class="flex items-center gap-1.5">
+                  <span class="material-symbols-outlined text-[16px]">verified</span>
+                  SOC2 Type II Certified
+                </span>
+                <span class="flex items-center gap-1.5">
+                  <span class="material-symbols-outlined text-[16px]">shield</span>
+                  GDPR Compliant
+                </span>
+                <span class="flex items-center gap-1.5">
+                  <span class="material-symbols-outlined text-[16px]">check_circle</span>
+                  99.99% SLA Uptime
+                </span>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+    <footer class="w-full bg-surface-container-low mt-24">
+      <div class="max-w-7xl mx-auto px-6 lg:px-12 py-16">
+        <div class="grid grid-cols-2 md:grid-cols-5 gap-10 lg:gap-12 mb-16">
+          <div class="col-span-2 md:col-span-1">
+            <div class="flex items-center gap-2 mb-4">
+              <span class="font-headline-md text-headline-md text-on-surface">TeamFlow</span>
+            </div>
+            <p class="font-body-sm text-body-sm text-on-surface-variant mb-6">
+              The intentional workspace built for focus, poise, and tactile team clarity.
+            </p>
+            <div
+              class="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-surface-container-highest"
+            >
+              <span class="w-2 h-2 rounded-full bg-secondary"></span
+              ><span class="font-caption text-caption text-on-surface-variant font-medium"
+                >All systems normal</span
+              >
+            </div>
+          </div>
+          <div>
+            <h4 class="font-label-md text-label-md text-on-surface font-semibold mb-4">Product</h4>
+            <ul class="space-y-3">
+              <li class="font-body-sm text-body-sm">
+                <a
+                  class="text-on-surface-variant hover:text-on-surface transition-colors"
+                  data-path="product"
+                  href="#"
+                  >Overview</a
+                >
+              </li>
+              <li class="font-body-sm text-body-sm">
+                <a
+                  class="text-on-surface-variant hover:text-on-surface transition-colors"
+                  data-path="features"
+                  href="#"
+                  >Features</a
+                >
+              </li>
+              <li class="font-body-sm text-body-sm">
+                <a
+                  class="text-on-surface-variant hover:text-on-surface transition-colors"
+                  data-path="solutions"
+                  href="#"
+                  >Solutions</a
+                >
+              </li>
+              <li class="font-body-sm text-body-sm">
+                <a
+                  class="text-on-surface-variant hover:text-on-surface transition-colors"
+                  data-path="pricing"
+                  href="#"
+                  >Pricing</a
+                >
+              </li>
+              <li class="font-body-sm text-body-sm">
+                <a
+                  class="text-on-surface-variant hover:text-on-surface transition-colors"
+                  data-path="changelog"
+                  href="#"
+                  >Changelog</a
+                >
+              </li>
+            </ul>
+          </div>
+          <div>
+            <h4 class="font-label-md text-label-md text-on-surface font-semibold mb-4">
+              Resources
+            </h4>
+            <ul class="space-y-3">
+              <li class="font-body-sm text-body-sm">
+                <a
+                  class="text-on-surface-variant hover:text-on-surface transition-colors"
+                  data-path="docs"
+                  href="#"
+                  >Documentation</a
+                >
+              </li>
+              <li class="font-body-sm text-body-sm">
+                <a
+                  class="text-on-surface-variant hover:text-on-surface transition-colors"
+                  data-path="help-center"
+                  href="#"
+                  >Help Center</a
+                >
+              </li>
+              <li class="font-body-sm text-body-sm">
+                <a
+                  class="text-on-surface-variant hover:text-on-surface transition-colors"
+                  data-path="community"
+                  href="#"
+                  >Community</a
+                >
+              </li>
+              <li class="font-body-sm text-body-sm">
+                <a
+                  class="text-on-surface-variant hover:text-on-surface transition-colors"
+                  data-path="integrations"
+                  href="#"
+                  >Integrations</a
+                >
+              </li>
+            </ul>
+          </div>
+          <div>
+            <h4 class="font-label-md text-label-md text-on-surface font-semibold mb-4">Company</h4>
+            <ul class="space-y-3">
+              <li class="font-body-sm text-body-sm">
+                <a
+                  class="text-on-surface-variant hover:text-on-surface transition-colors"
+                  data-path="about-us"
+                  href="#"
+                  >About</a
+                >
+              </li>
+              <li class="font-body-sm text-body-sm">
+                <a
+                  class="text-on-surface-variant hover:text-on-surface transition-colors"
+                  data-path="careers"
+                  href="#"
+                  >Careers</a
+                >
+              </li>
+              <li class="font-body-sm text-body-sm">
+                <a
+                  class="text-on-surface-variant hover:text-on-surface transition-colors"
+                  data-path="press"
+                  href="#"
+                  >Press Kit</a
+                >
+              </li>
+              <li class="font-body-sm text-body-sm">
+                <a
+                  class="text-on-surface-variant hover:text-on-surface transition-colors"
+                  data-path="contact"
+                  href="#"
+                  >Contact</a
+                >
+              </li>
+            </ul>
+          </div>
+          <div>
+            <h4 class="font-label-md text-label-md text-on-surface font-semibold mb-4">Legal</h4>
+            <ul class="space-y-3">
+              <li class="font-body-sm text-body-sm">
+                <a
+                  class="text-on-surface-variant hover:text-on-surface transition-colors"
+                  data-path="privacy-policy"
+                  href="#"
+                  >Privacy Policy</a
+                >
+              </li>
+              <li class="font-body-sm text-body-sm">
+                <a
+                  class="text-on-surface-variant hover:text-on-surface transition-colors"
+                  data-path="terms-of-service"
+                  href="#"
+                  >Terms of Service</a
+                >
+              </li>
+              <li class="font-body-sm text-body-sm">
+                <a
+                  class="text-on-surface-variant hover:text-on-surface transition-colors"
+                  data-path="security"
+                  href="#"
+                  >Security</a
+                >
+              </li>
+              <li class="font-body-sm text-body-sm">
+                <a
+                  class="text-on-surface-variant hover:text-on-surface transition-colors"
+                  data-path="compliance"
+                  href="#"
+                  >Compliance</a
+                >
+              </li>
+            </ul>
+          </div>
+        </div>
+        <div class="pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
+          <p class="font-caption text-caption text-on-surface-variant">
+            © 2025 TeamFlow, Inc. All rights reserved. Crafted for intentional teams.
+          </p>
+          <div class="flex items-center gap-6 font-caption text-caption text-on-surface-variant">
+            <a class="hover:text-on-surface transition-colors" data-path="github" href="#">GitHub</a
+            ><a class="hover:text-on-surface transition-colors" data-path="discord" href="#"
+              >Discord</a
+            ><a class="hover:text-on-surface transition-colors" data-path="status" href="#"
+              >System Status</a
+            >
+          </div>
+        </div>
+      </div>
+    </footer>
+  </body>
+</html>

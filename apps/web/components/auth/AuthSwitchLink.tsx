@@ -12,11 +12,11 @@ interface AuthSwitchLinkProps {
 
 export function AuthSwitchLink({ prompt, actionLabel, href }: AuthSwitchLinkProps) {
   return (
-    <p className="mb-7 text-right text-[13px] text-zinc-500">
-      {prompt}{' '}
+    <p className="mb-8 text-right text-[13px] text-[#737782] lg:mb-10">
+      <span>{prompt}</span>{' '}
       <Link
         href={href}
-        className="font-medium text-zinc-900 underline decoration-zinc-300 underline-offset-4 transition-colors hover:decoration-zinc-900"
+        className="font-medium whitespace-nowrap text-[#171A21] underline decoration-[#DDDCDF] underline-offset-4 transition-colors hover:text-[#3157D5] hover:decoration-[#3157D5]"
       >
         {actionLabel}
       </Link>

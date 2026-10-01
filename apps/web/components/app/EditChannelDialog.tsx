@@ -9,7 +9,8 @@
 
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { Dialog } from './dialog';
 import { AuthError } from '../auth/AuthError';
 import { AuthField } from '../auth/AuthField';
 import { AuthSubmitButton } from '../auth/AuthSubmitButton';
@@ -66,18 +67,6 @@ export function EditChannelDialog({
   const nameError = touched ? validateName(name) : null;
   const descriptionError = touched ? validateDescription(description) : null;
 
-  useEffect(() => {
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape' && !saving) {
-        onClose();
-      }
-    }
-    document.addEventListener('keydown', onKeyDown);
-    return () => {
-      document.removeEventListener('keydown', onKeyDown);
-    };
-  }, [saving, onClose]);
-
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     if (saving) {
@@ -120,28 +109,15 @@ export function EditChannelDialog({
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/25 p-4"
-      onClick={() => {
-        if (!saving) {
-          onClose();
-        }
-      }}
-    >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="edit-channel-title"
-        onClick={(event) => event.stopPropagation()}
-        className="w-full max-w-sm rounded-xl border border-stone-200 bg-white p-6 shadow-[0_20px_48px_-8px_rgba(24,24,27,0.12)]"
-      >
+    <Dialog open onClose={onClose} labelledBy="edit-channel-title" size="sm" dismissable={!saving}>
+      <div>
         <h2
           id="edit-channel-title"
-          className="text-base font-semibold tracking-tight text-zinc-900"
+          className="text-[17px] font-semibold tracking-tight text-[#171A21]"
         >
           Edit channel
         </h2>
-        <p className="mt-1.5 text-sm leading-relaxed text-zinc-500">
+        <p className="mt-1 text-[13px] leading-relaxed text-[#737782]">
           Only the name and description can be changed here.
         </p>
         <form onSubmit={handleSubmit} noValidate className="mt-5 space-y-4">
@@ -172,12 +148,12 @@ export function EditChannelDialog({
             onChange={(event) => setDescription(event.target.value)}
             onBlur={() => setTouched(true)}
           />
-          <div className="flex gap-2 pt-1">
+          <div className="flex gap-2 pt-2 border-t border-[#E4E2DF]">
             <button
               type="button"
               disabled={saving}
               onClick={onClose}
-              className="inline-flex h-10 items-center justify-center rounded-lg border border-stone-300 bg-white px-4 text-sm font-medium text-stone-700 transition-colors hover:border-stone-400 disabled:opacity-50"
+              className="inline-flex h-[42px] items-center justify-center rounded-lg border border-[#E4E2DF] bg-white px-4 text-sm font-medium text-[#4F5360] transition-colors hover:bg-[#F1F0EE] hover:text-[#171A21] focus-visible:outline-2 focus-visible:outline-[#3157D5] disabled:opacity-50"
             >
               Cancel
             </button>
@@ -189,6 +165,6 @@ export function EditChannelDialog({
           </div>
         </form>
       </div>
-    </div>
+    </Dialog>
   );
 }

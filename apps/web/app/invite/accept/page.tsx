@@ -28,9 +28,9 @@ type AcceptState =
 function Panel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <main className="flex min-h-screen items-center justify-center bg-[#fbf8ff] px-6">
-      <div className="w-full max-w-sm rounded-2xl border border-stone-200 bg-white p-6 text-center shadow-[0_20px_48px_-8px_rgba(24,24,27,0.12)]">
-        <h1 className="text-lg font-semibold tracking-tight text-zinc-900">{title}</h1>
-        <div className="mt-1.5 text-sm leading-relaxed text-zinc-500">{children}</div>
+      <div className="w-full max-w-sm rounded-2xl border border-[#e3e1ec] bg-white p-6 text-center shadow-[0_20px_48px_-8px_rgba(24,24,27,0.12)]">
+        <h1 className="text-lg font-semibold tracking-tight text-[#1a1b22]">{title}</h1>
+        <div className="mt-1.5 text-sm leading-relaxed text-[#47464b]">{children}</div>
       </div>
     </main>
   );
@@ -43,7 +43,10 @@ function AcceptInvitationView({ token }: { token: string }) {
   if (session.status === 'loading') {
     return (
       <Panel title="Checking your invitation">
-        <p role="status">Loading…</p>
+        <div role="status" aria-label="Checking your invitation" className="space-y-2 py-2">
+          <div aria-hidden="true" className="h-4 w-3/4 animate-pulse rounded bg-[#e8e7f1]" />
+          <div aria-hidden="true" className="h-10 w-full animate-pulse rounded-lg bg-[#e8e7f1]" />
+        </div>
       </Panel>
     );
   }
@@ -55,7 +58,7 @@ function AcceptInvitationView({ token }: { token: string }) {
         <p>Sign in to accept this workspace invitation.</p>
         <Link
           href={`/sign-in?next=${encodeURIComponent(next)}`}
-          className="mt-4 inline-flex h-10 items-center justify-center rounded-lg bg-zinc-900 px-4 text-sm font-medium text-white transition-colors hover:bg-zinc-800"
+          className="mt-4 inline-flex h-10 items-center justify-center rounded-lg bg-[#000000] px-4 text-sm font-medium text-white transition-colors hover:bg-[#1a1b22]"
         >
           Sign in to accept
         </Link>
@@ -70,7 +73,7 @@ function AcceptInvitationView({ token }: { token: string }) {
         <button
           type="button"
           onClick={() => window.location.reload()}
-          className="mt-4 inline-flex h-10 items-center justify-center rounded-lg bg-zinc-900 px-4 text-sm font-medium text-white transition-colors hover:bg-zinc-800"
+          className="mt-4 inline-flex h-10 items-center justify-center rounded-lg bg-[#000000] px-4 text-sm font-medium text-white transition-colors hover:bg-[#1a1b22]"
         >
           Try again
         </button>
@@ -87,7 +90,10 @@ function AcceptInvitationView({ token }: { token: string }) {
         return;
       }
       if (result.kind === 'unauthenticated') {
-        window.location.reload();
+        // Session died between page load and click: re-check in place so the
+        // view falls through to the sign-in prompt with the token preserved
+        // in ?next= (no full-page reload).
+        session.refresh();
         return;
       }
       if (result.kind === 'invalid') {
@@ -110,11 +116,11 @@ function AcceptInvitationView({ token }: { token: string }) {
     return (
       <Panel title="You’ve joined the workspace">
         <p>
-          Welcome to <span className="font-medium text-zinc-900">{state.workspaceName}</span>.
+          Welcome to <span className="font-medium text-[#1a1b22]">{state.workspaceName}</span>.
         </p>
         <Link
           href="/app"
-          className="mt-4 inline-flex h-10 items-center justify-center rounded-lg bg-zinc-900 px-4 text-sm font-medium text-white transition-colors hover:bg-zinc-800"
+          className="mt-4 inline-flex h-10 items-center justify-center rounded-lg bg-[#000000] px-4 text-sm font-medium text-white transition-colors hover:bg-[#1a1b22]"
         >
           Open workspace
         </Link>
@@ -148,7 +154,7 @@ function AcceptInvitationView({ token }: { token: string }) {
         <button
           type="button"
           onClick={() => setState({ status: 'idle' })}
-          className="mt-4 inline-flex h-10 items-center justify-center rounded-lg bg-zinc-900 px-4 text-sm font-medium text-white transition-colors hover:bg-zinc-800"
+          className="mt-4 inline-flex h-10 items-center justify-center rounded-lg bg-[#000000] px-4 text-sm font-medium text-white transition-colors hover:bg-[#1a1b22]"
         >
           Try again
         </button>
@@ -164,7 +170,7 @@ function AcceptInvitationView({ token }: { token: string }) {
         type="button"
         disabled={accepting}
         onClick={() => void handleAccept()}
-        className="mt-4 inline-flex h-10 items-center justify-center rounded-lg bg-zinc-900 px-4 text-sm font-medium text-white transition-colors hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
+        className="mt-4 inline-flex h-10 items-center justify-center rounded-lg bg-[#000000] px-4 text-sm font-medium text-white transition-colors hover:bg-[#1a1b22] disabled:cursor-not-allowed disabled:opacity-60"
       >
         {accepting ? 'Accepting…' : 'Accept invitation'}
       </button>
@@ -191,7 +197,10 @@ export default function AcceptInvitationPage() {
     <Suspense
       fallback={
         <Panel title="Checking your invitation">
-          <p role="status">Loading…</p>
+          <div role="status" aria-label="Checking your invitation" className="space-y-2 py-2">
+            <div aria-hidden="true" className="h-4 w-3/4 animate-pulse rounded bg-[#e8e7f1]" />
+            <div aria-hidden="true" className="h-10 w-full animate-pulse rounded-lg bg-[#e8e7f1]" />
+          </div>
         </Panel>
       }
     >

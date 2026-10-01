@@ -2,9 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { canUpdateChannel } from './authorization';
 import {
   createChannelSchema,
+  markChannelReadSchema,
   MAX_CHANNEL_DESCRIPTION_LENGTH,
   MAX_CHANNEL_NAME_LENGTH,
+  MAX_CHANNEL_TOPIC_LENGTH,
   updateChannelSchema,
+  updateChannelUserStateSchema,
 } from './validation';
 
 describe('channel validation', () => {
@@ -62,6 +65,62 @@ describe('channel validation', () => {
     expect(cleared.success).toBe(true);
     expect(updateChannelSchema.safeParse({}).success).toBe(false);
     expect(updateChannelSchema.safeParse({ name: 'x', slug: 'y' }).success).toBe(false);
+  });
+
+  it('accepts optional topic on create and update, and rejects overlong topics', () => {
+    const created = createChannelSchema.safeParse({
+      name: 'engineering',
+      topic: 'Ship the audit',
+    });
+    expect(created.success).toBe(true);
+    if (created.success) {
+      expect(created.data.topic).toBe('Ship the audit');
+    }
+
+    const updated = updateChannelSchema.safeParse({ topic: null });
+    expect(updated.success).toBe(true);
+
+    expect(
+      createChannelSchema.safeParse({
+        name: 'engineering',
+        topic: 'a'.repeat(MAX_CHANNEL_TOPIC_LENGTH + 1),
+      }).success,
+    ).toBe(false);
+    expect(
+      updateChannelSchema.safeParse({ topic: 'a'.repeat(MAX_CHANNEL_TOPIC_LENGTH + 1) }).success,
+    ).toBe(false);
+  });
+});
+
+describe('channel user-state validation', () => {
+  it('accepts star and mute patches', () => {
+    expect(updateChannelUserStateSchema.safeParse({ isStarred: true }).success).toBe(true);
+    expect(updateChannelUserStateSchema.safeParse({ isMuted: false }).success).toBe(true);
+    expect(
+      updateChannelUserStateSchema.safeParse({ isStarred: true, isMuted: true }).success,
+    ).toBe(true);
+  });
+
+  it('requires at least one flag and rejects non-booleans / unknown fields', () => {
+    expect(updateChannelUserStateSchema.safeParse({}).success).toBe(false);
+    expect(updateChannelUserStateSchema.safeParse({ isStarred: 'yes' }).success).toBe(false);
+    expect(updateChannelUserStateSchema.safeParse({ unreadCount: 3 }).success).toBe(false);
+    expect(
+      updateChannelUserStateSchema.safeParse({ isStarred: true, lastReadMessageId: 'm' }).success,
+    ).toBe(false);
+  });
+});
+
+describe('mark channel read validation', () => {
+  it('accepts an empty body and an optional message id', () => {
+    expect(markChannelReadSchema.safeParse({}).success).toBe(true);
+    expect(markChannelReadSchema.safeParse({ lastReadMessageId: 'msg-1' }).success).toBe(true);
+  });
+
+  it('rejects blank or non-string message ids and unknown fields', () => {
+    expect(markChannelReadSchema.safeParse({ lastReadMessageId: '' }).success).toBe(false);
+    expect(markChannelReadSchema.safeParse({ lastReadMessageId: 42 }).success).toBe(false);
+    expect(markChannelReadSchema.safeParse({ userId: 'attacker' }).success).toBe(false);
   });
 });
 

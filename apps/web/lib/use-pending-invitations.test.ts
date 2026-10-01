@@ -41,17 +41,13 @@ describe('usePendingInvitations', () => {
     expect(fetchPendingMock).toHaveBeenCalledWith('http://localhost:4000', 'ws-1');
   });
 
-  it('merges created invitations and retries failures', async () => {
+  it('retries failures', async () => {
     fetchPendingMock.mockResolvedValue({ ok: true, invitations: [] });
     const { result } = renderHook(() => usePendingInvitations('ws-1'));
 
     await waitFor(() => {
       expect(result.current.state.status).toBe('ready');
     });
-    act(() => {
-      result.current.addInvitation(INVITE);
-    });
-    expect(result.current.state).toEqual({ status: 'ready', invitations: [INVITE] });
 
     fetchPendingMock.mockResolvedValue({ ok: false, unauthenticated: false });
     act(() => {

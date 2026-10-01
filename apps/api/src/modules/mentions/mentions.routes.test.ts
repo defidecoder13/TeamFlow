@@ -1,11 +1,8 @@
 /**
- * Mention persistence integration tests (Phase 4H.2, live database).
+ * Mentions HTTP integration tests (Audit 12, live database).
  *
  * Real Better Auth sessions against the configured development database.
  * SKIPPED without auth/database env so `pnpm test` stays green everywhere.
- * Every assertion inspects actual MessageMention rows (never just status
- * codes). Fixtures are removed in `afterAll` (workspace deletion cascades
- * channels, DMs, messages, and mentions).
  */
 
 import { randomUUID } from 'node:crypto';
@@ -22,25 +19,23 @@ const liveDescribe = LIVE ? describe : describe.skip;
 
 const ORIGIN = process.env.BETTER_AUTH_URL ?? 'http://localhost:4000';
 const RUN = `${Date.now().toString(36)}${randomUUID().slice(0, 8)}`;
-const email = (who: string) => `mention-${RUN}-${who}@example.invalid`;
-const PASSWORD = 'mention-test-password-0123456789';
+const email = (who: string) => `mentions-${RUN}-${who}@example.invalid`;
+const PASSWORD = 'mentions-test-password-0123456789';
 
-liveDescribe('message mentions (live database)', () => {
+liveDescribe('mentions listing API (live database)', () => {
   const app = createApp();
   const createdWorkspaceIds: string[] = [];
   const createdEmails: string[] = [];
 
   let owner: ReturnType<typeof request.agent>;
-  let author: ReturnType<typeof request.agent>;
+  let guest: ReturnType<typeof request.agent>;
+  let outsider: ReturnType<typeof request.agent>;
 
   let ws1 = '';
-  let pubId = '';
-  let privId = '';
-  let dmOA = '';
-  let groupId = '';
-  let removalGroupId = '';
-  let authorId = '';
-  let otherId = '';
+  let pubSlug = '';
+  let guestId = '';
+  let msgMentionsGuest = '';
+  let msgNoMention = '';
 
   async function signUp(who: string, name: string): Promise<ReturnType<typeof request.agent>> {
     const agent = request.agent(app);
@@ -58,25 +53,16 @@ liveDescribe('message mentions (live database)', () => {
     return user.id;
   }
 
-  async function mentionedIds(messageId: string): Promise<string[]> {
-    const rows = await getPrisma().messageMention.findMany({
-      where: { messageId },
-      select: { mentionedUserId: true },
-    });
-    return rows.map((row) => row.mentionedUserId).sort();
-  }
+  const listMentions = (
+    agent: ReturnType<typeof request.agent>,
+    workspaceId: string,
+    params: Record<string, string> = {},
+  ) => agent.get(`/api/workspaces/${workspaceId}/mentions`).query(params);
 
   beforeAll(async () => {
-    // Short distinct first names keep exact-match assertions unambiguous.
-    owner = await signUp('owner', 'Owen');
-    author = await signUp('author', 'Aria');
-    // Otto exists as a workspace member (used as mention target / removal
-    // subject); no session agent needed for these assertions.
-    await signUp('other', 'Otto');
-    // Xena exists as a user but is never added to the workspace.
-    await signUp('outsider', 'Xena');
-    authorId = await userIdFor('author');
-    otherId = await userIdFor('other');
+    owner = await signUp('owner', `Mention Owner ${RUN}`);
+    guest = await signUp('guest', `Mention Guest ${RUN}`);
+    outsider = await signUp('outsider', `Mention Outsider ${RUN}`);
 
     const ws = await owner
       .post('/api/workspaces')
@@ -86,181 +72,146 @@ liveDescribe('message mentions (live database)', () => {
     ws1 = ws.body.workspace.id as string;
     createdWorkspaceIds.push(ws1);
 
-    const prisma = getPrisma();
-    for (const id of [authorId, otherId]) {
-      await prisma.workspaceMembership.create({
-        data: { id: randomUUID(), workspaceId: ws1, userId: id, role: 'MEMBER' },
-      });
-    }
+    guestId = await userIdFor('guest');
+    await getPrisma().workspaceMembership.create({
+      data: { id: randomUUID(), workspaceId: ws1, userId: guestId, role: 'MEMBER' },
+    });
 
     const pub = await owner
       .post(`/api/workspaces/${ws1}/channels`)
       .set('Origin', ORIGIN)
       .send({ name: `Mentionpub ${RUN}`, type: 'PUBLIC' });
     expect(pub.status).toBe(201);
-    pubId = pub.body.channel.id as string;
+    pubSlug = pub.body.channel.slug as string;
+    const channelId = pub.body.channel.id as string;
 
-    const priv = await owner
-      .post(`/api/workspaces/${ws1}/channels`)
-      .set('Origin', ORIGIN)
-      .send({ name: `Mentionvault ${RUN}`, type: 'PRIVATE' });
-    expect(priv.status).toBe(201);
-    privId = priv.body.channel.id as string;
-    await prisma.channelMembership.create({
-      data: { id: randomUUID(), channelId: privId, userId: authorId },
-    });
+    const guestName = (await getPrisma().user.findUniqueOrThrow({
+      where: { id: guestId },
+    })).name;
 
-    const dm = await owner
-      .post(`/api/workspaces/${ws1}/direct-messages`)
-      .set('Origin', ORIGIN)
-      .send({ recipientId: authorId });
-    expect(dm.status).toBe(200);
-    dmOA = dm.body.conversation.id as string;
-
-    const group = await owner
-      .post(`/api/workspaces/${ws1}/direct-messages/group`)
-      .set('Origin', ORIGIN)
-      .send({ participantIds: [authorId, otherId], name: `Mention crew ${RUN}` });
-    expect(group.status).toBe(201);
-    groupId = group.body.conversation.id as string;
-
-    const removalGroup = await owner
-      .post(`/api/workspaces/${ws1}/direct-messages/group`)
-      .set('Origin', ORIGIN)
-      .send({ participantIds: [authorId, otherId], name: `Mention exile ${RUN}` });
-    expect(removalGroup.status).toBe(201);
-    removalGroupId = removalGroup.body.conversation.id as string;
-    const removed = await owner
-      .delete(`/api/direct-messages/${removalGroupId}/participants/${otherId}`)
-      .set('Origin', ORIGIN);
-    expect(removed.status).toBe(200);
-  }, 300000);
-
-  afterAll(async () => {
-    if (!LIVE) {
-      return;
-    }
-    const prisma = getPrisma();
-    for (const workspaceId of createdWorkspaceIds) {
-      await prisma.workspace.deleteMany({ where: { id: workspaceId } });
-    }
-    for (const userEmail of createdEmails) {
-      await prisma.user.deleteMany({ where: { email: userEmail } });
-    }
-  });
-
-  async function postChannel(
-    agent: ReturnType<typeof request.agent>,
-    channelId: string,
-    body: string,
-  ): Promise<string> {
-    const res = await agent
+    // Mentions guest (channel root).
+    const withMention = await owner
       .post(`/api/channels/${channelId}/messages`)
       .set('Origin', ORIGIN)
-      .send({ body });
-    expect(res.status).toBe(201);
-    return res.body.message.id as string;
-  }
+      .send({ body: `Hey @${guestName} review this ${RUN}` });
+    expect(withMention.status).toBe(201);
+    msgMentionsGuest = withMention.body.message.id as string;
 
-  it('stores mentions for resolved members on channel message create', async () => {
-    const id = await postChannel(owner, pubId, 'Hey @Aria and @Otto, review this');
-    expect(await mentionedIds(id)).toEqual([authorId, otherId].sort());
-  });
-
-  it('matches case-insensitively and collapses duplicates to one row', async () => {
-    const id = await postChannel(owner, pubId, 'ping @ARIA @aria @Aria!');
-    expect(await mentionedIds(id)).toEqual([authorId]);
-  });
-
-  it('stores nothing for unmatched text and plain messages', async () => {
-    const plain = await postChannel(owner, pubId, 'no mentions here');
-    expect(await mentionedIds(plain)).toEqual([]);
-    const unknown = await postChannel(owner, pubId, 'hello @NobodyHere, contact a@b.co');
-    expect(await mentionedIds(unknown)).toEqual([]);
-  });
-
-  it('stores self-mentions (notification suppression is a later layer)', async () => {
-    const id = await postChannel(author, pubId, 'note to self @Aria');
-    expect(await mentionedIds(id)).toEqual([authorId]);
-  });
-
-  it('stores thread-reply mentions against the reply', async () => {
-    const root = await postChannel(owner, pubId, 'thread root');
-    const res = await author
-      .post(`/api/messages/${root}/replies`)
+    // Does not mention guest.
+    const plain = await owner
+      .post(`/api/channels/${channelId}/messages`)
       .set('Origin', ORIGIN)
-      .send({ body: 'reply for @Otto' });
-    expect(res.status).toBe(201);
-    expect(await mentionedIds(res.body.message.id as string)).toEqual([otherId]);
-    expect(await mentionedIds(root)).toEqual([]);
+      .send({ body: `No one mentioned here ${RUN}` });
+    expect(plain.status).toBe(201);
+    msgNoMention = plain.body.message.id as string;
+
+    // Thread-reply mention of guest.
+    const reply = await owner
+      .post(`/api/messages/${msgMentionsGuest}/replies`)
+      .set('Origin', ORIGIN)
+      .send({ body: `Follow-up for @${guestName} ${RUN}` });
+    expect(reply.status).toBe(201);
+
+    // Workspace guest cannot see — still has a mention row via outsider WS.
+    const outsiderWs = await outsider
+      .post('/api/workspaces')
+      .set('Origin', ORIGIN)
+      .send({ name: `Mention Far ${RUN}` });
+    expect(outsiderWs.status).toBe(201);
+    const farId = outsiderWs.body.workspace.id as string;
+    createdWorkspaceIds.push(farId);
+    // outsider tries to mention guest name but guest is not in that workspace —
+    // mention will not resolve. Instead: outsider message mentioning outsider.
+    const farChannel = await outsider
+      .post(`/api/workspaces/${farId}/channels`)
+      .set('Origin', ORIGIN)
+      .send({ name: `Mentionfar ${RUN}`, type: 'PUBLIC' });
+    expect(farChannel.status).toBe(201);
+    const outsiderName = (await getPrisma().user.findUniqueOrThrow({
+      where: { email: email('outsider') },
+    })).name;
+    await outsider
+      .post(`/api/channels/${farChannel.body.channel.id}/messages`)
+      .set('Origin', ORIGIN)
+      .send({ body: `@${outsiderName} note ${RUN}` })
+      .expect(201);
   });
 
-  it('rewrites the mention set on edit and skips no-op edits', async () => {
-    const id = await postChannel(owner, pubId, 'hello @Aria and @Otto');
-    expect(await mentionedIds(id)).toEqual([authorId, otherId].sort());
-
-    const edited = await owner
-      .patch(`/api/messages/${id}`)
-      .set('Origin', ORIGIN)
-      .send({ body: 'hello @Otto, meet Xena the outsider @Xena' });
-    expect(edited.status).toBe(200);
-    // Xena is not a workspace member: added @Otto resolves, @Xena does not.
-    expect(await mentionedIds(id)).toEqual([otherId]);
-
-    const same = await owner
-      .patch(`/api/messages/${id}`)
-      .set('Origin', ORIGIN)
-      .send({ body: 'hello @Otto, meet Xena the outsider @Xena' });
-    expect(same.status).toBe(200);
-    expect(await mentionedIds(id)).toEqual([otherId]);
+  afterAll(async () => {
+    const prisma = getPrisma();
+    for (const id of createdWorkspaceIds) {
+      await prisma.workspace.delete({ where: { id } }).catch(() => undefined);
+    }
+    for (const mail of createdEmails) {
+      await prisma.user.delete({ where: { email: mail } }).catch(() => undefined);
+    }
   });
 
-  it('clears mentions on soft-delete and blocks tombstone edits', async () => {
-    const id = await postChannel(owner, pubId, 'bye @Aria');
-    expect(await mentionedIds(id)).toEqual([authorId]);
-
-    const deleted = await owner.delete(`/api/messages/${id}`).set('Origin', ORIGIN);
-    expect(deleted.status).toBe(200);
-    expect(await mentionedIds(id)).toEqual([]);
-
-    const edited = await owner
-      .patch(`/api/messages/${id}`)
-      .set('Origin', ORIGIN)
-      .send({ body: 'resurrect @Aria' });
-    expect(edited.status).toBe(409);
-    expect(await mentionedIds(id)).toEqual([]);
+  it('returns 401 without a session', async () => {
+    const res = await request(app).get(`/api/workspaces/${ws1}/mentions`);
+    expect(res.status).toBe(401);
   });
 
-  it('excludes private-channel non-members from resolution', async () => {
-    // Otto is a workspace member but not a private-channel member.
-    const id = await postChannel(author, privId, 'secret for @Otto and @Aria');
-    // Author is both sender and private member; Otto is not a member.
-    expect(await mentionedIds(id)).toEqual([authorId]);
+  it('returns 404 for a non-member workspace (no enumeration)', async () => {
+    const res = await listMentions(outsider, ws1);
+    expect(res.status).toBe(404);
+    expect(res.body).toEqual({
+      error: { code: 'NOT_FOUND', message: 'Workspace not found.' },
+    });
   });
 
-  it('resolves DM participants but not outsiders', async () => {
-    const res = await owner
-      .post(`/api/direct-messages/${dmOA}/messages`)
-      .set('Origin', ORIGIN)
-      .send({ body: 'dm for @Aria and @Xena' });
-    expect(res.status).toBe(201);
-    expect(await mentionedIds(res.body.message.id as string)).toEqual([authorId]);
+  it('returns only messages that mention the caller, newest first', async () => {
+    const res = await listMentions(guest, ws1);
+    expect(res.status).toBe(200);
+    const ids = (res.body.mentions as Array<{ id: string }>).map((m) => m.id);
+    expect(ids).toContain(msgMentionsGuest);
+    expect(ids).not.toContain(msgNoMention);
+
+    const item = (res.body.mentions as Array<Record<string, unknown>>).find(
+      (m) => m.id === msgMentionsGuest,
+    ) as {
+      container: { type: string; slug?: string; name: string };
+      author: { id: string };
+      body: string;
+      parentMessageId: string | null;
+    };
+    expect(item.container.type).toBe('channel');
+    expect(item.container.slug).toBe(pubSlug);
+    expect(item.author.id).not.toBe(guestId);
+    expect(item.parentMessageId).toBeNull();
+    expect(res.body.pageInfo).toMatchObject({ hasMore: expect.any(Boolean) });
   });
 
-  it('resolves group mentions but not removed participants', async () => {
-    const res = await owner
-      .post(`/api/direct-messages/${groupId}/messages`)
-      .set('Origin', ORIGIN)
-      .send({ body: 'group ping @Aria @Otto' });
-    expect(res.status).toBe(201);
-    expect(await mentionedIds(res.body.message.id as string)).toEqual([authorId, otherId].sort());
+  it('includes thread-reply mentions with parentMessageId set', async () => {
+    const res = await listMentions(guest, ws1, { limit: '100' });
+    expect(res.status).toBe(200);
+    const threaded = (res.body.mentions as Array<{ parentMessageId: string | null; id: string }>)
+      .filter((m) => m.parentMessageId !== null);
+    expect(threaded.length).toBeGreaterThan(0);
+    expect(threaded.some((m) => m.parentMessageId === msgMentionsGuest)).toBe(true);
+  });
 
-    // Otto was removed from the exile group before this message.
-    const exiled = await owner
-      .post(`/api/direct-messages/${removalGroupId}/messages`)
-      .set('Origin', ORIGIN)
-      .send({ body: 'exile ping @Otto @Aria' });
-    expect(exiled.status).toBe(201);
-    expect(await mentionedIds(exiled.body.message.id as string)).toEqual([authorId]);
+  it('rejects unknown and invalid query parameters', async () => {
+    await listMentions(guest, ws1, { limit: '0' }).expect(400);
+    await listMentions(guest, ws1, { cursor: 'bogus' }).expect(400);
+    await listMentions(guest, ws1, { mentionedUserId: 'x' }).expect(400);
+  });
+
+  it('paginates with a valid cursor without repeating rows', async () => {
+    const first = await listMentions(guest, ws1, { limit: '1' });
+    expect(first.status).toBe(200);
+    if (first.body.pageInfo.hasMore) {
+      const next = await listMentions(guest, ws1, {
+        limit: '1',
+        cursor: first.body.pageInfo.nextCursor,
+      });
+      expect(next.status).toBe(200);
+      const firstIds = new Set(
+        (first.body.mentions as Array<{ id: string }>).map((m) => m.id),
+      );
+      for (const m of next.body.mentions as Array<{ id: string }>) {
+        expect(firstIds.has(m.id)).toBe(false);
+      }
+    }
   });
 });

@@ -3,7 +3,9 @@ import {
   createChannel,
   fetchChannel,
   fetchChannels,
+  markChannelRead,
   updateChannel,
+  updateChannelUserState,
   type Channel,
 } from './channels';
 
@@ -102,7 +104,7 @@ describe('fetchChannel', () => {
 });
 
 describe('createChannel', () => {
-  it('sends only name, description, and type', async () => {
+  it('sends only supported fields including optional topic', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       status: 201,
       ok: true,
@@ -114,6 +116,7 @@ describe('createChannel', () => {
       createChannel(apiBase, 'ws-1', {
         name: 'Engineering',
         description: 'Build things',
+        topic: 'Ship it',
         type: 'PUBLIC',
       }),
     ).resolves.toEqual({ ok: true, channel: ENGINEERING });
@@ -122,7 +125,7 @@ describe('createChannel', () => {
       string,
       unknown
     >;
-    expect(Object.keys(sent).sort()).toEqual(['description', 'name', 'type']);
+    expect(Object.keys(sent).sort()).toEqual(['description', 'name', 'topic', 'type']);
     vi.unstubAllGlobals();
   });
 
@@ -191,6 +194,75 @@ describe('updateChannel', () => {
     await expect(updateChannel(apiBase, 'ws-1', 'engineering', { name: 'x' })).resolves.toEqual({
       ok: false,
       kind: 'forbidden',
+    });
+    vi.unstubAllGlobals();
+  });
+});
+
+describe('updateChannelUserState', () => {
+  it('patches star/mute and maps outcomes', async () => {
+    const userState = {
+      unreadCount: 2,
+      hasUnread: true,
+      lastReadMessageId: 'm-1',
+      isStarred: true,
+      isMuted: false,
+    };
+    const fetchMock = vi.fn().mockResolvedValue({
+      status: 200,
+      ok: true,
+      json: async () => ({ userState }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(
+      updateChannelUserState(apiBase, 'ws-1', 'engineering', { isStarred: true }),
+    ).resolves.toEqual({ ok: true, userState });
+    expect(fetchMock.mock.calls[0]?.[0]).toContain(
+      '/api/workspaces/ws-1/channels/engineering/user-state',
+    );
+    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ method: 'PATCH' });
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ status: 404, ok: false, json: async () => ({}) }),
+    );
+    await expect(
+      updateChannelUserState(apiBase, 'ws-1', 'nope', { isMuted: true }),
+    ).resolves.toEqual({ ok: false, kind: 'notFound' });
+    vi.unstubAllGlobals();
+  });
+});
+
+describe('markChannelRead', () => {
+  it('posts the optional message id and maps outcomes', async () => {
+    const userState = {
+      unreadCount: 0,
+      hasUnread: false,
+      lastReadMessageId: 'm-9',
+      isStarred: false,
+      isMuted: false,
+    };
+    const fetchMock = vi.fn().mockResolvedValue({
+      status: 200,
+      ok: true,
+      json: async () => ({ userState }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(
+      markChannelRead(apiBase, 'ws-1', 'engineering', { lastReadMessageId: 'm-9' }),
+    ).resolves.toEqual({ ok: true, userState });
+    expect(fetchMock.mock.calls[0]?.[0]).toContain('/api/workspaces/ws-1/channels/engineering/read');
+    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ method: 'POST' });
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ status: 401, ok: false, json: async () => ({}) }),
+    );
+    await expect(markChannelRead(apiBase, 'ws-1', 'engineering')).resolves.toEqual({
+      ok: false,
+      kind: 'unauthenticated',
     });
     vi.unstubAllGlobals();
   });

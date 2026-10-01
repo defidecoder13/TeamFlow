@@ -15,6 +15,10 @@ import { requireAuth, toSafeUser } from './session';
 
 const MAX_USER_NAME_LENGTH = 100;
 const MAX_IMAGE_URL_LENGTH = 2048;
+/** Cap for inline avatar data URLs (base64). Client downscales to ≤512px JPEG. */
+export const MAX_DATA_IMAGE_LENGTH = 400_000;
+
+const DATA_IMAGE_PATTERN = /^data:image\/(jpeg|jpg|png|webp|gif);base64,[A-Za-z0-9+/]+={0,2}$/i;
 
 const userNameSchema = z
   .string({ error: 'Enter a display name.' })
@@ -22,11 +26,32 @@ const userNameSchema = z
   .min(1, 'Enter a display name.')
   .max(MAX_USER_NAME_LENGTH, `Use a shorter name (${MAX_USER_NAME_LENGTH} characters or fewer).`);
 
-const imageUrlSchema = z
+const httpImageUrlSchema = z
   .string({ error: 'Enter a valid image URL.' })
   .trim()
   .url('Enter a valid image URL.')
-  .max(MAX_IMAGE_URL_LENGTH, `Image URL must be ${MAX_IMAGE_URL_LENGTH} characters or fewer.`);
+  .max(MAX_IMAGE_URL_LENGTH, `Image URL must be ${MAX_IMAGE_URL_LENGTH} characters or fewer.`)
+  .refine((value) => {
+    try {
+      const protocol = new URL(value).protocol;
+      return protocol === 'http:' || protocol === 'https:';
+    } catch {
+      return false;
+    }
+  }, 'Enter a valid image URL.');
+
+const dataImageSchema = z
+  .string({ error: 'Enter a valid image.' })
+  .max(MAX_DATA_IMAGE_LENGTH, 'Profile photo is too large.')
+  .refine((value) => DATA_IMAGE_PATTERN.test(value), 'Enter a valid image.')
+  .refine((value) => {
+    const comma = value.indexOf(',');
+    if (comma === -1) return false;
+    const base64 = value.slice(comma + 1);
+    return base64.length % 4 === 0;
+  }, 'Enter a valid image.');
+
+const imageUrlSchema = z.union([httpImageUrlSchema, dataImageSchema]);
 
 export const updateMeSchema = z
   .object({

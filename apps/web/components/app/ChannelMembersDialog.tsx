@@ -9,11 +9,13 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { Dialog } from './dialog';
 import type { Channel } from '../../lib/channels';
 import type { ChannelMember } from '../../lib/channels';
 import { useChannelMembers } from '../../lib/use-channel-members';
 import { useWorkspaceMembers } from '../../lib/use-workspace-members';
 import { UserAvatar } from './UserAvatar';
+import { CloseIcon } from './icons';
 
 interface ChannelMembersDialogProps {
   workspaceId: string;
@@ -30,19 +32,16 @@ export function ChannelMembersDialog({
   onClose,
   onUnauthenticated,
 }: ChannelMembersDialogProps) {
-  const { state, addMember, removeMember } = useChannelMembers(workspaceId, channel.slug, true);
-  const { state: wsMembersState } = useWorkspaceMembers(workspaceId);
+  const {
+    state,
+    addMember,
+    removeMember,
+    retry: retryChannelMembers,
+  } = useChannelMembers(workspaceId, channel.slug, true);
+  const { state: wsMembersState, retry: retryWorkspaceMembers } = useWorkspaceMembers(workspaceId);
   const [search, setSearch] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState<string | null>(null);
-
-  useEffect(() => {
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape' && !submitting) onClose();
-    }
-    document.addEventListener('keydown', onKeyDown);
-    return () => document.removeEventListener('keydown', onKeyDown);
-  }, [onClose, submitting]);
 
   useEffect(() => {
     if (state.status === 'unauthenticated') onUnauthenticated?.();
@@ -81,27 +80,23 @@ export function ChannelMembersDialog({
   }
 
   return (
-    <div
-      role="presentation"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/40 p-4 backdrop-blur-[2px]"
-      onClick={() => !submitting && onClose()}
+    <Dialog
+      open
+      onClose={onClose}
+      labelledBy="channel-members-title"
+      size="md"
+      dismissable={!submitting}
     >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="channel-members-title"
-        onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-md rounded-xl border border-stone-200 bg-white p-6 shadow-[0_20px_48px_-8px_rgba(24,24,27,0.12)]"
-      >
+      <div>
         <div className="flex items-start justify-between">
           <div>
             <h2
               id="channel-members-title"
-              className="text-base font-semibold text-zinc-900 truncate"
+              className="truncate text-[17px] font-semibold text-[#171A21]"
             >
               #{channel.name} — Members
             </h2>
-            <p className="mt-1 text-xs text-stone-500">
+            <p className="mt-1 text-xs tabular-nums text-[#737782]">
               {state.status === 'ready'
                 ? `${members.length} member${members.length === 1 ? '' : 's'}`
                 : 'Private channel'}
@@ -112,43 +107,41 @@ export function ChannelMembersDialog({
             onClick={onClose}
             disabled={!!submitting}
             aria-label="Close dialog"
-            className="rounded-lg p-1 text-stone-400 hover:bg-stone-100 hover:text-stone-600 disabled:opacity-50"
+            className="touch-hit rounded-lg p-1.5 text-[#737782] transition-colors hover:bg-[#F1F0EE] hover:text-[#171A21] focus-visible:outline-2 focus-visible:outline-[#3157D5] disabled:opacity-50"
           >
-            <svg
-              className="h-5 w-5"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth="1.5"
-              stroke="currentColor"
-              aria-hidden="true"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            <CloseIcon className="h-4 w-4" />
           </button>
         </div>
 
         <div className="mt-4 space-y-4">
           {error && (
-            <div className="rounded-md bg-red-50 px-3 py-2 text-xs text-red-700" role="alert">
+            <div className="rounded-[8px] bg-rose-50 border border-rose-200 px-3 py-2 text-xs text-[#C94A45]" role="alert">
               {error}
             </div>
           )}
 
-          {state.status === 'loading' && <p className="text-xs text-stone-500">Loading members…</p>}
+          {state.status === 'loading' && <p className="text-xs text-[#737782]">Loading members…</p>}
           {state.status === 'error' && (
-            <p className="text-xs text-red-600">
-              {state.status === 'error' ? 'Could not load members.' : ''}
-            </p>
+            <div className="space-y-1">
+              <p className="text-xs text-[#C94A45]">Could not load members.</p>
+              <button
+                type="button"
+                onClick={retryChannelMembers}
+                className="rounded text-xs font-medium text-[#171A21] underline decoration-[#E4E2DF] underline-offset-4 transition-colors hover:decoration-[#171A21] focus-visible:outline-2 focus-visible:outline-[#3157D5]"
+              >
+                Try again
+              </button>
+            </div>
           )}
           {state.status === 'notFound' && (
-            <p className="text-xs text-red-600">Channel not found.</p>
+            <p className="text-xs text-[#C94A45]">Channel not found.</p>
           )}
 
           {canManage && (
-            <div className="rounded-lg border border-stone-200 bg-stone-50 p-3 space-y-2">
+            <div className="rounded-[10px] border border-[#E4E2DF] bg-[#FAF9F8] p-3.5 space-y-2">
               <label
                 htmlFor="channel-member-search"
-                className="block text-xs font-medium text-stone-700"
+                className="block text-xs font-medium text-[#171A21]"
               >
                 Add workspace member
               </label>
@@ -158,40 +151,57 @@ export function ChannelMembersDialog({
                 placeholder="Search members to add…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full rounded-md border border-stone-300 px-2.5 py-1 text-xs text-zinc-900 placeholder:text-stone-400 focus:border-zinc-900 focus:outline-none"
+                className="w-full rounded-[6px] border border-[#E4E2DF] bg-white px-2.5 py-1.5 text-xs text-[#171A21] outline-none placeholder:text-[#737782] focus:border-[#3157D5] focus-visible:ring-1 focus-visible:ring-[#3157D5]"
               />
-              <div className="max-h-36 overflow-y-auto rounded border border-stone-200 bg-white">
-                {wsMembersState.status !== 'ready' ? (
-                  <p className="p-2 text-center text-xs text-stone-500">
+              <div className="max-h-36 overflow-y-auto rounded-[6px] border border-[#E4E2DF] bg-white">
+                {wsMembersState.status === 'error' ? (
+                  <div className="space-y-1 p-2 text-center">
+                    <p className="text-xs text-[#C94A45]">Could not load workspace members.</p>
+                    <button
+                      type="button"
+                      onClick={retryWorkspaceMembers}
+                      className="rounded text-xs font-medium text-[#171A21] underline decoration-[#E4E2DF] underline-offset-4 transition-colors hover:decoration-[#171A21] focus-visible:outline-2 focus-visible:outline-[#3157D5]"
+                    >
+                      Try again
+                    </button>
+                  </div>
+                ) : wsMembersState.status !== 'ready' ? (
+                  <p className="p-2 text-center text-xs text-[#737782]">
                     Loading workspace members…
                   </p>
                 ) : filtered.length === 0 ? (
-                  <p className="p-2 text-center text-xs text-stone-500">
+                  <p className="p-2 text-center text-xs text-[#737782]">
                     {available.length === 0
                       ? 'All workspace members are already in this channel.'
                       : 'No matching members found.'}
                   </p>
                 ) : (
-                  <ul className="divide-y divide-stone-100">
+                  <ul className="divide-y divide-[#E4E2DF]">
                     {filtered.map((m) => (
                       <li
                         key={m.id}
-                        className="flex items-center justify-between p-2 hover:bg-stone-50"
+                        className="flex items-center justify-between p-2 hover:bg-[#FAF9F8]"
                       >
-                        <div className="min-w-0 flex-1 mr-2 flex items-center gap-2">
+                        <div className="mr-2 flex min-w-0 flex-1 items-center gap-2">
                           <UserAvatar name={m.user.name} image={m.user.image} size="sm" />
                           <div className="min-w-0">
-                            <p className="text-xs font-medium text-zinc-900 truncate">
+                            <p
+                              className="truncate text-xs font-medium text-[#171A21]"
+                              title={m.user.name}
+                            >
                               {m.user.name}
                             </p>
-                            <p className="text-[10px] text-stone-500 truncate">{m.user.email}</p>
+                            <p className="truncate text-[11px] text-[#737782]" title={m.user.email}>
+                              {m.user.email}
+                            </p>
                           </div>
                         </div>
                         <button
                           type="button"
                           disabled={!!submitting}
                           onClick={() => void handleAdd(m.user.id)}
-                          className="rounded bg-zinc-900 px-2 py-0.5 text-xs font-medium text-white hover:bg-zinc-800 disabled:opacity-50"
+                          aria-busy={submitting === m.user.id}
+                          className="rounded-[6px] bg-[#2E3440] px-2.5 py-1 text-xs font-medium text-white transition-colors hover:bg-[#1E222A] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#3157D5] disabled:opacity-50"
                         >
                           {submitting === m.user.id ? '…' : 'Add'}
                         </button>
@@ -204,22 +214,30 @@ export function ChannelMembersDialog({
           )}
 
           <div>
-            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-stone-400">
+            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-[#737782]">
               Members
             </h3>
             {state.status === 'ready' && members.length === 0 ? (
-              <p className="text-xs text-stone-500">No members yet.</p>
+              <p className="text-xs text-[#737782]">No members yet.</p>
             ) : (
-              <ul className="max-h-56 divide-y divide-stone-100 overflow-y-auto rounded-lg border border-stone-100 bg-stone-50/50 p-1">
+              <ul className="max-h-56 divide-y divide-[#E4E2DF] overflow-y-auto rounded-[10px] border border-[#E4E2DF] bg-white">
                 {members.map((member: ChannelMember) => (
-                  <li key={member.id} className="flex items-center justify-between p-2">
+                  <li key={member.id} className="flex items-center justify-between p-2.5">
                     <div className="flex items-center gap-2.5 min-w-0 flex-1">
                       <UserAvatar name={member.user.name} image={member.user.image} size="sm" />
                       <div className="min-w-0 flex-1">
-                        <p className="text-xs font-medium text-zinc-900 truncate">
+                        <p
+                          className="truncate text-xs font-medium text-[#171A21]"
+                          title={member.user.name}
+                        >
                           {member.user.name}
                         </p>
-                        <p className="text-[10px] text-stone-500 truncate">{member.user.email}</p>
+                        <p
+                          className="truncate text-[11px] text-[#737782]"
+                          title={member.user.email}
+                        >
+                          {member.user.email}
+                        </p>
                       </div>
                     </div>
                     {canManage && (
@@ -228,22 +246,10 @@ export function ChannelMembersDialog({
                         disabled={!!submitting}
                         onClick={() => void handleRemove(member.userId)}
                         aria-label={`Remove ${member.user.name}`}
-                        className="rounded p-1 text-stone-400 hover:text-red-600 hover:bg-red-50 disabled:opacity-50"
+                        className="rounded p-1 text-[#737782] transition-colors hover:bg-rose-50 hover:text-[#C94A45] focus-visible:outline-2 focus-visible:outline-[#3157D5] disabled:opacity-50"
                         title="Remove from channel"
                       >
-                        <svg
-                          className="h-4 w-4"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          strokeWidth="1.5"
-                          stroke="currentColor"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            d="M6 18L18 6M6 6l12 12"
-                          />
-                        </svg>
+                        <CloseIcon className="h-4 w-4" />
                       </button>
                     )}
                   </li>
@@ -252,17 +258,17 @@ export function ChannelMembersDialog({
             )}
           </div>
 
-          <div className="flex justify-end">
+          <div className="flex justify-end pt-2 border-t border-[#E4E2DF]">
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg border border-stone-300 bg-white px-4 py-1.5 text-xs font-medium text-stone-700 hover:border-stone-400"
+              className="rounded-[8px] border border-[#E4E2DF] bg-white px-4 py-1.5 text-xs font-medium text-[#4F5360] transition-colors hover:bg-[#F1F0EE] hover:text-[#171A21] focus-visible:outline-2 focus-visible:outline-[#3157D5]"
             >
               Close
             </button>
           </div>
         </div>
       </div>
-    </div>
+    </Dialog>
   );
 }

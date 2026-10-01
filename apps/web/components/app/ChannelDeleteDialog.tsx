@@ -6,7 +6,8 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import { Dialog } from './dialog';
 import { getApiBaseUrl } from '../../lib/config';
 import { deleteChannel, type Channel } from '../../lib/channels';
 
@@ -28,6 +29,7 @@ export function ChannelDeleteDialog({
   const [confirm, setConfirm] = useState('');
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const cancelBtnRef = useRef<HTMLButtonElement>(null);
 
   const matches = confirm === channel.slug || confirm === channel.name;
 
@@ -74,32 +76,30 @@ export function ChannelDeleteDialog({
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/25 p-4"
-      onClick={onClose}
+    <Dialog
+      open
+      onClose={onClose}
+      labelledBy="delete-channel-title"
+      size="sm"
+      dismissable={!deleting}
+      initialFocusRef={cancelBtnRef}
     >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="delete-channel-title"
-        onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-sm rounded-xl border border-stone-200 bg-white p-6 shadow-[0_20px_48px_-8px_rgba(24,24,27,0.12)]"
-      >
+      <div>
         <h2
           id="delete-channel-title"
-          className="text-base font-semibold tracking-tight text-zinc-900"
+          className="text-[17px] font-semibold tracking-tight text-[#171A21]"
         >
           Delete #{channel.name}?
         </h2>
-        <p className="mt-1.5 text-sm leading-relaxed text-zinc-500">
+        <p className="mt-1 text-[13px] leading-relaxed text-[#737782]">
           This will permanently delete the channel and all its messages. This cannot be undone.
         </p>
         <div className="mt-4">
           <label
             htmlFor="confirm-channel-delete"
-            className="text-[13px] font-medium text-stone-700"
+            className="text-[13px] font-medium text-[#171A21]"
           >
-            Type <span className="font-semibold text-stone-900">{channel.slug}</span> to confirm
+            Type <span className="font-semibold text-[#171A21]">{channel.slug}</span> to confirm
           </label>
           <input
             id="confirm-channel-delete"
@@ -109,20 +109,21 @@ export function ChannelDeleteDialog({
             onChange={(e) => setConfirm(e.target.value)}
             placeholder={channel.slug}
             disabled={deleting}
-            className="mt-1.5 h-9 w-full rounded-md border border-stone-300 bg-white px-3 text-sm text-stone-900 outline-none placeholder:text-stone-400 focus:border-red-500 focus:ring-2 focus:ring-red-500/20 disabled:opacity-60"
+            className="mt-1.5 h-10 w-full rounded-[8px] border border-[#E4E2DF] bg-white px-3 text-sm text-[#171A21] outline-none placeholder:text-[#737782] focus:border-[#C94A45] focus-visible:ring-1 focus-visible:ring-[#C94A45] disabled:opacity-60"
           />
         </div>
         {error ? (
-          <p role="alert" className="mt-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+          <p role="alert" className="mt-3 rounded-[8px] bg-rose-50 border border-rose-200 px-3 py-2 text-xs text-[#C94A45]">
             {error}
           </p>
         ) : null}
-        <div className="mt-5 flex gap-2">
+        <div className="mt-5 flex gap-2 pt-2 border-t border-[#E4E2DF]">
           <button
+            ref={cancelBtnRef}
             type="button"
             onClick={onClose}
             disabled={deleting}
-            className="inline-flex h-9 flex-1 items-center justify-center rounded-lg border border-stone-300 bg-white px-4 text-sm font-medium text-stone-700 transition-colors hover:border-stone-400 disabled:opacity-50"
+            className="inline-flex h-[42px] flex-1 items-center justify-center rounded-lg border border-[#E4E2DF] bg-white px-4 text-sm font-medium text-[#4F5360] transition-colors hover:bg-[#F1F0EE] hover:text-[#171A21] focus-visible:outline-2 focus-visible:outline-[#3157D5] disabled:opacity-50"
           >
             Cancel
           </button>
@@ -130,12 +131,12 @@ export function ChannelDeleteDialog({
             type="button"
             onClick={() => void handleDelete()}
             disabled={!matches || deleting}
-            className="inline-flex h-9 flex-1 items-center justify-center rounded-lg bg-red-600 px-4 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex h-[42px] flex-1 items-center justify-center rounded-lg bg-[#C94A45] px-4 text-sm font-medium text-white transition-colors hover:bg-[#B33E3A] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#C94A45] disabled:cursor-not-allowed disabled:opacity-60"
           >
             {deleting ? 'Deleting…' : 'Delete channel'}
           </button>
         </div>
       </div>
-    </div>
+    </Dialog>
   );
 }

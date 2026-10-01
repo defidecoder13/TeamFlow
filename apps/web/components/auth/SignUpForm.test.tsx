@@ -1,16 +1,36 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SignUpForm } from './SignUpForm';
 
 const { signUpEmail } = vi.hoisted(() => ({ signUpEmail: vi.fn() }));
+const { replaceMock, pushMock } = vi.hoisted(() => ({ replaceMock: vi.fn(), pushMock: vi.fn() }));
+const { updateProfileMock } = vi.hoisted(() => ({ updateProfileMock: vi.fn() }));
 
 vi.mock('../../lib/auth-client', () => ({
   getAuthClient: () => ({ signUp: { email: signUpEmail } }),
 }));
 
+vi.mock('../../lib/profile', () => ({
+  updateProfile: updateProfileMock,
+  validateProfileImage: () => null,
+}));
+
+vi.mock('../../lib/config', () => ({
+  getApiBaseUrl: () => 'http://localhost:4000',
+}));
+
+// ProfileSetupStep imports ../../lib/config and ../../lib/profile (same modules).
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ replace: replaceMock, push: pushMock, refresh: vi.fn() }),
+}));
+
 beforeEach(() => {
   signUpEmail.mockReset();
+  replaceMock.mockReset();
+  pushMock.mockReset();
+  updateProfileMock.mockReset();
 });
 
 async function fillValidForm(user: ReturnType<typeof userEvent.setup>) {
@@ -82,7 +102,7 @@ describe('SignUpForm', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(/already exists/i);
   });
 
-  it('shows a success state linking to sign-in after account creation', async () => {
+  it('continues to profile setup after account creation', async () => {
     const user = userEvent.setup();
     signUpEmail.mockResolvedValue({ data: { user: { email: 'ada@example.com' } }, error: null });
     render(<SignUpForm />);
@@ -90,10 +110,32 @@ describe('SignUpForm', () => {
     await fillValidForm(user);
     await user.click(screen.getByRole('button', { name: /create account/i }));
 
-    expect(await screen.findByRole('status')).toHaveTextContent(/account created/i);
-    expect(screen.getByRole('link', { name: /continue to sign in/i })).toHaveAttribute(
-      'href',
-      '/sign-in?status=account-created',
-    );
+    expect(await screen.findByRole('button', { name: /continue to teamflow/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /choose your profile photo/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /skip for now/i })).toBeInTheDocument();
+    expect(updateProfileMock).not.toHaveBeenCalled();
+  });
+
+  it('persists the chosen avatar then navigates to /app', async () => {
+    const user = userEvent.setup();
+    signUpEmail.mockResolvedValue({ data: { user: { email: 'ada@example.com' } }, error: null });
+    updateProfileMock.mockResolvedValue({
+      ok: true,
+      user: {
+        id: 'u1',
+        name: 'Ada Lovelace',
+        email: 'ada@example.com',
+        image: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=240&auto=format&fit=crop&q=80',
+        emailVerified: false,
+      },
+    });
+    render(<SignUpForm />);
+
+    await fillValidForm(user);
+    await user.click(screen.getByRole('button', { name: /create account/i }));
+    await user.click(await screen.findByRole('button', { name: /continue to teamflow/i }));
+
+    await waitFor(() => expect(updateProfileMock).toHaveBeenCalled());
+    expect(pushMock).toHaveBeenCalledWith('/app');
   });
 });

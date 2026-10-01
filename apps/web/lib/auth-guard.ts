@@ -101,6 +101,7 @@ export function decideAuthPageDestination(
   pathname: string,
   authenticated: boolean | SessionUser | null,
   returnTo: string | null,
+  search = '',
 ): { kind: 'allow' } | { kind: 'redirect'; to: string } {
   const safeReturnTo = getSafeReturnTo(returnTo);
 
@@ -117,14 +118,23 @@ export function decideAuthPageDestination(
   }
 
   if (pathname.startsWith('/app/') || pathname === '/app') {
-    return { kind: 'redirect', to: `/sign-in?next=${encodeURIComponent(pathname)}` };
+    // Preserve the full path including query so destinations like
+    // /app/search?q=… or /app/channels/general?thread=… survive the bounce.
+    const full = pathname + search;
+    return { kind: 'redirect', to: `/sign-in?next=${encodeURIComponent(full)}` };
   }
 
   return { kind: 'allow' };
 }
 
 /**
- * Decides whether a client-side navigation target is accessible.
+ * Legacy client-side navigation check (kept for backward compatibility).
+ *
+ * Not used by the live middleware — `middleware.ts` uses
+ * `decideAuthPageDestination`, which additionally preserves the full
+ * `?next=` destination (path + query). Prefer that for any new call sites;
+ * this helper intentionally stays minimal and its behavior is pinned by
+ * tests. Do not add new usages.
  */
 export const APP_PATH = '/app';
 export const SIGN_IN_PATH = '/sign-in';

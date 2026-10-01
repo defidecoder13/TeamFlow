@@ -112,6 +112,29 @@ liveDescribe('profile API (live database)', () => {
     expect((await alice.patch('/api/me').set('Origin', ORIGIN).send({})).status).toBe(400);
   });
 
+  it('accepts a downscaled avatar data URL and rejects invalid ones', async () => {
+    const dataUrl = `data:image/jpeg;base64,${'AAAA'.repeat(16)}`;
+    const ok = await alice.patch('/api/me').set('Origin', ORIGIN).send({ image: dataUrl });
+    expect(ok.status).toBe(200);
+    expect(ok.body.user.image).toBe(dataUrl);
+
+    const badType = await alice
+      .patch('/api/me')
+      .set('Origin', ORIGIN)
+      .send({ image: 'data:image/svg+xml;base64,AAAA' });
+    expect(badType.status).toBe(400);
+
+    const badPayload = await alice
+      .patch('/api/me')
+      .set('Origin', ORIGIN)
+      .send({ image: 'data:image/jpeg;base64,@@@' });
+    expect(badPayload.status).toBe(400);
+
+    // restore null for later tests
+    const cleared = await alice.patch('/api/me').set('Origin', ORIGIN).send({ image: null });
+    expect(cleared.status).toBe(200);
+  });
+
   it('rejects extra fields and userId/email', async () => {
     expect(
       (await alice.patch('/api/me').set('Origin', ORIGIN).send({ name: 'Alice', userId: 'hax' }))

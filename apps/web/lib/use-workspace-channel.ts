@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { getApiBaseUrl } from './config';
 import { fetchChannel, type Channel } from './channels';
+import { onRealtimeChannelDeleted, onRealtimeChannelMembershipRemoved } from './realtime-client';
 
 export type WorkspaceChannelState =
   | { status: 'idle' }
@@ -97,6 +98,34 @@ export function useWorkspaceChannel(
       cancelled = true;
     };
   }, [workspaceId, slug, attempt]);
+
+  useEffect(() => {
+    // Server-pushed removal while viewing: the open view becomes
+    // inaccessible immediately (same generic notFound as a 404 fetch).
+    const unsubscribeRemoved = onRealtimeChannelMembershipRemoved((event) => {
+      if (event.workspaceId !== workspaceId) return;
+      setState((current) => {
+        if (current.status !== 'ready' || current.channel.id !== event.channelId) {
+          return current;
+        }
+        return { status: 'notFound' };
+      });
+    });
+    // Server-pushed deletion elsewhere: same treatment for the open view.
+    const unsubscribeDeleted = onRealtimeChannelDeleted((event) => {
+      if (event.workspaceId !== workspaceId) return;
+      setState((current) => {
+        if (current.status !== 'ready' || current.channel.id !== event.channelId) {
+          return current;
+        }
+        return { status: 'notFound' };
+      });
+    });
+    return () => {
+      unsubscribeRemoved();
+      unsubscribeDeleted();
+    };
+  }, [workspaceId]);
 
   return { state, retry, setChannel };
 }

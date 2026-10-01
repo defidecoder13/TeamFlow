@@ -11,9 +11,10 @@
 
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { getSafeReturnTo } from '../../lib/auth-guard';
 import { getAuthClient } from '../../lib/auth-client';
 import { SIGN_IN_FALLBACK, toAuthErrorMessage } from '../../lib/auth-errors';
-import { validateEmail, validatePassword } from '../../lib/validation';
+import { validateEmail, validateExistingPassword } from '../../lib/validation';
 import { AuthError } from './AuthError';
 import { AuthField } from './AuthField';
 import { AuthSubmitButton } from './AuthSubmitButton';
@@ -30,7 +31,7 @@ export function SignInForm({ notice, returnTo }: { notice?: string; returnTo?: s
   const [submitting, setSubmitting] = useState(false);
 
   const emailError = touched.email ? validateEmail(email) : null;
-  const passwordError = touched.password ? validatePassword(password) : null;
+  const passwordError = touched.password ? validateExistingPassword(password) : null;
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -39,10 +40,13 @@ export function SignInForm({ notice, returnTo }: { notice?: string; returnTo?: s
     }
     setTouched({ email: true, password: true });
     const nextEmailError = validateEmail(email);
-    const nextPasswordError = validatePassword(password);
+    const nextPasswordError = validateExistingPassword(password);
     if (nextEmailError || nextPasswordError) {
       return;
     }
+    // Defense in depth: never navigate to an unsanitized destination even if
+    // the page prop is bypassed (deep link, direct component use).
+    const destination = getSafeReturnTo(returnTo ?? null) ?? '/app';
     setSubmitting(true);
     setAuthError(null);
     try {
@@ -54,7 +58,7 @@ export function SignInForm({ notice, returnTo }: { notice?: string; returnTo?: s
         setAuthError(toAuthErrorMessage(error, SIGN_IN_FALLBACK));
         return;
       }
-      router.replace(returnTo ?? '/app');
+      router.replace(destination);
     } catch {
       setAuthError(SIGN_IN_FALLBACK);
     } finally {
@@ -63,24 +67,24 @@ export function SignInForm({ notice, returnTo }: { notice?: string; returnTo?: s
   }
 
   return (
-    <div>
+    <div className="w-full min-w-0">
       <AuthSwitchLink prompt="New to TeamFlow?" actionLabel="Create an account" href="/sign-up" />
 
-      <h1 className="text-2xl font-semibold tracking-tight text-zinc-900">Welcome back</h1>
-      <p className="mt-1.5 text-sm leading-relaxed text-zinc-500">
+      <h1 className="text-2xl font-semibold tracking-[-0.02em] text-[#171A21]">Welcome back</h1>
+      <p className="mt-2 text-sm leading-relaxed text-[#4F5360]">
         Sign in to your TeamFlow account
       </p>
 
       {notice ? (
         <p
           role="status"
-          className="mt-5 rounded-lg border border-stone-200 bg-stone-50 px-3.5 py-3 text-[13px] leading-snug text-zinc-700"
+          className="mt-5 rounded-lg border border-[#E2E1E1] bg-[#FAF9F8] px-3.5 py-3 text-[13px] leading-snug text-[#171A21]"
         >
           {notice}
         </p>
       ) : null}
 
-      <form onSubmit={handleSubmit} noValidate className="mt-7 space-y-4">
+      <form onSubmit={handleSubmit} noValidate className="mt-8 space-y-5">
         <AuthError message={authError} />
         <AuthField
           id="signin-email"
@@ -109,7 +113,7 @@ export function SignInForm({ notice, returnTo }: { notice?: string; returnTo?: s
           onChange={setPassword}
           onBlur={() => setTouched((current) => ({ ...current, password: true }))}
         />
-        <div className="pt-2">
+        <div className="pt-3">
           <AuthSubmitButton pending={submitting} pendingLabel="Signing in…">
             Sign in
           </AuthSubmitButton>

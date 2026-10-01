@@ -2,7 +2,8 @@
  * Invitation HTTP boundary (Phase 2F-A, backend only).
  *
  * - `createWorkspaceInvitationsRouter`: POST + GET under
- *   `/api/workspaces/:workspaceId/invitations` (OWNER/ADMIN only).
+ *   `/api/workspaces/:workspaceId/invitations` plus DELETE
+ *   `/:invitationId` (revoke), all OWNER/ADMIN only.
  * - `createInvitationAcceptRouter`: POST `/api/invitations/accept` by token.
  *
  * Identity always comes from the session. No email delivery exists yet, so
@@ -23,6 +24,7 @@ import {
   InvitationForbiddenError,
   InvitationInvalidError,
   listPendingInvitations,
+  revokeInvitation,
 } from './service';
 import {
   acceptInvitationSchema,
@@ -93,6 +95,7 @@ export function createWorkspaceInvitationsRouter(resolveAuth: () => AuthContext)
           workspaceId: req.params.workspaceId,
           inviterUserId: authUser.id,
           email: parsed.data.email,
+          role: parsed.data.role,
         });
         res.status(201).json({ invitation });
       } catch (error) {
@@ -126,6 +129,39 @@ export function createWorkspaceInvitationsRouter(resolveAuth: () => AuthContext)
         workspaceId: req.params.workspaceId,
       });
       res.status(200).json({ invitations });
+    }),
+  );
+
+  router.delete(
+    '/:invitationId',
+    asyncRoute(async (req, res) => {
+      const authUser = requireSessionUser(req, res);
+      if (!authUser) {
+        return;
+      }
+      const prisma = getPrisma();
+      const role = await getMembershipRole(prisma, req.params.workspaceId, authUser.id);
+      if (!role) {
+        notFound(res);
+        return;
+      }
+      if (!canManageInvitations(role)) {
+        forbidden(res);
+        return;
+      }
+      try {
+        const result = await revokeInvitation(prisma, {
+          workspaceId: req.params.workspaceId,
+          invitationId: req.params.invitationId,
+        });
+        res.status(200).json({ invitation: result });
+      } catch (error) {
+        if (error instanceof InvitationInvalidError) {
+          notFound(res, error.message);
+          return;
+        }
+        throw error;
+      }
     }),
   );
 

@@ -3,6 +3,7 @@ import {
   MIN_NAME_LENGTH,
   MIN_PASSWORD_LENGTH,
   validateEmail,
+  validateExistingPassword,
   validateName,
   validatePassword,
   validatePasswordConfirmation,
@@ -29,6 +30,12 @@ describe('auth validation', () => {
     expect(validatePassword('')).toBe('Enter your password.');
     expect(validatePassword('short')).toBe(`Use at least ${MIN_PASSWORD_LENGTH} characters.`);
     expect(validatePassword('long-enough-password')).toBeNull();
+  });
+
+  it('requires only a non-empty password for sign-in', () => {
+    expect(validateExistingPassword('')).toBe('Enter your password.');
+    expect(validateExistingPassword('short')).toBeNull();
+    expect(validateExistingPassword('long-enough-password')).toBeNull();
   });
 
   it('requires a name of minimum length', () => {

@@ -50,6 +50,10 @@ async function readJson(response: Response): Promise<unknown> {
 
 export const MAX_PROFILE_NAME_LENGTH = 100;
 export const MAX_PROFILE_IMAGE_URL_LENGTH = 2048;
+/** Matches API `MAX_DATA_IMAGE_LENGTH` for inline avatar data URLs. */
+export const MAX_PROFILE_IMAGE_DATA_LENGTH = 400_000;
+
+const DATA_IMAGE_PATTERN = /^data:image\/(jpeg|jpg|png|webp|gif);base64,[A-Za-z0-9+/]+={0,2}$/i;
 
 export function validateProfileName(value: string): string | null {
   const trimmed = value.trim();
@@ -62,6 +66,14 @@ export function validateProfileName(value: string): string | null {
 export function validateProfileImage(value: string): string | null {
   const trimmed = value.trim();
   if (trimmed.length === 0) return null;
+  if (trimmed.startsWith('data:image/')) {
+    if (!DATA_IMAGE_PATTERN.test(trimmed)) return 'Enter a valid image.';
+    if (trimmed.length > MAX_PROFILE_IMAGE_DATA_LENGTH) return 'Profile photo is too large.';
+    const comma = trimmed.indexOf(',');
+    const base64 = comma === -1 ? '' : trimmed.slice(comma + 1);
+    if (base64.length % 4 !== 0) return 'Enter a valid image.';
+    return null;
+  }
   if (trimmed.length > MAX_PROFILE_IMAGE_URL_LENGTH)
     return `Image URL must be ${MAX_PROFILE_IMAGE_URL_LENGTH} characters or fewer.`;
   try {

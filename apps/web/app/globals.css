@@ -1,1 +1,218 @@
 @import 'tailwindcss';
+
+/**
+ * TeamFlow design tokens — single source of truth (`extract` pass).
+ *
+ * Sources (in conflict order):
+ * 1. Stitch "TeamFlow Design System" (assets/3c9f47a36430446badcfef05599b926c,
+ *    docs/design-reference/stitch/teamflow_design_system/DESIGN.md)
+ * 2. Stitch "Workspace Home — TeamFlow" screen code (zinc-900 emphasis)
+ *
+ * Token names are the Stitch snake_case names in kebab-case, so Tailwind v4
+ * exposes them as utilities (e.g. `--color-surface-low` → `bg-surface-low`,
+ * `--color-on-surface-variant` → `text-on-surface-variant`). New code should
+ * prefer these utilities; the existing literal hex values below are kept
+ * where tests pin class names — they resolve to the same palette.
+ *
+ * Near-black rule: primary actions use primary `#000000`; selection and
+ * emphasis surfaces (rail-active tile, active nav pill, send button) use
+ * `#18181b` (zinc-900, from the Stitch screen code). The two are visually
+ * identical at these sizes; do not introduce a third near-black.
+ */
+
+@theme {
+  --color-canvas: #FAF9F8;
+  --color-surface-lowest: #FFFFFF;
+  --color-surface-secondary: #F6F5F3;
+  --color-surface-sidebar: #F7F6F5;
+  --color-surface-subtle: #F1F0EE;
+  --color-surface-hover: #F1F0EE;
+
+  --color-text-primary: #171A21;
+  --color-text-secondary: #4F5360;
+  --color-text-muted: #737782;
+  --color-text-disabled: #A5A8AE;
+
+  --color-border: #E4E2DF;
+  --color-border-subtle: #ECEAE7;
+
+  --color-brand: #3157D5;
+  --color-brand-hover: #2547BE;
+  --color-brand-soft: #EEF2FF;
+
+  --color-background: #FAF9F8;
+  --color-on-background: #171A21;
+  --color-surface: #FFFFFF;
+  --color-surface-bright: #FAF9F8;
+  --color-surface-dim: #dad9e3;
+  --color-surface-low: #F6F5F3;
+  --color-surface-container: #eeedf7;
+  --color-surface-container-high: #e8e7f1;
+  --color-surface-container-highest: #e3e1ec;
+  --color-surface-variant: #e3e1ec;
+  --color-on-surface: #171A21;
+  --color-on-surface-variant: #4F5360;
+  --color-inverse-surface: #2E3440;
+  --color-inverse-on-surface: #F8F7F6;
+  --color-surface-tint: #5f5e61;
+  --color-outline: #737782;
+  --color-outline-variant: #E4E2DF;
+  --color-primary: #2E3440;
+  --color-on-primary: #ffffff;
+  --color-primary-container: #1b1b1e;
+  --color-on-primary-container: #858387;
+  --color-inverse-primary: #c8c5ca;
+  --color-secondary: #3157D5;
+  --color-on-secondary: #ffffff;
+  --color-secondary-container: #EEF2FF;
+  --color-on-secondary-container: #3157D5;
+  --color-tertiary: #2E3440;
+  --color-on-tertiary: #ffffff;
+  --color-tertiary-container: #1d1b16;
+  --color-on-tertiary-container: #88837c;
+  --color-error: #ba1a1a;
+  --color-on-error: #ffffff;
+  --color-error-container: #ffdad6;
+  --color-on-error-container: #93000a;
+  --color-primary-fixed: #e4e1e6;
+  --color-primary-fixed-dim: #c8c5ca;
+  --color-on-primary-fixed: #1b1b1e;
+  --color-on-primary-fixed-variant: #47464a;
+  --color-secondary-fixed: #dee0ff;
+  --color-secondary-fixed-dim: #bac3ff;
+  --color-on-secondary-fixed: #00105a;
+  --color-on-secondary-fixed-variant: #0030c8;
+  --color-tertiary-fixed: #e8e2d9;
+  --color-tertiary-fixed-dim: #cbc6bd;
+  --color-on-tertiary-fixed: #1d1b16;
+  --color-on-tertiary-fixed-variant: #494640;
+
+  /* Motion tokens (Emil Kowalski bar): strong custom curves, never the
+     weak built-in easings, for deliberate entrances. Utilities:
+     `ease-out-expo`, `ease-drawer`. Hover/color transitions keep the
+     Tailwind default; press feedback is `active:scale` + transform. */
+  --ease-out-expo: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+:root {
+  --background: #FAF9F8;
+  --canvas: #FAF9F8;
+  --surface: #FFFFFF;
+  --surface-secondary: #F6F5F3;
+  --surface-sidebar: #F7F6F5;
+  --surface-subtle: #F1F0EE;
+  --surface-hover: #F1F0EE;
+
+  --text-primary: #171A21;
+  --text-secondary: #4F5360;
+  --text-muted: #737782;
+  --text-disabled: #A5A8AE;
+
+  --border: #E4E2DF;
+  --border-subtle: #ECEAE7;
+
+  --brand: #3157D5;
+  --brand-hover: #2547BE;
+  --brand-soft: #EEF2FF;
+
+  --success: #48B88A;
+  --warning: #E8A33A;
+  --danger: #C94A45;
+}
+
+/* Base application styles */
+html,
+body {
+  background: #FAF9F8;
+  color: #171A21;
+  font-family:
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    sans-serif;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Custom scrollbars matching macOS native clarity */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #E4E2DF;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #C8C6D3;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Display type gets even line lengths; long prose avoids orphans.
+   Applied globally — both landing and app surfaces use the same Inter ramp. */
+h1,
+h2,
+h3 {
+  text-wrap: balance;
+}
+
+p {
+  text-wrap: pretty;
+}
+
+/* Press feedback (Emil Kowalski bar): color fades plus a 150ms scale
+   that must itself transition — Tailwind's `transition-colors` omits
+   `scale`, which would make every `:active` press snap. Use `press`
+   on pressable primary/danger CTAs instead of `transition-colors`. */
+@utility press {
+  transition-property: color, background-color, border-color, scale;
+  transition-duration: 150ms;
+  transition-timing-function: ease;
+}
+
+/* Touch adaptation (`adapt` pass): icon-only controls keep their Stitch
+   visual size on desktop but grow to a 44px hit area on coarse pointers,
+   with zero layout or visual change. */
+@media (pointer: coarse) {
+  .touch-hit {
+    position: relative;
+  }
+  .touch-hit::before {
+    content: '';
+    position: absolute;
+    inset: -8px;
+  }
+}
+
+/* Touch users can't hover: message actions must stay reachable instead of
+   hover-revealed. Desktop hover behavior is unchanged. */
+@media (hover: none) {
+  .message-toolbar {
+    opacity: 1 !important;
+    pointer-events: auto !important;
+  }
+}
+
+/* Motion sensitivity: instant transitions for users who prefer reduced
+   motion. Content is never gated on animation — this only shortens it. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

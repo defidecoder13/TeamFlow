@@ -1,14 +1,10 @@
-/**
- * User avatar with generated initial fallback (Phase 1D).
- *
- * Shows the account image when present; otherwise monochrome initials derived
- * from the real display name. No external avatar service is used.
- */
+'use client';
 
+import React from 'react';
 import type { PresenceStatus } from '../../lib/presence';
-import { PresenceIndicator } from './PresenceIndicator';
+import { Avatar } from '@/components/ui/Avatar';
 
-interface UserAvatarProps {
+export interface UserAvatarProps {
   name: string;
   image?: string | null;
   size?: 'sm' | 'md' | 'lg';
@@ -27,34 +23,17 @@ export function avatarInitials(name: string): string {
 }
 
 export function UserAvatar({ name, image, size = 'md', presenceStatus }: UserAvatarProps) {
-  const dimensions =
-    size === 'sm' ? 'h-6 w-6 text-[10px]' : size === 'lg' ? 'h-10 w-10 text-sm' : 'h-8 w-8 text-xs';
-
-  const avatarElement = image ? (
-    // Plain img (not next/image): account avatars are tiny remote images that
-    // must not require image-optimization configuration.
-    <img src={image} alt="" className={`${dimensions} rounded-full object-cover`} />
-  ) : (
-    <span
-      aria-hidden="true"
-      className={`flex ${dimensions} shrink-0 items-center justify-center rounded-full bg-stone-200 font-semibold text-stone-700`}
-    >
-      {avatarInitials(name)}
-    </span>
-  );
-
-  if (!presenceStatus) {
-    return avatarElement;
-  }
-
-  const indicatorSize = size === 'lg' ? 'md' : 'sm';
+  const avatarSize = size === 'sm' ? 28 : size === 'lg' ? 40 : 34;
 
   return (
-    <div className="relative inline-flex shrink-0">
-      {avatarElement}
-      <span className="absolute bottom-0 right-0 translate-x-[15%] translate-y-[15%]">
-        <PresenceIndicator status={presenceStatus} size={indicatorSize} />
-      </span>
-    </div>
+    <Avatar
+      name={name}
+      src={image}
+      size={avatarSize}
+      presence={presenceStatus}
+      showPresence={Boolean(presenceStatus)}
+    />
   );
 }
+
+export default UserAvatar;

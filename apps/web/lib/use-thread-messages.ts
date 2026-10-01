@@ -378,14 +378,67 @@ export function useThreadMessages(rootMessageId: string | null, channelId?: stri
     [],
   );
 
+  /**
+   * Splice a backend-deleted attachment out of a reply's local state.
+   * Called only after the DELETE succeeds (via AttachmentDisplay's
+   * onAttachmentDeleted); idempotent no-op when already absent. Other
+   * messages, ordering, and reactions are untouched.
+   */
+  const removeAttachment = useCallback((messageId: string, attachmentId: string) => {
+    setState((current) => {
+      if (current.status !== 'ready') return current;
+      return {
+        ...current,
+        messages: current.messages.map((m) =>
+          m.id === messageId && m.attachments
+            ? { ...m, attachments: m.attachments.filter((a) => a.id !== attachmentId) }
+            : m,
+        ),
+      };
+    });
+  }, []);
+
+  /**
+   * Silent refetch of replies so attachment uploads appear without a
+   * skeleton flash in the thread panel.
+   */
+  const refresh = useCallback(async () => {
+    if (!rootMessageId || isLoadingRef.current) return;
+    const targetRootId = rootMessageId;
+    isLoadingRef.current = true;
+    try {
+      const apiBase = getApiBaseUrl();
+      const result = await fetchThreadReplies(apiBase, targetRootId);
+      if (activeRootMessageIdRef.current !== targetRootId || !result.ok) return;
+      const normalized = normalizeReplies(result.data.messages);
+      setState((current) => {
+        if (current.status !== 'ready') return current;
+        return {
+          status: 'ready',
+          messages: mergeMessages(current.messages, normalized, false, {
+            preferIncomingOnTie: true,
+          }),
+          hasMore: result.data.pageInfo.hasMore,
+          nextCursor: current.nextCursor ?? result.data.pageInfo.nextCursor,
+        };
+      });
+    } catch {
+      // Silent — keep existing replies on refresh failure.
+    } finally {
+      isLoadingRef.current = false;
+    }
+  }, [rootMessageId, normalizeReplies]);
+
   return {
     state,
     isLoadingOlder,
     loadOlderError,
     retry,
+    refresh,
     loadOlder,
     send,
     edit,
     remove,
+    removeAttachment,
   };
 }

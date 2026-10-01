@@ -192,6 +192,26 @@ describe('createWorkspace', () => {
     vi.unstubAllGlobals();
   });
 
+  it('includes an optional custom slug when provided', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      status: 201,
+      ok: true,
+      json: async () => ({ workspace: created }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(createWorkspace(apiBase, 'Acme Studio', 'acme-corp')).resolves.toEqual({
+      ok: true,
+      workspace: created,
+    });
+    const sent = JSON.parse((fetchMock.mock.calls[0]?.[1] as { body: string }).body) as Record<
+      string,
+      unknown
+    >;
+    expect(sent).toEqual({ name: 'Acme Studio', slug: 'acme-corp' });
+    vi.unstubAllGlobals();
+  });
+
   it('passes through safe validation and conflict messages', async () => {
     vi.stubGlobal(
       'fetch',

@@ -10,7 +10,8 @@
 
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { Dialog } from './dialog';
 import { AuthError } from '../auth/AuthError';
 import { AuthField } from '../auth/AuthField';
 import { AuthSubmitButton } from '../auth/AuthSubmitButton';
@@ -68,18 +69,6 @@ export function CreateChannelDialog({
   const nameError = touched ? validateName(name) : null;
   const descriptionError = touched ? validateDescription(description) : null;
 
-  useEffect(() => {
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape' && !creating) {
-        onClose();
-      }
-    }
-    document.addEventListener('keydown', onKeyDown);
-    return () => {
-      document.removeEventListener('keydown', onKeyDown);
-    };
-  }, [creating, onClose]);
-
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     if (creating) {
@@ -106,6 +95,10 @@ export function CreateChannelDialog({
         onUnauthenticated();
         return;
       }
+      if (result.kind === 'forbidden') {
+        setFormError('You do not have permission to create channels in this workspace.');
+        return;
+      }
       setFormError(result.kind === 'failed' ? CREATE_FALLBACK_MESSAGE : result.message);
     } catch {
       setFormError(CREATE_FALLBACK_MESSAGE);
@@ -115,28 +108,21 @@ export function CreateChannelDialog({
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/25 p-4"
-      onClick={() => {
-        if (!creating) {
-          onClose();
-        }
-      }}
+    <Dialog
+      open
+      onClose={onClose}
+      labelledBy="create-channel-title"
+      size="sm"
+      dismissable={!creating}
     >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="create-channel-title"
-        onClick={(event) => event.stopPropagation()}
-        className="w-full max-w-sm rounded-xl border border-stone-200 bg-white p-6 shadow-[0_20px_48px_-8px_rgba(24,24,27,0.12)]"
-      >
+      <div>
         <h2
           id="create-channel-title"
-          className="text-base font-semibold tracking-tight text-zinc-900"
+          className="text-[17px] font-semibold tracking-tight text-[#171A21]"
         >
           Create a channel
         </h2>
-        <p className="mt-1.5 text-sm leading-relaxed text-zinc-500">in {workspaceName}</p>
+        <p className="mt-1 text-[13px] leading-relaxed text-[#737782]">in {workspaceName}</p>
         <form onSubmit={handleSubmit} noValidate className="mt-5 space-y-4">
           <AuthError message={formError} />
           <AuthField
@@ -168,7 +154,7 @@ export function CreateChannelDialog({
             onBlur={() => setTouched(true)}
           />
           <fieldset disabled={creating}>
-            <legend className="mb-1.5 text-[13px] font-medium text-zinc-700">
+            <legend className="mb-1.5 text-[13px] font-medium text-[#171A21]">
               Who can access this channel?
             </legend>
             <div className="space-y-2">
@@ -181,10 +167,10 @@ export function CreateChannelDialog({
                 <label
                   key={option.value}
                   className={[
-                    'flex cursor-pointer items-start gap-2.5 rounded-lg border px-3 py-2.5 transition-colors',
+                    'flex cursor-pointer items-start gap-2.5 rounded-[8px] border px-3 py-2.5 transition-colors',
                     type === option.value
-                      ? 'border-zinc-900 bg-zinc-900/[0.03]'
-                      : 'border-stone-200 hover:border-stone-300',
+                      ? 'border-[#3157D5] bg-[#EEF2FF]/40'
+                      : 'border-[#E4E2DF] hover:border-[#D2D0CC]',
                   ].join(' ')}
                 >
                   <input
@@ -193,22 +179,22 @@ export function CreateChannelDialog({
                     value={option.value}
                     checked={type === option.value}
                     onChange={() => setType(option.value)}
-                    className="mt-0.5 h-4 w-4 accent-zinc-900"
+                    className="mt-0.5 h-4 w-4 accent-[#171A21]"
                   />
                   <span>
-                    <span className="block text-sm font-medium text-zinc-900">{option.label}</span>
-                    <span className="block text-[13px] text-stone-500">{option.hint}</span>
+                    <span className="block text-sm font-medium text-[#171A21]">{option.label}</span>
+                    <span className="block text-[13px] text-[#737782]">{option.hint}</span>
                   </span>
                 </label>
               ))}
             </div>
           </fieldset>
-          <div className="flex gap-2 pt-1">
+          <div className="flex gap-2 pt-2 border-t border-[#E4E2DF]">
             <button
               type="button"
               disabled={creating}
               onClick={onClose}
-              className="inline-flex h-10 items-center justify-center rounded-lg border border-stone-300 bg-white px-4 text-sm font-medium text-stone-700 transition-colors hover:border-stone-400 disabled:opacity-50"
+              className="inline-flex h-[42px] items-center justify-center rounded-lg border border-[#E4E2DF] bg-white px-4 text-sm font-medium text-[#4F5360] transition-colors hover:bg-[#F1F0EE] hover:text-[#171A21] focus-visible:outline-2 focus-visible:outline-[#3157D5] disabled:opacity-50"
             >
               Cancel
             </button>
@@ -220,6 +206,6 @@ export function CreateChannelDialog({
           </div>
         </form>
       </div>
-    </div>
+    </Dialog>
   );
 }

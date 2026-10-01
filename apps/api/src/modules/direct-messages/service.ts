@@ -8,6 +8,10 @@
 
 import { randomUUID } from 'node:crypto';
 import type { PrismaClient } from '@teamflow/db';
+
+type MessageWhereInput = NonNullable<
+  NonNullable<Parameters<PrismaClient['message']['findMany']>[0]>['where']
+>;
 import {
   authorizeDirectConversationAccess,
   authorizeDirectConversationAdmin,
@@ -202,6 +206,32 @@ function toConversationResponse(
   };
 }
 
+/**
+ * Build the `conversation:created` payload for one recipient from a freshly
+ * created conversation response. Peer/role fields are recipient-relative
+ * (the 1:1 peer of A is B and vice versa); read state is zeroed because no
+ * messages can exist yet. Pure — no database access.
+ */
+export function toConversationCreatedPayload(
+  conversation: DirectConversationResponse,
+  recipientUserId: string,
+): DirectConversationResponse {
+  const self = conversation.participants.find((p) => p.id === recipientUserId) ?? null;
+  const other =
+    conversation.type === 'DIRECT'
+      ? (conversation.participants.find((p) => p.id !== recipientUserId) ?? null)
+      : null;
+  return {
+    ...conversation,
+    participant: other,
+    peer: other,
+    currentUserRole: self?.role,
+    unreadCount: 0,
+    hasUnread: false,
+    lastReadMessageId: null,
+  };
+}
+
 function isPrismaUniqueConstraintError(error: unknown): boolean {
   return (
     typeof error === 'object' &&
@@ -226,7 +256,7 @@ export interface GetOrCreateDirectConversationInput {
 export async function getOrCreateDirectConversation(
   prisma: PrismaClient,
   input: GetOrCreateDirectConversationInput,
-): Promise<DirectConversationResponse> {
+): Promise<{ conversation: DirectConversationResponse; created: boolean }> {
   const recipientId = input.recipientId ?? input.targetUserId;
   if (!recipientId) {
     throw new DirectMessageValidationError('Recipient ID is required.');
@@ -265,7 +295,7 @@ export async function getOrCreateDirectConversation(
   });
 
   if (existing) {
-    return toConversationResponse(existing, input.userId);
+    return { conversation: toConversationResponse(existing, input.userId), created: false };
   }
 
   // 2. Create atomically in transaction, with race-condition catch for concurrent creates
@@ -293,7 +323,10 @@ export async function getOrCreateDirectConversation(
       conversationId: created.id,
       userId: input.userId,
     });
-    return toConversationResponse(created, input.userId, unreadInfo);
+    return {
+      conversation: toConversationResponse(created, input.userId, unreadInfo),
+      created: true,
+    };
   } catch (error: unknown) {
     if (isPrismaUniqueConstraintError(error)) {
       // Concurrent request won the race: retrieve and return the created record
@@ -313,7 +346,11 @@ export async function getOrCreateDirectConversation(
           conversationId: concurrent.id,
           userId: input.userId,
         });
-        return toConversationResponse(concurrent, input.userId, unreadInfo);
+        // Lost the creation race: another request created it.
+        return {
+          conversation: toConversationResponse(concurrent, input.userId, unreadInfo),
+          created: false,
+        };
       }
     }
     throw error;
@@ -652,21 +689,54 @@ export async function getWorkspaceDirectConversationsUnreadMap(
     });
   }
 
-  // 2. Fetch candidate root messages (not authored by current user, not soft-deleted)
-  const unreadCandidates = await prisma.message.findMany({
-    where: {
-      directMessageConversationId: { in: input.conversationIds },
-      parentMessageId: null,
-      authorId: { not: input.userId },
-      deletedAt: null,
-    },
-    select: {
-      id: true,
-      directMessageConversationId: true,
-      authorId: true,
-      createdAt: true,
-    },
-  });
+  // 2. Fetch candidate root messages (not authored by current user, not
+  // soft-deleted). Bounded per conversation: read-state conversations only
+  // need messages at/after their cutoff (the exact strict-newer rule,
+  // including the same-timestamp id tiebreak, is still applied in JS
+  // below). Conversations never read have no bound by definition.
+  // Result: one query regardless of conversation count, and long-read
+  // histories no longer scan from the beginning of time.
+  const withoutState: string[] = [];
+  let minCutoff: number | null = null;
+  for (const cid of input.conversationIds) {
+    const rs = readStateByConv.get(cid);
+    if (!rs) {
+      withoutState.push(cid);
+      continue;
+    }
+    const cutoff = rs.lastReadMessage?.createdAt ?? rs.lastReadAt;
+    const time = cutoff instanceof Date ? cutoff.getTime() : new Date(cutoff).getTime();
+    minCutoff = minCutoff === null ? time : Math.min(minCutoff, time);
+  }
+  const sharedClauses = {
+    parentMessageId: null,
+    authorId: { not: input.userId },
+    deletedAt: null,
+  } as const;
+  const or: MessageWhereInput[] = [];
+  if (withoutState.length > 0) {
+    or.push({ directMessageConversationId: { in: withoutState }, ...sharedClauses });
+  }
+  const withStateIds = input.conversationIds.filter((cid) => !withoutState.includes(cid));
+  if (withStateIds.length > 0 && minCutoff !== null) {
+    or.push({
+      directMessageConversationId: { in: withStateIds },
+      ...sharedClauses,
+      createdAt: { gte: new Date(minCutoff) },
+    });
+  }
+  const unreadCandidates =
+    or.length === 0
+      ? []
+      : await prisma.message.findMany({
+          where: { OR: or },
+          select: {
+            id: true,
+            directMessageConversationId: true,
+            authorId: true,
+            createdAt: true,
+          },
+        });
 
   // 3. Compute unread count per conversation
   for (const msg of unreadCandidates) {

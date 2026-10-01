@@ -3,6 +3,7 @@ import { memoryAdapter } from 'better-auth/adapters/memory';
 import request from 'supertest';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from '../../app';
+import { updateMeSchema } from './me';
 
 const TEST_AUTH_URL = 'http://localhost:4000';
 const TEST_USER = {
@@ -10,6 +11,34 @@ const TEST_USER = {
   email: 'phase-1b@test.teamflow.local',
   password: 'phase-1b-test-password-0123456789',
 };
+
+describe('updateMeSchema', () => {
+  it('accepts http(s) image URLs and null', () => {
+    expect(
+      updateMeSchema.safeParse({ image: 'https://example.com/a.jpg' }).success,
+    ).toBe(true);
+    expect(updateMeSchema.safeParse({ image: null }).success).toBe(true);
+    expect(updateMeSchema.safeParse({ name: 'Ada' }).success).toBe(true);
+  });
+
+  it('accepts a well-formed jpeg/png/webp/gif data URL under the cap', () => {
+    const dataUrl = 'data:image/jpeg;base64,' + 'AAAA'.repeat(8);
+    expect(updateMeSchema.safeParse({ image: dataUrl }).success).toBe(true);
+  });
+
+  it('rejects bad data URLs, non-http URLs, and oversized payloads', () => {
+    expect(updateMeSchema.safeParse({ image: 'data:image/svg+xml;base64,AAAA' }).success).toBe(
+      false,
+    );
+    expect(updateMeSchema.safeParse({ image: 'data:image/jpeg;base64,!!' }).success).toBe(false);
+    expect(updateMeSchema.safeParse({ image: 'ftp://example.com/a.jpg' }).success).toBe(false);
+    expect(
+      updateMeSchema.safeParse({ image: 'data:image/jpeg;base64,' + 'A'.repeat(400_001) }).success,
+    ).toBe(false);
+    expect(updateMeSchema.safeParse({}).success).toBe(false);
+    expect(updateMeSchema.safeParse({ name: 'A', extra: true }).success).toBe(false);
+  });
+});
 
 /**
  * Session tests run against a memory-adapter auth instance: the full Express

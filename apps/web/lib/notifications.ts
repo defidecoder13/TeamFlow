@@ -127,7 +127,41 @@ export interface NotificationListOptions {
   limit?: number;
   cursor?: string;
   unreadOnly?: boolean;
+  type?: NotificationType;
   signal?: AbortSignal;
+}
+
+/**
+ * Popover filter state. Mirrors the backend list parameters exactly —
+ * `unreadOnly` and `type` combine server-side. No client-side filtering.
+ */
+export interface NotificationFilter {
+  unreadOnly: boolean;
+  type?: NotificationType;
+}
+
+export const DEFAULT_NOTIFICATION_FILTER: NotificationFilter = { unreadOnly: false };
+
+/** Backend-supported types only — never invented categories. */
+export const NOTIFICATION_TYPE_FILTERS: Array<{ value: NotificationType; label: string }> = [
+  { value: 'MENTION', label: 'Mentions' },
+  { value: 'DM_MESSAGE', label: 'Direct messages' },
+  { value: 'GROUP_MESSAGE', label: 'Group messages' },
+  { value: 'THREAD_REPLY', label: 'Thread replies' },
+];
+
+export function notificationFilterKey(filter: NotificationFilter): string {
+  return `${filter.unreadOnly ? 'unread' : 'all'}:${filter.type ?? ''}`;
+}
+
+/** Whether a realtime item belongs in a filtered list. */
+export function matchesNotificationFilter(
+  item: Pick<NotificationItem, 'readAt' | 'type'>,
+  filter: NotificationFilter,
+): boolean {
+  if (filter.unreadOnly && item.readAt !== null) return false;
+  if (filter.type !== undefined && item.type !== filter.type) return false;
+  return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -189,6 +223,9 @@ export async function fetchNotifications(
   }
   if (options?.unreadOnly) {
     params.set('unreadOnly', 'true');
+  }
+  if (options?.type) {
+    params.set('type', options.type);
   }
   const query = params.toString();
   const url =

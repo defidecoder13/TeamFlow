@@ -11,6 +11,11 @@ export default defineConfig({
     },
   },
   test: {
+    server: {
+      deps: {
+        inline: ['@hugeicons/core-free-icons'],
+      },
+    },
     environment: 'jsdom',
     include: ['**/*.test.{ts,tsx}'],
     exclude: ['node_modules', '.next'],

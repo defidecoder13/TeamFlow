@@ -8,47 +8,54 @@
  */
 
 import type { ReactNode } from 'react';
+import { TeamFlowLogo } from '../brand/TeamFlowLogo';
 
 interface AuthLayoutProps {
-  /** Window caption, e.g. "TeamFlow — Sign In". */
-  windowTitle: string;
+  /** Optional window caption for reference. */
+  windowTitle?: string;
   brand: ReactNode;
   children: ReactNode;
 }
 
 function TrafficLights() {
   return (
-    <span aria-hidden="true" className="flex items-center gap-2">
-      <span className="h-3 w-3 rounded-full bg-[#ff5f57]" />
-      <span className="h-3 w-3 rounded-full bg-[#febc2e]" />
-      <span className="h-3 w-3 rounded-full bg-[#28c840]" />
+    <span aria-hidden="true" className="flex items-center gap-1.5">
+      <span className="h-2.5 w-2.5 rounded-full bg-[#EE6A62]" />
+      <span className="h-2.5 w-2.5 rounded-full bg-[#E9B949]" />
+      <span className="h-2.5 w-2.5 rounded-full bg-[#46B96B]" />
     </span>
   );
 }
 
-export function AuthLayout({ windowTitle, brand, children }: AuthLayoutProps) {
+export function AuthLayout({ brand, children }: AuthLayoutProps) {
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[#fbf8ff] p-0 text-zinc-900 sm:p-6 lg:p-10">
-      <div className="w-full max-w-5xl overflow-hidden bg-white sm:rounded-2xl sm:border sm:border-stone-200 sm:shadow-[0_20px_48px_-8px_rgba(24,24,27,0.12)]">
-        <div className="flex items-center justify-between border-b border-stone-200/70 px-5 py-3">
+    <main className="relative flex min-h-screen w-full items-center justify-center overflow-hidden bg-[#F8F7F6] p-0 text-[#171A21] sm:p-6 lg:p-12">
+      {/* Subtle atmospheric ambient glow from DESIGN.md palette */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 overflow-hidden"
+      >
+        <div className="absolute -top-[15%] left-1/2 h-[520px] w-[860px] -translate-x-1/2 rounded-full bg-gradient-to-b from-[#EEF2FF]/60 via-[#D7D2EC]/15 to-transparent blur-3xl" />
+        <div className="absolute -bottom-[20%] right-[12%] h-[420px] w-[520px] rounded-full bg-gradient-to-t from-[#DCC8BA]/20 to-transparent blur-3xl" />
+      </div>
+
+      <div className="relative w-full max-w-5xl min-w-0 overflow-hidden bg-white sm:rounded-2xl sm:border sm:border-[#E2E1E1] sm:shadow-[0_20px_60px_rgba(20,25,35,0.08)]">
+        {/* Minimal macOS titlebar chrome with traffic lights */}
+        <div className="hidden items-center border-b border-[#E2E1E1] bg-[#F5F4F3] px-5 py-3 sm:flex">
           <TrafficLights />
-          <p className="text-xs text-zinc-400">{windowTitle}</p>
         </div>
-        <div className="grid lg:grid-cols-2">
+        <div className="grid w-full grid-cols-1 lg:grid-cols-[48%_52%]">
           {brand}
           <section
             aria-label="Authentication"
-            className="flex items-center justify-center px-6 py-10 sm:px-12 lg:px-16 lg:py-14"
+            className="flex w-full min-w-0 items-center justify-center bg-white px-6 py-10 sm:px-12 lg:px-14 lg:py-16"
           >
-            <div className="w-full max-w-sm">
+            <div className="w-full max-w-sm min-w-0">
               <div className="mb-8 flex items-center gap-2.5 lg:hidden">
-                <span
-                  aria-hidden="true"
-                  className="flex h-8 w-8 items-center justify-center rounded-lg bg-zinc-900 text-sm font-semibold text-white"
-                >
-                  T
-                </span>
-                <span className="text-[15px] font-semibold tracking-tight">TeamFlow</span>
+                <TeamFlowLogo
+                  size={24}
+                  wordmarkClassName="text-[17px] font-semibold tracking-[-0.02em] text-[#171A21]"
+                />
               </div>
               {children}
             </div>

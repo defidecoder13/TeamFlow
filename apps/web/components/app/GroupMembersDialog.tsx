@@ -8,7 +8,8 @@
 
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
+import { Dialog } from './dialog';
 import { getApiBaseUrl } from '../../lib/config';
 import { usePresence } from '../../lib/use-presence';
 import { useWorkspaceMembers } from '../../lib/use-workspace-members';
@@ -21,6 +22,7 @@ import {
 } from '../../lib/messages';
 import { AuthError } from '../auth/AuthError';
 import { PresenceIndicator } from './PresenceIndicator';
+import { CloseIcon } from './icons';
 
 export interface GroupMembersDialogProps {
   conversation: DirectConversation;
@@ -48,6 +50,7 @@ export function GroupMembersDialog({
   const [isAddingMember, setIsAddingMember] = useState(false);
   const [memberSearch, setMemberSearch] = useState('');
   const [confirmLeave, setConfirmLeave] = useState(false);
+  const renameInputRef = useRef<HTMLInputElement>(null);
 
   const { state: membersState } = useWorkspaceMembers(workspaceId);
   const { getPresence } = usePresence(workspaceId);
@@ -58,18 +61,6 @@ export function GroupMembersDialog({
 
   const isAdmin =
     conversation.currentUserRole === 'ADMIN' || currentUserParticipant?.role === 'ADMIN';
-
-  useEffect(() => {
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape' && !isSubmitting) {
-        onClose();
-      }
-    }
-    document.addEventListener('keydown', onKeyDown);
-    return () => {
-      document.removeEventListener('keydown', onKeyDown);
-    };
-  }, [isSubmitting, onClose]);
 
   const availableWorkspaceMembers = useMemo(() => {
     if (membersState.status !== 'ready') return [];
@@ -92,6 +83,7 @@ export function GroupMembersDialog({
     const trimmed = nameInput.trim();
     if (!trimmed) {
       setError('Group name cannot be empty.');
+      renameInputRef.current?.focus();
       return;
     }
 
@@ -234,31 +226,24 @@ export function GroupMembersDialog({
     'Group Message';
 
   return (
-    <div
-      role="presentation"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/40 p-4 backdrop-blur-[2px]"
-      onClick={() => {
-        if (!isSubmitting) {
-          onClose();
-        }
-      }}
+    <Dialog
+      open
+      onClose={onClose}
+      labelledBy="group-members-title"
+      size="md"
+      dismissable={!isSubmitting}
     >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="group-members-title"
-        onClick={(event) => event.stopPropagation()}
-        className="w-full max-w-md rounded-xl border border-stone-200 bg-white p-6 shadow-[0_20px_48px_-8px_rgba(24,24,27,0.12)]"
-      >
+      <div>
         <div className="flex items-start justify-between">
           <div className="min-w-0 flex-1 pr-2">
             <h2
               id="group-members-title"
-              className="text-base font-semibold tracking-tight text-zinc-900 truncate"
+              className="truncate text-[17px] font-semibold tracking-tight text-[#171A21]"
+              title={groupDisplayName}
             >
               {groupDisplayName}
             </h2>
-            <p className="mt-1 text-xs text-stone-500">
+            <p className="mt-1 text-xs tabular-nums text-[#737782]">
               {conversation.participants.length} member
               {conversation.participants.length === 1 ? '' : 's'}
             </p>
@@ -268,18 +253,9 @@ export function GroupMembersDialog({
             disabled={isSubmitting}
             onClick={onClose}
             aria-label="Close dialog"
-            className="rounded-lg p-1 text-stone-400 transition-colors hover:bg-stone-100 hover:text-stone-600 disabled:opacity-50"
+            className="touch-hit rounded-lg p-1.5 text-[#737782] transition-colors hover:bg-[#F1F0EE] hover:text-[#171A21] focus-visible:outline-2 focus-visible:outline-[#3157D5] disabled:opacity-50"
           >
-            <svg
-              className="h-5 w-5"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth="1.5"
-              stroke="currentColor"
-              aria-hidden="true"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            <CloseIcon className="h-4 w-4" />
           </button>
         </div>
 
@@ -288,16 +264,17 @@ export function GroupMembersDialog({
 
           {/* Admin Rename Group Section */}
           {isAdmin && (
-            <div className="rounded-lg border border-stone-100 bg-stone-50/50 p-3">
+            <div className="rounded-[10px] border border-[#E4E2DF] bg-[#FAF9F8] p-3">
               {isRenaming ? (
                 <form onSubmit={handleRename} className="space-y-2">
                   <label
                     htmlFor="rename-group-input"
-                    className="block text-xs font-medium text-stone-700"
+                    className="block text-xs font-medium text-[#171A21]"
                   >
-                    Group Name
+                    Group name
                   </label>
                   <input
+                    ref={renameInputRef}
                     id="rename-group-input"
                     type="text"
                     autoFocus
@@ -306,7 +283,7 @@ export function GroupMembersDialog({
                     maxLength={100}
                     onChange={(e) => setNameInput(e.target.value)}
                     placeholder="Enter group name"
-                    className="w-full rounded-lg border border-stone-300 px-3 py-1.5 text-xs text-zinc-900 placeholder:text-stone-400 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 disabled:opacity-50"
+                    className="w-full rounded-[8px] border border-[#E4E2DF] bg-white px-3 py-1.5 text-xs text-[#171A21] outline-none placeholder:text-[#737782] focus:border-[#3157D5] focus-visible:ring-1 focus-visible:ring-[#3157D5] disabled:opacity-50"
                   />
                   <div className="flex justify-end gap-2">
                     <button
@@ -316,14 +293,15 @@ export function GroupMembersDialog({
                         setIsRenaming(false);
                         setNameInput(conversation.name ?? '');
                       }}
-                      className="rounded-md border border-stone-300 bg-white px-2.5 py-1 text-xs font-medium text-stone-700 transition-colors hover:border-stone-400"
+                      className="rounded-[6px] border border-[#E4E2DF] bg-white px-2.5 py-1 text-xs font-medium text-[#4F5360] transition-colors hover:bg-[#F1F0EE] hover:text-[#171A21] focus-visible:outline-2 focus-visible:outline-[#3157D5]"
                     >
                       Cancel
                     </button>
                     <button
                       type="submit"
-                      disabled={isSubmitting || !nameInput.trim()}
-                      className="rounded-md bg-zinc-900 px-2.5 py-1 text-xs font-medium text-white shadow-xs transition-colors hover:bg-zinc-800 disabled:opacity-50"
+                      disabled={isSubmitting}
+                      aria-busy={isSubmitting}
+                      className="rounded-[6px] bg-[#2E3440] px-2.5 py-1 text-xs font-medium text-white transition-colors hover:bg-[#1E222A] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#3157D5] disabled:opacity-50"
                     >
                       {isSubmitting ? 'Saving…' : 'Save'}
                     </button>
@@ -332,15 +310,15 @@ export function GroupMembersDialog({
               ) : (
                 <div className="flex items-center justify-between">
                   <div className="min-w-0 flex-1">
-                    <span className="text-xs text-stone-500">Group name: </span>
-                    <span className="text-xs font-medium text-zinc-900 truncate">
+                    <span className="text-xs text-[#737782]">Group name: </span>
+                    <span className="text-xs font-medium text-[#171A21] truncate">
                       {conversation.name ?? '(none)'}
                     </span>
                   </div>
                   <button
                     type="button"
                     onClick={() => setIsRenaming(true)}
-                    className="ml-2 text-xs font-medium text-zinc-900 underline decoration-stone-300 underline-offset-2 hover:decoration-zinc-900"
+                    className="ml-2 rounded text-xs font-medium text-[#171A21] underline decoration-[#E4E2DF] underline-offset-2 transition-colors hover:decoration-[#171A21] focus-visible:outline-2 focus-visible:outline-[#3157D5]"
                   >
                     Rename
                   </button>
@@ -352,14 +330,14 @@ export function GroupMembersDialog({
           {/* Members List */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-stone-400">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-[#737782]">
                 Members
               </h3>
               {isAdmin && !isAddingMember && conversation.participants.length < 20 && (
                 <button
                   type="button"
                   onClick={() => setIsAddingMember(true)}
-                  className="text-xs font-medium text-zinc-900 underline decoration-stone-300 underline-offset-2 hover:decoration-zinc-900"
+                  className="rounded text-xs font-medium text-[#171A21] underline decoration-[#E4E2DF] underline-offset-2 transition-colors hover:decoration-[#171A21] focus-visible:outline-2 focus-visible:outline-[#3157D5]"
                 >
                   + Add Member
                 </button>
@@ -368,9 +346,9 @@ export function GroupMembersDialog({
 
             {/* Add Member Dropdown / Input */}
             {isAddingMember && (
-              <div className="mb-3 rounded-lg border border-stone-200 bg-stone-50 p-3 space-y-2">
+              <div className="mb-3 rounded-[10px] border border-[#E4E2DF] bg-[#FAF9F8] p-3 space-y-2">
                 <div className="flex items-center justify-between">
-                  <label htmlFor="search-add-member" className="text-xs font-medium text-stone-700">
+                  <label htmlFor="search-add-member" className="text-xs font-medium text-[#171A21]">
                     Add workspace member
                   </label>
                   <button
@@ -379,7 +357,7 @@ export function GroupMembersDialog({
                       setIsAddingMember(false);
                       setMemberSearch('');
                     }}
-                    className="text-xs text-stone-500 hover:text-stone-800"
+                    className="rounded text-xs text-[#737782] transition-colors hover:text-[#171A21] focus-visible:outline-2 focus-visible:outline-[#3157D5]"
                   >
                     Cancel
                   </button>
@@ -391,33 +369,38 @@ export function GroupMembersDialog({
                   placeholder="Search members to add…"
                   value={memberSearch}
                   onChange={(e) => setMemberSearch(e.target.value)}
-                  className="w-full rounded-md border border-stone-300 px-2.5 py-1 text-xs text-zinc-900 placeholder:text-stone-400 focus:border-zinc-900 focus:outline-none"
+                  className="w-full rounded-[6px] border border-[#E4E2DF] bg-white px-2.5 py-1 text-xs text-[#171A21] outline-none placeholder:text-[#737782] focus:border-[#3157D5] focus-visible:ring-1 focus-visible:ring-[#3157D5]"
                 />
-                <div className="max-h-36 overflow-y-auto rounded border border-stone-200 bg-white">
+                <div className="max-h-36 overflow-y-auto rounded-[6px] border border-[#E4E2DF] bg-white">
                   {filteredAvailableMembers.length === 0 ? (
-                    <p className="p-2 text-center text-xs text-stone-500">
+                    <p className="p-2 text-center text-xs text-[#737782]">
                       {availableWorkspaceMembers.length === 0
                         ? 'All workspace members are already in this group.'
                         : 'No matching members found.'}
                     </p>
                   ) : (
-                    <ul className="divide-y divide-stone-100">
+                    <ul className="divide-y divide-[#E4E2DF]">
                       {filteredAvailableMembers.map((m) => (
                         <li
                           key={m.id}
-                          className="flex items-center justify-between p-2 hover:bg-stone-50"
+                          className="flex items-center justify-between p-2 hover:bg-[#FAF9F8]"
                         >
-                          <div className="min-w-0 flex-1 mr-2">
-                            <p className="text-xs font-medium text-zinc-900 truncate">
+                          <div className="mr-2 min-w-0 flex-1">
+                            <p
+                              className="truncate text-xs font-medium text-[#171A21]"
+                              title={m.user.name}
+                            >
                               {m.user.name}
                             </p>
-                            <p className="text-[10px] text-stone-500 truncate">{m.user.email}</p>
+                            <p className="truncate text-[11px] text-[#737782]" title={m.user.email}>
+                              {m.user.email}
+                            </p>
                           </div>
                           <button
                             type="button"
                             disabled={isSubmitting}
                             onClick={() => void handleAddParticipant(m.user.id)}
-                            className="rounded bg-zinc-900 px-2 py-0.5 text-xs font-medium text-white hover:bg-zinc-800 disabled:opacity-50"
+                            className="rounded-[6px] bg-[#2E3440] px-2.5 py-1 text-xs font-medium text-white transition-colors hover:bg-[#1E222A] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#3157D5] disabled:opacity-50"
                           >
                             Add
                           </button>
@@ -429,7 +412,7 @@ export function GroupMembersDialog({
               </div>
             )}
 
-            <ul className="max-h-56 divide-y divide-stone-100 overflow-y-auto rounded-lg border border-stone-100 bg-stone-50/50 p-1">
+            <ul className="max-h-56 divide-y divide-[#E4E2DF] overflow-y-auto rounded-[10px] border border-[#E4E2DF] bg-white p-1">
               {conversation.participants.map((p) => {
                 const initial =
                   p.name.trim().charAt(0).toUpperCase() ||
@@ -439,12 +422,12 @@ export function GroupMembersDialog({
                 const roleBadge = p.role === 'ADMIN' ? 'Admin' : 'Member';
 
                 return (
-                  <li key={p.id} className="flex items-center justify-between p-2">
+                  <li key={p.id} className="flex items-center justify-between p-2.5">
                     <div className="flex items-center gap-2.5 min-w-0 flex-1">
                       <span className="relative inline-flex shrink-0">
                         <span
                           aria-hidden="true"
-                          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-stone-200 text-[10px] font-medium text-stone-700"
+                          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#ECEAE7] text-xs font-medium text-[#171A21]"
                         >
                           {initial}
                         </span>
@@ -453,21 +436,20 @@ export function GroupMembersDialog({
                         </span>
                       </span>
                       <div className="min-w-0 flex-1">
-                        <p className="text-xs font-medium text-zinc-900 truncate">
+                        <p
+                          className="truncate text-xs font-medium text-[#171A21]"
+                          title={isSelf ? `${p.name} (You)` : p.name}
+                        >
                           {p.name} {isSelf ? '(You)' : ''}
                         </p>
-                        <p className="text-[10px] text-stone-500 truncate">{p.email}</p>
+                        <p className="truncate text-[11px] text-[#737782]" title={p.email}>
+                          {p.email}
+                        </p>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span
-                        className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${
-                          p.role === 'ADMIN'
-                            ? 'bg-zinc-900 text-white'
-                            : 'bg-stone-200 text-stone-700'
-                        }`}
-                      >
+                    <div className="flex shrink-0 items-center gap-2">
+                      <span className="rounded-[6px] bg-[#F1F0EE] px-1.5 py-0.5 text-[11px] font-semibold text-[#4F5360]">
                         {roleBadge}
                       </span>
                       {isAdmin && !isSelf && (
@@ -476,22 +458,10 @@ export function GroupMembersDialog({
                           disabled={isSubmitting}
                           onClick={() => void handleRemoveParticipant(p.id)}
                           aria-label={`Remove ${p.name}`}
-                          className="rounded p-1 text-stone-400 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
+                          className="rounded p-1 text-[#737782] transition-colors hover:bg-rose-50 hover:text-[#C94A45] focus-visible:outline-2 focus-visible:outline-[#3157D5] disabled:opacity-50"
                           title="Remove from group"
                         >
-                          <svg
-                            className="h-4 w-4"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            strokeWidth="1.5"
-                            stroke="currentColor"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              d="M6 18L18 6M6 6l12 12"
-                            />
-                          </svg>
+                          <CloseIcon className="h-4 w-4" />
                         </button>
                       )}
                     </div>
@@ -502,10 +472,10 @@ export function GroupMembersDialog({
           </div>
 
           {/* Leave Group Action */}
-          <div className="border-t border-stone-100 pt-3">
+          <div className="border-t border-[#E4E2DF] pt-3">
             {confirmLeave ? (
-              <div className="rounded-lg border border-red-200 bg-red-50/50 p-3 space-y-2">
-                <p className="text-xs text-red-800 font-medium">
+              <div className="space-y-2 rounded-[8px] border border-rose-200 bg-rose-50/50 p-3">
+                <p className="text-xs font-medium text-[#C94A45]">
                   Are you sure you want to leave this group conversation?
                 </p>
                 <div className="flex justify-end gap-2">
@@ -513,7 +483,7 @@ export function GroupMembersDialog({
                     type="button"
                     disabled={isSubmitting}
                     onClick={() => setConfirmLeave(false)}
-                    className="rounded-md border border-stone-300 bg-white px-2.5 py-1 text-xs font-medium text-stone-700 hover:border-stone-400"
+                    className="rounded-[6px] border border-[#E4E2DF] bg-white px-2.5 py-1 text-xs font-medium text-[#4F5360] transition-colors hover:bg-[#F1F0EE] hover:text-[#171A21] focus-visible:outline-2 focus-visible:outline-[#3157D5]"
                   >
                     Cancel
                   </button>
@@ -521,9 +491,9 @@ export function GroupMembersDialog({
                     type="button"
                     disabled={isSubmitting}
                     onClick={() => void handleLeave()}
-                    className="rounded-md bg-red-600 px-2.5 py-1 text-xs font-medium text-white shadow-xs hover:bg-red-700 disabled:opacity-50"
+                    className="rounded-[6px] bg-[#C94A45] px-2.5 py-1 text-xs font-medium text-white transition-colors hover:bg-[#B33E3A] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#C94A45] disabled:opacity-50"
                   >
-                    {isSubmitting ? 'Leaving…' : 'Leave Group'}
+                    {isSubmitting ? 'Leaving…' : 'Leave group'}
                   </button>
                 </div>
               </div>
@@ -533,7 +503,7 @@ export function GroupMembersDialog({
                   type="button"
                   disabled={isSubmitting}
                   onClick={() => setConfirmLeave(true)}
-                  className="text-xs font-medium text-red-600 hover:text-red-700 underline decoration-red-200 underline-offset-2"
+                  className="rounded text-xs font-medium text-[#C94A45] underline decoration-rose-200 underline-offset-2 transition-colors hover:text-[#B33E3A] focus-visible:outline-2 focus-visible:outline-[#C94A45] disabled:opacity-50"
                 >
                   Leave group
                 </button>
@@ -541,7 +511,7 @@ export function GroupMembersDialog({
                   type="button"
                   disabled={isSubmitting}
                   onClick={onClose}
-                  className="rounded-lg border border-stone-300 bg-white px-4 py-1.5 text-xs font-medium text-stone-700 hover:border-stone-400"
+                  className="rounded-[8px] border border-[#E4E2DF] bg-white px-4 py-1.5 text-xs font-medium text-[#4F5360] transition-colors hover:bg-[#F1F0EE] hover:text-[#171A21] focus-visible:outline-2 focus-visible:outline-[#3157D5]"
                 >
                   Close
                 </button>
@@ -550,6 +520,6 @@ export function GroupMembersDialog({
           </div>
         </div>
       </div>
-    </div>
+    </Dialog>
   );
 }

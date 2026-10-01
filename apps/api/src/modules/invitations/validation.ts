@@ -18,7 +18,14 @@ const emailField = z
   .toLowerCase()
   .email('Enter a valid email address.');
 
-export const createInvitationSchema = z.object({ email: emailField }).strict();
+export const createInvitationSchema = z
+  .object({
+    email: emailField,
+    role: z.enum(['MEMBER', 'ADMIN'], {
+      error: 'Role must be MEMBER or ADMIN.',
+    }).optional(),
+  })
+  .strict();
 
 export const acceptInvitationSchema = z
   .object({

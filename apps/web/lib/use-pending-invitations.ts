@@ -2,8 +2,8 @@
  * Pending-invitation list state (Phase 2F-B).
  *
  * Mirrors the `useWorkspaces` pattern: loading → ready | unauthenticated |
- * error, with retry for failures and an `addInvitation` merge for freshly
- * created invitations (from the POST response — never fabricated).
+ * error, with retry for failures. Newly created invitations arrive through
+ * refetch (`retry`), never fabricated client-side merges.
  */
 
 'use client';
@@ -25,28 +25,12 @@ const LOAD_FAILURE_MESSAGE =
 export function usePendingInvitations(workspaceId: string | null): {
   state: PendingInvitationsState;
   retry: () => void;
-  addInvitation: (invitation: PendingInvitation) => void;
 } {
   const [attempt, setAttempt] = useState(0);
   const [state, setState] = useState<PendingInvitationsState>({ status: 'idle' });
 
   const retry = useCallback(() => {
     setAttempt((count) => count + 1);
-  }, []);
-
-  const addInvitation = useCallback((invitation: PendingInvitation) => {
-    setState((current) => {
-      if (current.status !== 'ready') {
-        return current;
-      }
-      if (current.invitations.some((existing) => existing.id === invitation.id)) {
-        return current;
-      }
-      return {
-        status: 'ready',
-        invitations: [invitation, ...current.invitations],
-      };
-    });
   }, []);
 
   useEffect(() => {
@@ -88,5 +72,5 @@ export function usePendingInvitations(workspaceId: string | null): {
     };
   }, [workspaceId, attempt]);
 
-  return { state, retry, addInvitation };
+  return { state, retry };
 }

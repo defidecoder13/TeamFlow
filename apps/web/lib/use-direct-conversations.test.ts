@@ -11,6 +11,8 @@ const {
   onRealtimeReconnectMock,
   joinRealtimeDirectConversationMock,
   leaveRealtimeDirectConversationMock,
+  onRealtimeConversationCreatedMock,
+  createdHandlers,
 } = vi.hoisted(() => ({
   fetchDirectConversationsMock: vi.fn(),
   onRealtimeMessageNewMock: vi.fn(),
@@ -18,6 +20,8 @@ const {
   onRealtimeReconnectMock: vi.fn(),
   joinRealtimeDirectConversationMock: vi.fn(),
   leaveRealtimeDirectConversationMock: vi.fn(),
+  onRealtimeConversationCreatedMock: vi.fn(),
+  createdHandlers: [] as Array<(event: unknown) => void>,
 }));
 
 vi.mock('./messages', async (importOriginal) => ({
@@ -32,6 +36,10 @@ vi.mock('./realtime-client', () => ({
   onRealtimeMessageNew: onRealtimeMessageNewMock,
   onRealtimeConversationRead: onRealtimeConversationReadMock,
   onRealtimeReconnect: onRealtimeReconnectMock,
+  onRealtimeConversationCreated: (handler: (event: unknown) => void) => {
+    createdHandlers.push(handler);
+    return () => {};
+  },
   onRealtimeConversationUpdated: vi.fn(() => () => {}),
   onRealtimeParticipantAdded: vi.fn(() => () => {}),
   onRealtimeParticipantRemoved: vi.fn(() => () => {}),
@@ -74,6 +82,8 @@ beforeEach(() => {
   onRealtimeReconnectMock.mockReturnValue(() => {});
   joinRealtimeDirectConversationMock.mockClear();
   leaveRealtimeDirectConversationMock.mockClear();
+  onRealtimeConversationCreatedMock.mockClear();
+  createdHandlers.length = 0;
   vi.stubEnv('NEXT_PUBLIC_API_URL', 'http://localhost:4000');
 });
 
@@ -341,5 +351,102 @@ describe('useDirectConversations', () => {
     });
     expect(joinRealtimeDirectConversationMock).toHaveBeenCalledTimes(1);
     expect(joinRealtimeDirectConversationMock).toHaveBeenCalledWith('dm-3');
+  });
+});
+
+describe('useDirectConversations conversation:created sync', () => {
+  const RAW_NEW = {
+    id: 'dm-9',
+    workspaceId: 'ws-1',
+    type: 'DIRECT',
+    name: null,
+    createdAt: '2026-09-09T00:00:00.000Z',
+    updatedAt: '2026-09-09T00:00:00.000Z',
+    participants: [
+      {
+        id: 'u-1',
+        name: 'User One',
+        email: 'user1@example.com',
+        image: null,
+        role: 'MEMBER',
+        joinedAt: '2026-09-09T00:00:00.000Z',
+      },
+      {
+        id: 'u-9',
+        name: 'User Nine',
+        email: 'user9@example.com',
+        image: null,
+        role: 'MEMBER',
+        joinedAt: '2026-09-09T00:00:00.000Z',
+      },
+    ],
+    participant: null,
+    peer: {
+      id: 'u-9',
+      name: 'User Nine',
+      email: 'user9@example.com',
+      image: null,
+    },
+    participantCount: 2,
+    unreadCount: 0,
+    hasUnread: false,
+    lastReadMessageId: null,
+  };
+
+  async function readyWith(conversations: DirectConversation[]) {
+    fetchDirectConversationsMock.mockResolvedValue({
+      ok: true,
+      data: { conversations, pageInfo: { hasMore: false, nextCursor: null } },
+    });
+    const { result } = renderHook(() => useDirectConversations('ws-1', 'u-1'));
+    await waitFor(() => {
+      expect(result.current.state.status).toBe('ready');
+    });
+    return result;
+  }
+
+  function fireCreated(conversation: unknown, workspaceId = 'ws-1') {
+    act(() => {
+      for (const handler of [...createdHandlers]) {
+        handler({ type: 'conversation:created', workspaceId, conversation });
+      }
+    });
+  }
+
+  it('prepends pushed conversations, joins the room, and ignores other workspaces', async () => {
+    const result = await readyWith([CONVERSATION_1]);
+    fireCreated(RAW_NEW);
+    const state = result.current.state;
+    if (state.status !== 'ready') throw new Error('not ready');
+    expect(state.conversations.map((c) => c.id)).toEqual(['dm-9', 'dm-1']);
+    expect(state.conversations[0].peer).toEqual(
+      expect.objectContaining({ id: 'u-9', name: 'User Nine' }),
+    );
+    expect(joinRealtimeDirectConversationMock).toHaveBeenCalledWith('dm-9');
+
+    fireCreated(RAW_NEW, 'ws-9');
+    expect(result.current.state).toEqual(state);
+  });
+
+  it('dedupes double delivery and REST races by id', async () => {
+    const result = await readyWith([CONVERSATION_1]);
+    fireCreated(RAW_NEW);
+    fireCreated(RAW_NEW);
+    act(() => {
+      result.current.addConversation({
+        ...(result.current.state as { conversations: DirectConversation[] }).conversations[0],
+        id: 'dm-9',
+      } as DirectConversation);
+    });
+    const state = result.current.state;
+    if (state.status !== 'ready') throw new Error('not ready');
+    expect(state.conversations.filter((c) => c.id === 'dm-9')).toHaveLength(1);
+  });
+
+  it('drops malformed payloads without touching state', async () => {
+    const result = await readyWith([CONVERSATION_1]);
+    const before = result.current.state;
+    fireCreated({ id: 'dm-x' });
+    expect(result.current.state).toBe(before);
   });
 });

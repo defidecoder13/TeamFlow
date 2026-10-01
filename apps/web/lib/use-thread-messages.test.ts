@@ -796,4 +796,58 @@ describe('useThreadMessages', () => {
       expect(result.current.state.messages.map((m) => m.id)).toEqual(['r-fast']);
     }
   });
+
+  describe('removeAttachment', () => {
+    const att = (id: string) => ({
+      id,
+      messageId: 'r-1',
+      originalName: `${id}.png`,
+      mimeType: 'image/png',
+      size: 10,
+      createdAt: new Date('2026-09-06T10:05:00.000Z'),
+    });
+
+    it('removes only the targeted attachment from thread state', async () => {
+      const reply1 = makeReply('r-1', 'First reply message', '2026-09-06T10:05:00.000Z');
+      (reply1 as unknown as Record<string, unknown>).attachments = [att('a-1'), att('a-2')];
+      fetchThreadRepliesMock.mockResolvedValue({
+        ok: true,
+        data: { messages: [reply1], pageInfo: { hasMore: false, nextCursor: null } },
+      });
+      const { result } = renderHook(() => useThreadMessages('root-1', 'ch-1'));
+      await waitFor(() => {
+        expect(result.current.state.status).toBe('ready');
+      });
+
+      act(() => {
+        result.current.removeAttachment('r-1', 'a-2');
+      });
+
+      const state = result.current.state;
+      if (state.status !== 'ready') throw new Error('not ready');
+      expect(state.messages).toHaveLength(1);
+      expect(state.messages[0].attachments?.map((a) => a.id)).toEqual(['a-1']);
+    });
+
+    it('is a no-op when the attachment is already absent', async () => {
+      const reply1 = makeReply('r-1', 'First reply message', '2026-09-06T10:05:00.000Z');
+      (reply1 as unknown as Record<string, unknown>).attachments = [att('a-1')];
+      fetchThreadRepliesMock.mockResolvedValue({
+        ok: true,
+        data: { messages: [reply1], pageInfo: { hasMore: false, nextCursor: null } },
+      });
+      const { result } = renderHook(() => useThreadMessages('root-1', 'ch-1'));
+      await waitFor(() => {
+        expect(result.current.state.status).toBe('ready');
+      });
+
+      act(() => {
+        result.current.removeAttachment('r-1', 'a-9');
+      });
+
+      const state = result.current.state;
+      if (state.status !== 'ready') throw new Error('not ready');
+      expect(state.messages[0].attachments?.map((a) => a.id)).toEqual(['a-1']);
+    });
+  });
 });

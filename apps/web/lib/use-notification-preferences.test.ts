@@ -120,7 +120,7 @@ describe('useNotificationPreferences', () => {
     });
 
     expect(success).toBe(true);
-    expect(api.updateNotificationPreferences).toHaveBeenCalledWith({
+    expect(api.updateNotificationPreferences).toHaveBeenCalledWith('http://localhost:4000', {
       mentionDelivery: 'NONE',
     });
 

@@ -1,204 +1,204 @@
 /**
- * Minimal line-icon set for the app shell (Phase 1D).
+ * Shared line-icon set for the authenticated app — HugeIcons.
  *
- * Hand-drawn geometric strokes — no icon library. All icons are decorative
- * (aria-hidden) and inherit text color via `currentColor`.
+ * Every export keeps the original `{ className }` API (default `h-4 w-4`,
+ * decorative via `aria-hidden`, inherits text color via `currentColor`), so
+ * consumers render identically while the glyphs come from
+ * `@hugeicons/core-free-icons` (stroke style, 1.8 weight to match the
+ * Stitch line language). Per-icon ESM imports keep bundles tree-shaken.
  */
 
-import type { ReactNode } from 'react';
+import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react';
+import {
+  ArrowDown01Icon,
+  AtSignIcon,
+  Attachment01Icon,
+  Bookmark02Icon,
+  BubbleChatIcon,
+  Calendar01Icon,
+  Cancel01Icon,
+  CheckmarkCircle01Icon,
+  Clock01Icon,
+  Delete02Icon,
+  Download01Icon,
+  EyeIcon as EyeGlyph,
+  FilterIcon as FilterGlyph,
+  HashtagIcon,
+  HelpCircleIcon,
+  Home01Icon,
+  Link01Icon,
+  LockPasswordIcon,
+  Logout01Icon,
+  Menu01Icon,
+  MoreHorizontalIcon as MoreHorizontalGlyph,
+  MoreVerticalIcon as MoreVerticalGlyph,
+  Notification01Icon,
+  PencilEdit02Icon,
+  PlusSignIcon,
+  Search01Icon,
+  SentIcon,
+  Settings01Icon,
+  SmileIcon,
+  Sun01Icon,
+  Upload01Icon,
+  UserAdd01Icon,
+  UserIcon,
+  UserMultiple02Icon,
+} from '@hugeicons/core-free-icons';
 
-function Icon({ children, className }: { children: ReactNode; className?: string }) {
+function AppIcon({ icon, className }: { icon: IconSvgElement; className?: string }) {
   return (
-    <svg
+    <HugeiconsIcon
+      icon={icon}
+      className={className ?? 'h-4 w-4'}
+      color="currentColor"
+      strokeWidth={1.8}
       aria-hidden="true"
       focusable="false"
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className ?? 'h-4 w-4'}
-    >
-      {children}
-    </svg>
+    />
   );
 }
 
 export function HomeIcon({ className }: { className?: string }) {
-  return (
-    <Icon className={className}>
-      <path d="M3 8.5 8 3.5l5 5" />
-      <path d="M4.5 7.5V13h7V7.5" />
-    </Icon>
-  );
+  return <AppIcon icon={Home01Icon} className={className} />;
 }
 
 export function ThreadsIcon({ className }: { className?: string }) {
-  return (
-    <Icon className={className}>
-      <path d="M3 4.5h10" />
-      <path d="M5 8h8" />
-      <path d="M3 11.5h10" />
-    </Icon>
-  );
+  return <AppIcon icon={BubbleChatIcon} className={className} />;
 }
 
 export function MentionsIcon({ className }: { className?: string }) {
-  return (
-    <Icon className={className}>
-      <circle cx="8" cy="8" r="5" />
-      <circle cx="8" cy="8" r="1.8" />
-      <path d="M9.8 8v1.6a1.4 1.4 0 0 0 2.8 0V8" />
-    </Icon>
-  );
+  return <AppIcon icon={AtSignIcon} className={className} />;
 }
 
 export function SavedIcon({ className }: { className?: string }) {
-  return (
-    <Icon className={className}>
-      <path d="M5 2.5h6V13l-3-2.2L5 13V2.5z" />
-    </Icon>
-  );
+  return <AppIcon icon={Bookmark02Icon} className={className} />;
 }
 
 export function HashIcon({ className }: { className?: string }) {
-  return (
-    <Icon className={className}>
-      <path d="M6 2.5 4.7 13.5" />
-      <path d="M11.3 2.5 10 13.5" />
-      <path d="M3.2 6h9.6" />
-      <path d="M3.2 10h9.6" />
-    </Icon>
-  );
+  return <AppIcon icon={HashtagIcon} className={className} />;
 }
 
 export function LockIcon({ className }: { className?: string }) {
-  return (
-    <Icon className={className}>
-      <rect x="3.5" y="7" width="9" height="6.5" rx="2" />
-      <path d="M5.5 7V5.5a2.5 2.5 0 0 1 5 0V7" />
-    </Icon>
-  );
+  return <AppIcon icon={LockPasswordIcon} className={className} />;
 }
 
 export function PersonIcon({ className }: { className?: string }) {
-  return (
-    <Icon className={className}>
-      <circle cx="8" cy="5.5" r="2.5" />
-      <path d="M3.3 13.5a4.7 4.7 0 0 1 9.4 0" />
-    </Icon>
-  );
+  return <AppIcon icon={UserIcon} className={className} />;
+}
+
+export function UserPlusIcon({ className }: { className?: string }) {
+  return <AppIcon icon={UserAdd01Icon} className={className} />;
 }
 
 export function MembersIcon({ className }: { className?: string }) {
-  return (
-    <Icon className={className}>
-      <circle cx="6" cy="6" r="2.5" />
-      <path d="M1.8 13a4.2 4.2 0 0 1 8.4 0" />
-      <circle cx="11.5" cy="6.5" r="2" />
-      <path d="M10.8 11.2a3.4 3.4 0 0 1 3.4 3.3" />
-    </Icon>
-  );
+  return <AppIcon icon={UserMultiple02Icon} className={className} />;
+}
+
+export function UsersIcon({ className }: { className?: string }) {
+  return <AppIcon icon={UserMultiple02Icon} className={className} />;
 }
 
 export function SearchIcon({ className }: { className?: string }) {
-  return (
-    <Icon className={className}>
-      <circle cx="7" cy="7" r="4.5" />
-      <path d="M10.5 10.5 14 14" />
-    </Icon>
-  );
+  return <AppIcon icon={Search01Icon} className={className} />;
 }
 
 export function BellIcon({ className }: { className?: string }) {
-  return (
-    <Icon className={className}>
-      <path d="M8 2.8a3.7 3.7 0 0 1 3.7 3.7c0 2.6.9 3.6.9 3.6H3.4s.9-1 .9-3.6A3.7 3.7 0 0 1 8 2.8z" />
-      <path d="M6.9 12.4a1.2 1.2 0 0 0 2.2 0" />
-    </Icon>
-  );
+  return <AppIcon icon={Notification01Icon} className={className} />;
 }
 
 export function PlusIcon({ className }: { className?: string }) {
-  return (
-    <Icon className={className}>
-      <path d="M8 3.5v9" />
-      <path d="M3.5 8h9" />
-    </Icon>
-  );
+  return <AppIcon icon={PlusSignIcon} className={className} />;
 }
 
 export function ChevronDownIcon({ className }: { className?: string }) {
-  return (
-    <Icon className={className}>
-      <path d="M4.5 6.5 8 10l3.5-3.5" />
-    </Icon>
-  );
+  return <AppIcon icon={ArrowDown01Icon} className={className} />;
+}
+
+export function ArrowDownIcon({ className }: { className?: string }) {
+  return <AppIcon icon={ArrowDown01Icon} className={className} />;
 }
 
 export function SettingsIcon({ className }: { className?: string }) {
-  return (
-    <Icon className={className}>
-      <circle cx="8" cy="8" r="2.2" />
-      <path d="M8 2v2M8 12v2M2 8h2M12 8h2M3.8 3.8l1.4 1.4M10.8 10.8l1.4 1.4M12.2 3.8l-1.4 1.4M5.2 10.8l-1.4 1.4" />
-    </Icon>
-  );
+  return <AppIcon icon={Settings01Icon} className={className} />;
 }
 
 export function HelpIcon({ className }: { className?: string }) {
-  return (
-    <Icon className={className}>
-      <circle cx="8" cy="8" r="6" />
-      <path d="M6.3 6.1A1.8 1.8 0 0 1 8 4.7c1 0 1.8.7 1.8 1.6 0 1.2-1.2 1.4-1.8 2.1v.7" />
-      <path d="M8 11.4v.2" />
-    </Icon>
-  );
+  return <AppIcon icon={HelpCircleIcon} className={className} />;
 }
 
 export function SignOutIcon({ className }: { className?: string }) {
-  return (
-    <Icon className={className}>
-      <path d="M9.5 3.5h-5v9h5" />
-      <path d="M6.5 8H13" />
-      <path d="M11 5.8 13.2 8 11 10.2" />
-    </Icon>
-  );
+  return <AppIcon icon={Logout01Icon} className={className} />;
 }
 
 export function PencilIcon({ className }: { className?: string }) {
-  return (
-    <Icon className={className}>
-      <path d="M11.5 2.5a1.4 1.4 0 0 1 2 2L4.5 13.5H2.5v-2L11.5 2.5z" />
-    </Icon>
-  );
+  return <AppIcon icon={PencilEdit02Icon} className={className} />;
 }
 
 export function TrashIcon({ className }: { className?: string }) {
-  return (
-    <Icon className={className}>
-      <path d="M3 4.5h10" />
-      <path d="M5.5 4.5V3a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v1.5" />
-      <path d="M12 4.5v8a1.5 1.5 0 0 1-1.5 1.5h-5A1.5 1.5 0 0 1 4 12.5v-8" />
-    </Icon>
-  );
+  return <AppIcon icon={Delete02Icon} className={className} />;
 }
 
 export function CloseIcon({ className }: { className?: string }) {
-  return (
-    <Icon className={className}>
-      <path d="M4 4l8 8" />
-      <path d="M12 4L4 12" />
-    </Icon>
-  );
+  return <AppIcon icon={Cancel01Icon} className={className} />;
 }
 
 export function SmileyIcon({ className }: { className?: string }) {
-  return (
-    <Icon className={className}>
-      <circle cx="8" cy="8" r="6" />
-      <path d="M6 6.5h.01M10 6.5h.01" />
-      <path d="M5.5 9.5a3.5 3.5 0 0 0 5 0" />
-    </Icon>
-  );
+  return <AppIcon icon={SmileIcon} className={className} />;
+}
+
+export function SunIcon({ className }: { className?: string }) {
+  return <AppIcon icon={Sun01Icon} className={className} />;
+}
+
+export function CalendarIcon({ className }: { className?: string }) {
+  return <AppIcon icon={Calendar01Icon} className={className} />;
+}
+
+export function ClockIcon({ className }: { className?: string }) {
+  return <AppIcon icon={Clock01Icon} className={className} />;
+}
+
+export function MenuIcon({ className }: { className?: string }) {
+  return <AppIcon icon={Menu01Icon} className={className} />;
+}
+
+export function SendIcon({ className }: { className?: string }) {
+  return <AppIcon icon={SentIcon} className={className} />;
+}
+
+export function LinkIcon({ className }: { className?: string }) {
+  return <AppIcon icon={Link01Icon} className={className} />;
+}
+
+export function AttachmentIcon({ className }: { className?: string }) {
+  return <AppIcon icon={Attachment01Icon} className={className} />;
+}
+
+export function CheckCircleIcon({ className }: { className?: string }) {
+  return <AppIcon icon={CheckmarkCircle01Icon} className={className} />;
+}
+
+export function EyeIcon({ className }: { className?: string }) {
+  return <AppIcon icon={EyeGlyph} className={className} />;
+}
+
+export function DownloadIcon({ className }: { className?: string }) {
+  return <AppIcon icon={Download01Icon} className={className} />;
+}
+
+export function UploadIcon({ className }: { className?: string }) {
+  return <AppIcon icon={Upload01Icon} className={className} />;
+}
+
+export function FilterIcon({ className }: { className?: string }) {
+  return <AppIcon icon={FilterGlyph} className={className} />;
+}
+
+export function MoreHorizontalIcon({ className }: { className?: string }) {
+  return <AppIcon icon={MoreHorizontalGlyph} className={className} />;
+}
+
+export function MoreVerticalIcon({ className }: { className?: string }) {
+  return <AppIcon icon={MoreVerticalGlyph} className={className} />;
 }

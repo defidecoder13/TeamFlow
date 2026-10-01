@@ -28,13 +28,26 @@ import {
   removeChannelMember,
   updateChannel,
 } from './service';
-import { removeUserFromChannelRoom } from '../realtime/index';
+import {
+  emitChannelMembershipRemoved,
+  notifyChannelCreated,
+  notifyChannelDeleted,
+  notifyChannelUpdated,
+  removeUserFromChannelRoom,
+  resolveChannelBroadcastRecipients,
+} from '../realtime/index';
 import {
   addChannelMemberSchema,
   createChannelSchema,
   firstValidationMessage,
+  markChannelReadSchema,
   updateChannelSchema,
+  updateChannelUserStateSchema,
 } from './validation';
+import {
+  markChannelRead,
+  updateChannelUserState,
+} from './service';
 
 function validationError(res: Response, message: string): void {
   res.status(400).json({ error: { code: 'VALIDATION_ERROR', message } });
@@ -95,8 +108,13 @@ export function createChannelsRouter(resolveAuth: () => AuthContext): Router {
           userId: authUser.id,
           name: parsed.data.name,
           description: parsed.data.description,
+          topic: parsed.data.topic,
           type: parsed.data.type,
         });
+        // Post-commit fan-out to authorized rooms only (public: workspace
+        // members; private: channel members). Awaited so delivery precedes
+        // the response; never throws.
+        await notifyChannelCreated({ workspaceId: req.params.workspaceId, channel });
         res.status(201).json({ channel });
       } catch (error) {
         if (error instanceof ChannelSlugConflictError) {
@@ -145,10 +163,34 @@ export function createChannelsRouter(resolveAuth: () => AuthContext): Router {
         notFound(res);
         return;
       }
-      const { id, name, slug, description, type, createdAt, updatedAt } = accessible.channel;
-      res
-        .status(200)
-        .json({ channel: { id, name, slug, description, type, createdAt, updatedAt } });
+      // createdById is exposed on the authenticated detail response ONLY, so
+      // the channel page can implement the backend's existing creator branch
+      // of canUpdateChannel. List/create/update payloads intentionally omit
+      // it (see the safe-fields security test).
+      const {
+        id,
+        name,
+        slug,
+        description,
+        topic,
+        type,
+        createdById,
+        createdAt,
+        updatedAt,
+      } = accessible.channel;
+      res.status(200).json({
+        channel: {
+          id,
+          name,
+          slug,
+          description,
+          topic,
+          type,
+          createdById,
+          createdAt,
+          updatedAt,
+        },
+      });
     }),
   );
 
@@ -188,7 +230,11 @@ export function createChannelsRouter(resolveAuth: () => AuthContext): Router {
           channelId: accessible.channel.id,
           name: parsed.data.name,
           description: parsed.data.description,
+          topic: parsed.data.topic,
         });
+        // Post-commit fan-out to authorized rooms only. Awaited so delivery
+        // precedes the response; never throws.
+        await notifyChannelUpdated({ workspaceId: req.params.workspaceId, channel });
         res.status(200).json({ channel });
       } catch (error) {
         if (error instanceof ChannelNotFoundError) {
@@ -296,6 +342,71 @@ export function createChannelsRouter(resolveAuth: () => AuthContext): Router {
     }),
   );
 
+  router.patch(
+    '/:channelSlug/user-state',
+    asyncRoute(async (req, res) => {
+      const parsed = updateChannelUserStateSchema.safeParse(req.body);
+      if (!parsed.success) {
+        validationError(res, firstValidationMessage(parsed.error));
+        return;
+      }
+      const authUser = requireSessionUser(req, res);
+      if (!authUser) return;
+      const accessible = await getAccessibleChannel(getPrisma(), {
+        workspaceId: req.params.workspaceId,
+        channelSlug: req.params.channelSlug,
+        userId: authUser.id,
+      });
+      if (!accessible) {
+        notFound(res);
+        return;
+      }
+      const userState = await updateChannelUserState(getPrisma(), {
+        channelId: accessible.channel.id,
+        userId: authUser.id,
+        isStarred: parsed.data.isStarred,
+        isMuted: parsed.data.isMuted,
+      });
+      res.status(200).json({ userState });
+    }),
+  );
+
+  router.post(
+    '/:channelSlug/read',
+    asyncRoute(async (req, res) => {
+      const parsed = markChannelReadSchema.safeParse(req.body ?? {});
+      if (!parsed.success) {
+        validationError(res, firstValidationMessage(parsed.error));
+        return;
+      }
+      const authUser = requireSessionUser(req, res);
+      if (!authUser) return;
+      const accessible = await getAccessibleChannel(getPrisma(), {
+        workspaceId: req.params.workspaceId,
+        channelSlug: req.params.channelSlug,
+        userId: authUser.id,
+      });
+      if (!accessible) {
+        notFound(res);
+        return;
+      }
+      try {
+        const userState = await markChannelRead(getPrisma(), {
+          channelId: accessible.channel.id,
+          userId: authUser.id,
+          lastReadMessageId: parsed.data.lastReadMessageId,
+        });
+        res.status(200).json({ userState });
+      } catch (error) {
+        if (error instanceof ChannelNotFoundError) {
+          notFound(res);
+          return;
+        }
+        throw error;
+      }
+    }),
+  );
+
   router.delete(
     '/:channelSlug/members/me',
     asyncRoute(async (req, res) => {
@@ -367,6 +478,11 @@ export function createChannelsRouter(resolveAuth: () => AuthContext): Router {
           userId: req.params.userId,
         });
         removeUserFromChannelRoom(accessible.channel.id, req.params.userId);
+        emitChannelMembershipRemoved(
+          req.params.workspaceId,
+          accessible.channel.id,
+          req.params.userId,
+        );
         res.status(204).send();
       } catch (error) {
         if (error instanceof ChannelNotFoundError) {
@@ -406,7 +522,19 @@ export function createChannelsRouter(resolveAuth: () => AuthContext): Router {
         return;
       }
       try {
+        // Capture recipients pre-delete (cascades remove membership rows):
+        // only these users may learn the channel id, and only post-commit.
+        const memberUserIds = await resolveChannelBroadcastRecipients({
+          workspaceId: req.params.workspaceId,
+          channelId: accessible.channel.id,
+          channelType: accessible.channel.type,
+        });
         await deleteChannel(getPrisma(), { channelId: accessible.channel.id });
+        await notifyChannelDeleted({
+          workspaceId: req.params.workspaceId,
+          channelId: accessible.channel.id,
+          memberUserIds,
+        });
         res.status(204).send();
       } catch (error) {
         if (error instanceof ChannelNotFoundError) {

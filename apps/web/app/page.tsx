@@ -1,8 +1,27 @@
+import { NewLandingNavbar } from '../components/landing/NewLandingNavbar';
+import { NewLandingHero } from '../components/landing/NewLandingHero';
+import { NewLandingPrinciples } from '../components/landing/NewLandingPrinciples';
+import { NewLandingSteps } from '../components/landing/NewLandingSteps';
+import { NewLandingValuePillars } from '../components/landing/NewLandingValuePillars';
+import { NewLandingSearch } from '../components/landing/NewLandingSearch';
+import { NewLandingPrivacy } from '../components/landing/NewLandingPrivacy';
+import { NewLandingFinalCta } from '../components/landing/NewLandingFinalCta';
+import { NewLandingFooter } from '../components/landing/NewLandingFooter';
+
 export default function Home() {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-2 bg-white text-zinc-900">
-      <h1 className="text-3xl font-semibold tracking-tight">TeamFlow</h1>
-      <p className="text-sm text-zinc-500">Foundation setup complete.</p>
-    </main>
+    <div className="min-h-screen bg-[#F8F7F6] text-[#171A21] selection:bg-[#EEF2FF] selection:text-[#3157D5]">
+      <NewLandingNavbar />
+      <main>
+        <NewLandingHero />
+        <NewLandingPrinciples />
+        <NewLandingSteps />
+        <NewLandingValuePillars />
+        <NewLandingSearch />
+        <NewLandingPrivacy />
+        <NewLandingFinalCta />
+      </main>
+      <NewLandingFooter />
+    </div>
   );
 }

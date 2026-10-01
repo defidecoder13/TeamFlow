@@ -8,6 +8,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { getApiBaseUrl } from './config';
 import {
   fetchNotificationPreferences,
   updateNotificationPreferences as apiUpdatePreferences,
@@ -29,10 +30,12 @@ export function useNotificationPreferences(): {
   state: NotificationPreferencesState;
   isSaving: boolean;
   saveError: string | null;
+  clearSaveError: () => void;
   updatePreference: (
     key: keyof UpdateNotificationPreferencesInput,
     value: NotificationDelivery,
   ) => Promise<boolean>;
+  savePreferences: (patch: UpdateNotificationPreferencesInput) => Promise<boolean>;
   retry: () => void;
 } {
   const [state, setState] = useState<NotificationPreferencesState>({ status: 'loading' });
@@ -52,7 +55,15 @@ export function useNotificationPreferences(): {
     setState({ status: 'loading' });
     setSaveError(null);
 
-    void fetchNotificationPreferences().then((res) => {
+    let apiBase: string;
+    try {
+      apiBase = getApiBaseUrl();
+    } catch {
+      setState({ status: 'error', message: LOAD_ERROR_MESSAGE });
+      return;
+    }
+
+    void fetchNotificationPreferences(apiBase).then((res) => {
       if (cancelled) return;
       if (res.ok) {
         setState({ status: 'ready', preferences: res.data });
@@ -66,25 +77,47 @@ export function useNotificationPreferences(): {
     };
   }, [attempt]);
 
-  const updatePreference = useCallback(
-    async (
-      key: keyof UpdateNotificationPreferencesInput,
-      value: NotificationDelivery,
-    ): Promise<boolean> => {
+  const clearSaveError = useCallback(() => {
+    setSaveError(null);
+  }, []);
+
+  const savePreferences = useCallback(
+    async (patch: UpdateNotificationPreferencesInput): Promise<boolean> => {
       const current = stateRef.current;
       if (current.status !== 'ready') {
         return false;
       }
 
       const previousPreferences = current.preferences;
-      if (previousPreferences[key] === value) {
+      const changes: UpdateNotificationPreferencesInput = {};
+      if (
+        patch.mentionDelivery !== undefined &&
+        patch.mentionDelivery !== previousPreferences.mentionDelivery
+      ) {
+        changes.mentionDelivery = patch.mentionDelivery;
+      }
+      if (patch.dmDelivery !== undefined && patch.dmDelivery !== previousPreferences.dmDelivery) {
+        changes.dmDelivery = patch.dmDelivery;
+      }
+      if (
+        patch.threadReplyDelivery !== undefined &&
+        patch.threadReplyDelivery !== previousPreferences.threadReplyDelivery
+      ) {
+        changes.threadReplyDelivery = patch.threadReplyDelivery;
+      }
+
+      if (
+        changes.mentionDelivery === undefined &&
+        changes.dmDelivery === undefined &&
+        changes.threadReplyDelivery === undefined
+      ) {
+        setSaveError(null);
         return true;
       }
 
-      // Optimistic update
       const optimisticPreferences: NotificationPreferences = {
         ...previousPreferences,
-        [key]: value,
+        ...changes,
       };
 
       setState({
@@ -94,7 +127,17 @@ export function useNotificationPreferences(): {
       setIsSaving(true);
       setSaveError(null);
 
-      const res = await apiUpdatePreferences({ [key]: value });
+      let apiBase: string;
+      try {
+        apiBase = getApiBaseUrl();
+      } catch {
+        setIsSaving(false);
+        setState({ status: 'ready', preferences: previousPreferences });
+        setSaveError(UPDATE_ERROR_MESSAGE);
+        return false;
+      }
+
+      const res = await apiUpdatePreferences(apiBase, changes);
 
       setIsSaving(false);
 
@@ -104,24 +147,33 @@ export function useNotificationPreferences(): {
           preferences: res.data,
         });
         return true;
-      } else {
-        // Rollback on failure
-        setState({
-          status: 'ready',
-          preferences: previousPreferences,
-        });
-        setSaveError(res.message || UPDATE_ERROR_MESSAGE);
-        return false;
       }
+
+      setState({
+        status: 'ready',
+        preferences: previousPreferences,
+      });
+      setSaveError(res.message || UPDATE_ERROR_MESSAGE);
+      return false;
     },
     [],
+  );
+
+  const updatePreference = useCallback(
+    (
+      key: keyof UpdateNotificationPreferencesInput,
+      value: NotificationDelivery,
+    ): Promise<boolean> => savePreferences({ [key]: value }),
+    [savePreferences],
   );
 
   return {
     state,
     isSaving,
     saveError,
+    clearSaveError,
     updatePreference,
+    savePreferences,
     retry,
   };
 }

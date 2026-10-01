@@ -42,6 +42,7 @@ const mockStorageService = {
   createPresignedDownloadUrl: vi.fn<StorageService['createPresignedDownloadUrl']>(),
   deleteObject: vi.fn<StorageService['deleteObject']>(),
   headObject: vi.fn<StorageService['headObject']>(),
+  checkConnectivity: vi.fn<StorageService['checkConnectivity']>(),
 };
 
 vi.mock('../auth/prisma', () => ({

@@ -10,13 +10,13 @@ export function AuthError({ message }: { message: string | null }) {
   return (
     <div
       role="alert"
-      className="flex items-start gap-2.5 rounded-lg border border-red-200 bg-red-50 px-3.5 py-3 text-[13px] leading-snug text-red-800"
+      className="flex items-start gap-2.5 rounded-lg border border-[#F8D7DA] bg-[#FDF2F2] px-3.5 py-3 text-[13px] leading-snug text-[#991B1B]"
     >
       <svg
         aria-hidden="true"
         focusable="false"
         viewBox="0 0 16 16"
-        className="mt-0.5 h-4 w-4 shrink-0"
+        className="mt-0.5 h-4 w-4 shrink-0 text-[#BA1A1A]"
         fill="none"
         stroke="currentColor"
         strokeWidth="1.5"

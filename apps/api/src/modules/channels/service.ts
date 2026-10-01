@@ -17,9 +17,23 @@ export interface ChannelResponse {
   name: string;
   slug: string;
   description: string | null;
+  topic: string | null;
   type: ChannelType;
   createdAt: Date;
   updatedAt: Date;
+}
+
+/** Per-caller channel UI state (unread/star/mute) attached to list rows. */
+export interface ChannelUserStateResponse {
+  unreadCount: number;
+  hasUnread: boolean;
+  lastReadMessageId: string | null;
+  isStarred: boolean;
+  isMuted: boolean;
+}
+
+export interface ChannelWithUserState extends ChannelResponse {
+  userState: ChannelUserStateResponse;
 }
 
 function isUniqueConstraintError(error: unknown): boolean {
@@ -87,6 +101,7 @@ function toResponse(channel: {
   name: string;
   slug: string;
   description: string | null;
+  topic?: string | null;
   type: ChannelType;
   createdAt: Date;
   updatedAt: Date;
@@ -96,6 +111,7 @@ function toResponse(channel: {
     name: channel.name,
     slug: channel.slug,
     description: channel.description,
+    topic: channel.topic ?? null,
     type: channel.type,
     createdAt: channel.createdAt,
     updatedAt: channel.updatedAt,
@@ -118,6 +134,7 @@ export async function createChannel(
     userId: string;
     name: string;
     description?: string | null;
+    topic?: string | null;
     type: ChannelType;
   },
 ): Promise<ChannelResponse> {
@@ -130,6 +147,7 @@ export async function createChannel(
           name: input.name,
           slug: slugify(input.name),
           description: input.description ?? null,
+          topic: input.topic ?? null,
           type: input.type,
           createdById: input.userId,
         },
@@ -153,20 +171,259 @@ export async function createChannel(
 /**
  * Channels visible to a workspace member: all PUBLIC channels plus PRIVATE
  * channels with membership. Deterministic order: name ascending, id tiebreak.
+ * Each row includes the caller's ChannelUserState (unread/star/mute).
  * The caller must have verified workspace membership first.
  */
 export async function listAccessibleChannels(
   prisma: PrismaClient,
   input: { workspaceId: string; userId: string },
-): Promise<ChannelResponse[]> {
+): Promise<ChannelWithUserState[]> {
   const channels = await prisma.channel.findMany({
     where: {
       workspaceId: input.workspaceId,
       OR: [{ type: 'PUBLIC' }, { memberships: { some: { userId: input.userId } } }],
     },
     orderBy: [{ name: 'asc' }, { id: 'asc' }],
+    include: {
+      userStates: { where: { userId: input.userId } },
+    },
   });
-  return channels.map(toResponse);
+  if (channels.length === 0) {
+    return [];
+  }
+
+  const channelIds = channels.map((c) => c.id);
+  const stateByChannel = new Map(
+    channels.flatMap((c) => c.userStates.map((s) => [c.id, s] as const)),
+  );
+  const unreadMap = await getChannelUnreadMap(prisma, {
+    userId: input.userId,
+    channelIds,
+  });
+
+  return channels.map((channel) => {
+    const state = stateByChannel.get(channel.id);
+    const unread = unreadMap.get(channel.id) ?? {
+      unreadCount: 0,
+      hasUnread: false,
+      lastReadMessageId: null as string | null,
+    };
+    return {
+      ...toResponse(channel),
+      userState: {
+        unreadCount: unread.unreadCount,
+        hasUnread: unread.hasUnread,
+        lastReadMessageId: unread.lastReadMessageId,
+        isStarred: state?.isStarred ?? false,
+        isMuted: state?.isMuted ?? false,
+      },
+    };
+  });
+}
+
+export interface ChannelUnreadInfo {
+  unreadCount: number;
+  hasUnread: boolean;
+  lastReadMessageId: string | null;
+}
+
+/**
+ * Unread root-message counts per channel for one user. Mirrors the DM
+ * unread map: no read state → all non-self root messages count; with a
+ * lastReadMessage → strictly newer by (createdAt, id); with null message
+ * id → newer than lastReadAt. Thread replies never count.
+ */
+export async function getChannelUnreadMap(
+  prisma: PrismaClient,
+  input: { userId: string; channelIds: string[] },
+): Promise<Map<string, ChannelUnreadInfo>> {
+  const result = new Map<string, ChannelUnreadInfo>();
+  if (input.channelIds.length === 0) {
+    return result;
+  }
+  for (const id of input.channelIds) {
+    result.set(id, { unreadCount: 0, hasUnread: false, lastReadMessageId: null });
+  }
+
+  const states = await prisma.channelUserState.findMany({
+    where: { userId: input.userId, channelId: { in: input.channelIds } },
+    include: { lastReadMessage: { select: { createdAt: true, id: true } } },
+  });
+  const stateByChannel = new Map(states.map((s) => [s.channelId, s]));
+
+  const withoutState: string[] = [];
+  let minCutoff: number | null = null;
+  for (const cid of input.channelIds) {
+    const rs = stateByChannel.get(cid);
+    if (!rs) {
+      withoutState.push(cid);
+      continue;
+    }
+    const info = result.get(cid)!;
+    info.lastReadMessageId = rs.lastReadMessageId;
+    const cutoff = rs.lastReadMessage?.createdAt ?? rs.lastReadAt;
+    const time = cutoff instanceof Date ? cutoff.getTime() : new Date(cutoff).getTime();
+    minCutoff = minCutoff === null ? time : Math.min(minCutoff, time);
+  }
+
+  const sharedClauses = {
+    parentMessageId: null,
+    authorId: { not: input.userId },
+    deletedAt: null,
+  } as const;
+  const or: Array<Record<string, unknown>> = [];
+  if (withoutState.length > 0) {
+    or.push({ channelId: { in: withoutState }, ...sharedClauses });
+  }
+  const withStateIds = input.channelIds.filter((cid) => !withoutState.includes(cid));
+  if (withStateIds.length > 0 && minCutoff !== null) {
+    or.push({
+      channelId: { in: withStateIds },
+      ...sharedClauses,
+      createdAt: { gte: new Date(minCutoff) },
+    });
+  }
+  const unreadCandidates =
+    or.length === 0
+      ? []
+      : await prisma.message.findMany({
+          where: { OR: or as never },
+          select: {
+            id: true,
+            channelId: true,
+            authorId: true,
+            createdAt: true,
+          },
+        });
+
+  for (const msg of unreadCandidates) {
+    if (msg.authorId === input.userId || !msg.channelId) continue;
+    const info = result.get(msg.channelId);
+    if (!info) continue;
+    const rs = stateByChannel.get(msg.channelId);
+    let isUnread = false;
+    if (!rs) {
+      isUnread = true;
+    } else if (rs.lastReadMessage) {
+      const cur = rs.lastReadMessage;
+      if (
+        msg.createdAt > cur.createdAt ||
+        (msg.createdAt.getTime() === cur.createdAt.getTime() && msg.id > cur.id)
+      ) {
+        isUnread = true;
+      }
+    } else if (msg.createdAt > rs.lastReadAt) {
+      isUnread = true;
+    }
+    if (isUnread) {
+      info.unreadCount += 1;
+      info.hasUnread = true;
+    }
+  }
+  return result;
+}
+
+/** Upsert star/mute flags for the caller's channel user state. */
+export async function updateChannelUserState(
+  prisma: PrismaClient,
+  input: {
+    channelId: string;
+    userId: string;
+    isStarred?: boolean;
+    isMuted?: boolean;
+  },
+): Promise<ChannelUserStateResponse> {
+  const data: { isStarred?: boolean; isMuted?: boolean } = {};
+  if (input.isStarred !== undefined) data.isStarred = input.isStarred;
+  if (input.isMuted !== undefined) data.isMuted = input.isMuted;
+
+  const upserted = await prisma.channelUserState.upsert({
+    where: { channelId_userId: { channelId: input.channelId, userId: input.userId } },
+    create: {
+      id: randomUUID(),
+      channelId: input.channelId,
+      userId: input.userId,
+      isStarred: data.isStarred ?? false,
+      isMuted: data.isMuted ?? false,
+    },
+    update: data,
+    include: { lastReadMessage: { select: { createdAt: true, id: true } } },
+  });
+
+  const unreadMap = await getChannelUnreadMap(prisma, {
+    userId: input.userId,
+    channelIds: [input.channelId],
+  });
+  const unread = unreadMap.get(input.channelId) ?? {
+    unreadCount: 0,
+    hasUnread: false,
+    lastReadMessageId: null,
+  };
+  return {
+    unreadCount: unread.unreadCount,
+    hasUnread: unread.hasUnread,
+    lastReadMessageId: upserted.lastReadMessageId ?? unread.lastReadMessageId,
+    isStarred: upserted.isStarred,
+    isMuted: upserted.isMuted,
+  };
+}
+
+/**
+ * Mark a channel read for the caller. With lastReadMessageId, validates the
+ * message belongs to this channel; without it, stamps lastReadAt = now and
+ * clears the message pointer (empty-channel / mark-all-read).
+ */
+export async function markChannelRead(
+  prisma: PrismaClient,
+  input: {
+    channelId: string;
+    userId: string;
+    lastReadMessageId?: string;
+  },
+): Promise<ChannelUserStateResponse> {
+  let lastReadMessageId: string | null = null;
+  if (input.lastReadMessageId) {
+    const message = await prisma.message.findUnique({
+      where: { id: input.lastReadMessageId },
+      select: { id: true, channelId: true },
+    });
+    if (!message || message.channelId !== input.channelId) {
+      throw new ChannelNotFoundError();
+    }
+    lastReadMessageId = message.id;
+  }
+
+  const upserted = await prisma.channelUserState.upsert({
+    where: { channelId_userId: { channelId: input.channelId, userId: input.userId } },
+    create: {
+      id: randomUUID(),
+      channelId: input.channelId,
+      userId: input.userId,
+      lastReadMessageId,
+      lastReadAt: new Date(),
+    },
+    update: {
+      lastReadMessageId,
+      lastReadAt: new Date(),
+    },
+  });
+
+  const unreadMap = await getChannelUnreadMap(prisma, {
+    userId: input.userId,
+    channelIds: [input.channelId],
+  });
+  const unread = unreadMap.get(input.channelId) ?? {
+    unreadCount: 0,
+    hasUnread: false,
+    lastReadMessageId: null,
+  };
+  return {
+    unreadCount: unread.unreadCount,
+    hasUnread: unread.hasUnread,
+    lastReadMessageId: lastReadMessageId ?? unread.lastReadMessageId,
+    isStarred: upserted.isStarred,
+    isMuted: upserted.isMuted,
+  };
 }
 
 export interface ChannelMember {
@@ -306,7 +563,12 @@ export async function removeChannelMember(
  */
 export async function updateChannel(
   prisma: PrismaClient,
-  input: { channelId: string; name?: string; description?: string | null },
+  input: {
+    channelId: string;
+    name?: string;
+    description?: string | null;
+    topic?: string | null;
+  },
 ): Promise<ChannelResponse> {
   try {
     const updated = await prisma.channel.update({
@@ -314,6 +576,7 @@ export async function updateChannel(
       data: {
         ...(input.name !== undefined ? { name: input.name, slug: slugify(input.name) } : {}),
         ...(input.description !== undefined ? { description: input.description } : {}),
+        ...(input.topic !== undefined ? { topic: input.topic } : {}),
       },
     });
     return toResponse(updated);

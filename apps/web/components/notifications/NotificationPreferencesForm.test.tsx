@@ -1,7 +1,8 @@
 /**
  * NotificationPreferencesForm tests (Phase 4H.8).
  */
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { NotificationPreferencesForm } from './NotificationPreferencesForm';
 
@@ -41,11 +42,11 @@ describe('NotificationPreferencesForm', () => {
       />,
     );
 
-    const mentionGroup = screen.getByRole('radiogroup', { name: 'Mentions' });
-    const dmGroup = screen.getByRole('radiogroup', { name: 'Direct & group messages' });
+    const mentionGroup = screen.getByRole('group', { name: 'Mentions' });
+    const dmGroup = screen.getByRole('group', { name: 'Direct & group messages' });
 
-    expect(mentionGroup.querySelector('button[aria-checked="true"]')).toHaveTextContent('All');
-    expect(dmGroup.querySelector('button[aria-checked="true"]')).toHaveTextContent('None');
+    expect(within(mentionGroup).getByRole('radio', { name: 'All' })).toBeChecked();
+    expect(within(dmGroup).getByRole('radio', { name: 'None' })).toBeChecked();
   });
 
   it('calls onUpdate when toggling an option', () => {
@@ -59,11 +60,32 @@ describe('NotificationPreferencesForm', () => {
       />,
     );
 
-    const mentionGroup = screen.getByRole('radiogroup', { name: 'Mentions' });
-    const noneBtn = mentionGroup.querySelectorAll('button')[1];
-    fireEvent.click(noneBtn);
+    const mentionGroup = screen.getByRole('group', { name: 'Mentions' });
+    fireEvent.click(within(mentionGroup).getByRole('radio', { name: 'None' }));
 
     expect(onUpdate).toHaveBeenCalledWith('mentionDelivery', 'NONE');
+  });
+
+  it('moves between options with arrow keys (native radio behavior)', async () => {
+    const user = userEvent.setup();
+    render(
+      <NotificationPreferencesForm
+        preferences={defaultPrefs}
+        isSaving={false}
+        saveError={null}
+        onUpdate={vi.fn()}
+      />,
+    );
+
+    const mentionGroup = screen.getByRole('group', { name: 'Mentions' });
+    const all = within(mentionGroup).getByRole('radio', { name: 'All' });
+    const none = within(mentionGroup).getByRole('radio', { name: 'None' });
+
+    all.focus();
+    await user.keyboard('{ArrowRight}');
+    expect(none).toHaveFocus();
+    await user.keyboard('{ArrowLeft}');
+    expect(all).toHaveFocus();
   });
 
   it('shows saving indicator when isSaving is true', () => {

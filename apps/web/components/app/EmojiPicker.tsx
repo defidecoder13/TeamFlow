@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 export interface EmojiOption {
   emoji: string;
@@ -28,53 +28,85 @@ export const POPULAR_EMOJIS: EmojiOption[] = [
   { emoji: '👎', name: 'Thumbs down' },
 ];
 
+const COLUMNS = 6;
+
 export interface EmojiPickerProps {
   isOpen: boolean;
   onSelect: (emoji: string) => void;
   onClose: () => void;
   className?: string;
+  /** The button that opened the picker — focus returns here on close. */
+  triggerRef?: React.RefObject<HTMLElement | null>;
 }
 
-export function EmojiPicker({ isOpen, onSelect, onClose, className = '' }: EmojiPickerProps) {
+export function EmojiPicker({
+  isOpen,
+  onSelect,
+  onClose,
+  className = '',
+  triggerRef,
+}: EmojiPickerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
+  // Focus the active option on open so arrows work immediately.
+  useEffect(() => {
+    if (!isOpen) return;
+    setActiveIndex(0);
+    const buttons = containerRef.current?.querySelectorAll<HTMLButtonElement>('button');
+    buttons?.[0]?.focus({ preventScroll: true });
+  }, [isOpen]);
 
   useEffect(() => {
     if (!isOpen) return;
 
+    function move(delta: number) {
+      const buttons = containerRef.current?.querySelectorAll<HTMLButtonElement>('button');
+      if (!buttons || buttons.length === 0) return;
+      const next = (activeIndex + delta + buttons.length) % buttons.length;
+      setActiveIndex(next);
+      buttons[next]?.focus();
+    }
+
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === 'Escape') {
         e.stopPropagation();
-        onClose();
+        onCloseRef.current();
+        triggerRef?.current?.focus({ preventScroll: true });
         return;
       }
-
-      if (['ArrowRight', 'ArrowLeft', 'ArrowDown', 'ArrowUp'].includes(e.key)) {
-        if (!containerRef.current) return;
-        const buttons = Array.from(
-          containerRef.current.querySelectorAll<HTMLButtonElement>('button'),
-        );
-        if (buttons.length === 0) return;
-        const currentIndex = buttons.indexOf(document.activeElement as HTMLButtonElement);
-        let nextIndex = 0;
-        if (currentIndex === -1) {
-          nextIndex = 0;
-        } else if (e.key === 'ArrowRight') {
-          nextIndex = (currentIndex + 1) % buttons.length;
-        } else if (e.key === 'ArrowLeft') {
-          nextIndex = (currentIndex - 1 + buttons.length) % buttons.length;
-        } else if (e.key === 'ArrowDown') {
-          nextIndex = (currentIndex + 6) % buttons.length;
-        } else if (e.key === 'ArrowUp') {
-          nextIndex = (currentIndex - 6 + buttons.length) % buttons.length;
-        }
+      if (!containerRef.current?.contains(e.target as Node)) return;
+      if (e.key === 'ArrowRight') {
         e.preventDefault();
-        buttons[nextIndex]?.focus();
+        move(1);
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        move(-1);
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        move(COLUMNS);
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        move(-COLUMNS);
+      } else if (e.key === 'Home') {
+        e.preventDefault();
+        setActiveIndex(0);
+        containerRef.current?.querySelectorAll<HTMLButtonElement>('button')[0]?.focus();
+      } else if (e.key === 'End') {
+        e.preventDefault();
+        const buttons = containerRef.current?.querySelectorAll<HTMLButtonElement>('button');
+        if (buttons && buttons.length > 0) {
+          setActiveIndex(buttons.length - 1);
+          buttons[buttons.length - 1]?.focus();
+        }
       }
     }
 
     function handleClickOutside(e: MouseEvent) {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        onClose();
+        onCloseRef.current();
       }
     }
 
@@ -84,29 +116,34 @@ export function EmojiPicker({ isOpen, onSelect, onClose, className = '' }: Emoji
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [isOpen, onClose]);
+  }, [isOpen, activeIndex, triggerRef]);
 
   if (!isOpen) return null;
+
+  function handleSelect(emoji: string) {
+    onSelect(emoji);
+    onCloseRef.current();
+    triggerRef?.current?.focus({ preventScroll: true });
+  }
 
   return (
     <div
       ref={containerRef}
       role="dialog"
       aria-label="Emoji picker"
-      className={`absolute z-30 rounded-xl border border-stone-200 bg-white p-2 shadow-lg ${className}`}
+      className={`absolute z-30 rounded-xl border border-[#e3e1ec] bg-white p-2 shadow-lg transition-[opacity,scale] duration-150 ease-out-expo starting:scale-[0.97] starting:opacity-0 ${className}`}
     >
-      <div className="grid grid-cols-6 gap-1 w-52 sm:w-60">
-        {POPULAR_EMOJIS.map(({ emoji, name }) => (
+      <div role="toolbar" aria-label="Emoji" className="grid w-52 grid-cols-6 gap-1 sm:w-60">
+        {POPULAR_EMOJIS.map(({ emoji, name }, index) => (
           <button
             key={emoji}
             type="button"
-            onClick={() => {
-              onSelect(emoji);
-              onClose();
-            }}
             aria-label={name}
             title={name}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-lg transition-transform hover:scale-125 hover:bg-stone-100 focus:scale-125 focus:bg-stone-100 focus:outline-none focus:ring-1 focus:ring-stone-400"
+            tabIndex={index === activeIndex ? 0 : -1}
+            onClick={() => handleSelect(emoji)}
+            onMouseEnter={() => setActiveIndex(index)}
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-lg transition-colors hover:bg-[#f4f2fd] focus-visible:bg-[#f4f2fd] focus-visible:outline-2 focus-visible:outline-[#1f44e4]"
           >
             {emoji}
           </button>

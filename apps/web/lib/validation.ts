@@ -30,6 +30,17 @@ export function validatePassword(value: string): string | null {
   return null;
 }
 
+/**
+ * Sign-in only requires a non-empty password. Length policy is enforced at
+ * sign-up; the server remains authoritative for credential checks.
+ */
+export function validateExistingPassword(value: string): string | null {
+  if (value.length === 0) {
+    return 'Enter your password.';
+  }
+  return null;
+}
+
 export function validateName(value: string): string | null {
   if (value.trim().length === 0) {
     return 'Enter your name.';

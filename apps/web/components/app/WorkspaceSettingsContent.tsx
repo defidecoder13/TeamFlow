@@ -7,7 +7,9 @@
 
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { ShieldAlert } from 'lucide-react';
+import { AuthField } from '../auth/AuthField';
 import { getApiBaseUrl } from '../../lib/config';
 import { deleteWorkspace, updateWorkspace, validateWorkspaceName } from '../../lib/workspaces';
 import type { WorkspaceRole } from '../../lib/workspaces';
@@ -46,6 +48,8 @@ export function WorkspaceSettingsContent({
   const [confirmName, setConfirmName] = useState('');
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const nameInputRef = useRef<HTMLInputElement>(null);
+  const saveErrorRef = useRef<HTMLParagraphElement>(null);
 
   useEffect(() => {
     setName(workspace.name);
@@ -66,7 +70,10 @@ export function WorkspaceSettingsContent({
     if (!canRename || saving) return;
     setTouched(true);
     const err = validateWorkspaceName(name);
-    if (err) return;
+    if (err) {
+      nameInputRef.current?.focus();
+      return;
+    }
     if (!hasNameChanged) {
       setSaveSuccess('No changes to save.');
       return;
@@ -79,7 +86,8 @@ export function WorkspaceSettingsContent({
       apiBase = getApiBaseUrl();
     } catch {
       setSaving(false);
-      setSaveError('Could not connect to API server.');
+      setSaveError('Could not connect to API server. Check your connection and try again.');
+      saveErrorRef.current?.focus();
       return;
     }
     const result = await updateWorkspace(apiBase, workspace.id, trimmedName);
@@ -95,17 +103,21 @@ export function WorkspaceSettingsContent({
     }
     if (result.kind === 'forbidden') {
       setSaveError('You do not have permission to rename this workspace.');
+      saveErrorRef.current?.focus();
       return;
     }
     if (result.kind === 'notFound') {
       setSaveError('Workspace not found. It may have been deleted.');
+      saveErrorRef.current?.focus();
       return;
     }
     if (result.kind === 'validation') {
       setSaveError(result.message);
+      nameInputRef.current?.focus();
       return;
     }
-    setSaveError('Could not update workspace. Please try again.');
+    setSaveError('Could not update workspace. Check your connection and try again.');
+    saveErrorRef.current?.focus();
   }
 
   async function handleDelete() {
@@ -136,60 +148,68 @@ export function WorkspaceSettingsContent({
       return;
     }
     if (result.kind === 'notFound') {
-      // Treat as gone — clean local state
       onDeleted(workspace.id);
       return;
     }
     setDeleteError(result.message ?? 'Could not delete workspace. Please try again.');
   }
 
+  const initial = workspace.name.trim().charAt(0).toUpperCase() || 'W';
+
   return (
-    <div className="space-y-8">
+    <div className="max-w-2xl mx-auto space-y-8">
       <div>
-        <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-stone-400">
+        <h1 className="text-[26px] font-semibold text-[#171A21] tracking-tight">
           Workspace settings
-        </p>
-        <h1 className="mt-2 text-[26px] font-semibold tracking-tight text-stone-900">Workspace</h1>
-        <p className="mt-1.5 max-w-xl text-sm leading-relaxed text-stone-500">
-          Manage your workspace name and danger zone.
+        </h1>
+        <p className="text-[14px] text-[#4F5360] mt-1">
+          Configure primary metadata, team domain slug, and administrative controls.
         </p>
       </div>
 
       <section
         aria-labelledby="rename-heading"
-        className="rounded-xl border border-stone-200 bg-white p-6 shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
+        className="bg-white border border-[#E4E2DF] rounded-[12px] p-6 shadow-2xs space-y-6"
       >
-        <h2 id="rename-heading" className="text-[13px] font-semibold text-stone-900">
-          Workspace name
-        </h2>
-        <p className="mt-1 text-[13px] leading-relaxed text-stone-500">
-          Renaming does not change the workspace URL. The slug stays{' '}
-          <span className="font-mono text-stone-700">{workspace.slug}</span>.
-        </p>
+        <div className="flex items-center gap-3 pb-4 border-b border-[#E4E2DF]">
+          <div className="w-10 h-10 rounded-[8px] bg-[#2E3440] text-white font-bold flex items-center justify-center text-[14px]">
+            {initial}
+          </div>
+          <div>
+            <h2 id="rename-heading" className="text-[15px] font-semibold text-[#171A21]">
+              {workspace.name}
+            </h2>
+            <p className="mt-0.5 text-[13px] leading-relaxed text-[#4F5360]">
+              Renaming does not change the workspace URL — the slug below is immutable.
+            </p>
+          </div>
+        </div>
 
-        <div className="mt-4 grid gap-2">
-          <label htmlFor="workspace-slug" className="text-[13px] font-medium text-stone-700">
-            Workspace URL slug (read-only)
+        <div className="grid gap-1.5">
+          <label htmlFor="workspace-slug" className="text-[13px] font-semibold text-[#171A21]">
+            Workspace URL (Immutable)
           </label>
-          <input
-            id="workspace-slug"
-            value={workspace.slug}
-            readOnly
-            aria-readonly="true"
-            className="h-9 w-full rounded-md border border-stone-200 bg-stone-50 px-3 font-mono text-sm text-stone-500"
-          />
-          <p className="text-xs text-stone-500">
-            The URL slug is immutable and stays the same after renaming.
+          <div className="flex items-center rounded-[8px] border border-[#E4E2DF] bg-[#F6F5F3] px-3 py-2 text-[14px] text-[#737782] select-all">
+            <input
+              id="workspace-slug"
+              value={workspace.slug}
+              readOnly
+              aria-readonly="true"
+              tabIndex={-1}
+              className="bg-transparent border-none outline-none text-[#737782] w-full cursor-default text-[14px]"
+            />
+          </div>
+          <p className="text-[12px] text-[#737782]">
+            Workspace slug paths are locked to preserve permalinks and API tokens.
           </p>
         </div>
 
-        <form onSubmit={handleRename} noValidate className="mt-6 space-y-4">
+        <form onSubmit={handleRename} noValidate className="space-y-4">
           <div>
-            <label htmlFor="workspace-name" className="text-[13px] font-medium text-stone-700">
-              Workspace name
-            </label>
-            <input
+            <AuthField
+              ref={nameInputRef}
               id="workspace-name"
+              label="Workspace name"
               type="text"
               value={name}
               onChange={(e) => {
@@ -199,71 +219,71 @@ export function WorkspaceSettingsContent({
               onBlur={() => setTouched(true)}
               maxLength={100}
               disabled={!canRename || saving}
-              aria-invalid={validationError ? 'true' : undefined}
-              className="mt-1.5 h-9 w-full rounded-md border border-stone-200 bg-white px-3 text-sm text-stone-900 shadow-[0_1px_2px_rgba(0,0,0,0.04)] outline-none placeholder:text-stone-400 hover:border-stone-300 focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10 disabled:bg-stone-50 disabled:text-stone-500"
+              error={validationError}
               placeholder="Enter workspace name"
             />
-            {validationError ? (
-              <p role="alert" className="mt-1.5 text-xs text-red-600">
-                {validationError}
-              </p>
-            ) : null}
             {!canRename ? (
-              <p className="mt-1.5 text-xs text-stone-500">
+              <p className="mt-1.5 text-xs text-[#737782]">
                 Only owners and admins can rename this workspace.
               </p>
             ) : null}
           </div>
 
           {saveError ? (
-            <p role="alert" className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+            <p
+              ref={saveErrorRef}
+              tabIndex={-1}
+              role="alert"
+              className="rounded-[8px] bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700 outline-none"
+            >
               {saveError}
             </p>
           ) : null}
           {saveSuccess ? (
-            <p role="status" className="rounded-md bg-green-50 px-3 py-2 text-sm text-green-700">
+            <p role="status" className="rounded-[8px] bg-emerald-50 border border-emerald-200 px-3 py-2 text-sm text-emerald-700">
               {saveSuccess}
             </p>
           ) : null}
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center justify-end gap-3 pt-2">
             <button
               type="submit"
-              disabled={!canRename || saving || !hasNameChanged || !!validationError}
-              className="inline-flex h-9 items-center justify-center rounded-lg bg-zinc-900 px-4 text-sm font-medium text-white transition-colors hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={!canRename || saving}
+              aria-busy={saving}
+              className="inline-flex h-9 items-center justify-center rounded-[8px] bg-[#2E3440] px-4 text-[13px] font-medium text-white transition-colors hover:bg-[#1E222A] focus-visible:outline-2 focus-visible:outline-[#3157D5] disabled:cursor-not-allowed disabled:opacity-60 active:scale-[0.98] motion-reduce:active:scale-100 shadow-2xs"
             >
               {saving ? 'Saving…' : 'Save changes'}
             </button>
-            {hasNameChanged && canRename ? (
-              <span className="text-xs text-stone-500">Slug will not change.</span>
-            ) : null}
           </div>
         </form>
       </section>
 
       <section
         aria-labelledby="danger-heading"
-        className="rounded-xl border border-red-200 bg-white p-6 shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
+        className="border border-rose-200 bg-white rounded-[12px] p-6 shadow-2xs space-y-4"
       >
-        <h2 id="danger-heading" className="text-[13px] font-semibold text-red-700">
-          Danger zone
-        </h2>
-        <p className="mt-1 text-[13px] leading-relaxed text-stone-600">
+        <div className="flex items-center gap-2 text-[#C94A45]">
+          <ShieldAlert className="w-5 h-5 shrink-0" />
+          <h2 id="danger-heading" className="text-[16px] font-semibold text-[#C94A45]">
+            Danger zone
+          </h2>
+        </div>
+        <p className="text-[13px] leading-relaxed text-[#4F5360]">
           Deleting a workspace is permanent and removes all channels, messages, and memberships.
           Your user account will remain.
         </p>
 
         {!canDelete ? (
-          <p className="mt-4 rounded-md bg-stone-50 px-3 py-2 text-sm text-stone-600">
+          <p className="mt-4 rounded-[8px] bg-[#F6F5F3] border border-[#E4E2DF] px-3 py-2 text-xs text-[#737782]">
             Only the workspace owner can delete this workspace.
           </p>
         ) : (
           <div className="mt-4 space-y-3">
             <label
               htmlFor="confirm-workspace-name"
-              className="text-[13px] font-medium text-stone-700"
+              className="text-[13px] font-medium text-[#4F5360]"
             >
-              Type <span className="font-semibold text-stone-900">{workspace.name}</span> to confirm
+              Type <span className="font-semibold text-[#171A21]">{workspace.name}</span> to confirm
             </label>
             <input
               id="confirm-workspace-name"
@@ -273,23 +293,25 @@ export function WorkspaceSettingsContent({
               onChange={(e) => setConfirmName(e.target.value)}
               placeholder={workspace.name}
               disabled={deleting}
-              className="h-9 w-full rounded-md border border-stone-300 bg-white px-3 text-sm text-stone-900 outline-none placeholder:text-stone-400 focus:border-red-500 focus:ring-2 focus:ring-red-500/20 disabled:opacity-60"
+              className="h-10 w-full rounded-[8px] border border-[#E4E2DF] bg-white px-3 text-[14px] text-[#171A21] outline-none placeholder:text-[#737782] focus:border-[#C94A45] focus:ring-2 focus:ring-rose-100 disabled:opacity-60 transition-all"
             />
             {deleteError ? (
-              <p role="alert" className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+              <p role="alert" className="rounded-[8px] bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
                 {deleteError}
               </p>
             ) : null}
-            <button
-              type="button"
-              onClick={() => void handleDelete()}
-              disabled={!confirmMatches || deleting}
-              aria-label="Delete workspace"
-              className="inline-flex h-9 items-center justify-center rounded-lg bg-red-600 px-4 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {deleting ? 'Deleting…' : 'Delete workspace'}
-            </button>
-            <p className="text-xs text-stone-500">This cannot be undone.</p>
+            <div className="flex items-center justify-between pt-1">
+              <button
+                type="button"
+                onClick={() => void handleDelete()}
+                disabled={!confirmMatches || deleting}
+                aria-label={`Delete ${workspace.name}`}
+                className="inline-flex h-9 items-center justify-center rounded-[8px] bg-[#C94A45] px-4 text-[13px] font-medium text-white transition-colors hover:bg-rose-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#C94A45] disabled:cursor-not-allowed disabled:opacity-60 active:scale-[0.98] motion-reduce:active:scale-100 shadow-2xs"
+              >
+                {deleting ? 'Deleting…' : 'Delete workspace'}
+              </button>
+              <p className="text-xs text-[#737782]">This cannot be undone.</p>
+            </div>
           </div>
         )}
       </section>

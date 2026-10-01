@@ -1,0 +1,124 @@
+import { fireEvent, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import React from 'react';
+import { describe, expect, it, vi } from 'vitest';
+import { EmojiPicker, POPULAR_EMOJIS } from './EmojiPicker';
+
+describe('EmojiPicker', () => {
+  it('does not render when isOpen is false', () => {
+    render(<EmojiPicker isOpen={false} onSelect={vi.fn()} onClose={vi.fn()} />);
+    expect(screen.queryByRole('dialog', { name: /emoji picker/i })).not.toBeInTheDocument();
+  });
+
+  it('renders all popular emojis when isOpen is true', () => {
+    render(<EmojiPicker isOpen={true} onSelect={vi.fn()} onClose={vi.fn()} />);
+    expect(screen.getByRole('dialog', { name: /emoji picker/i })).toBeInTheDocument();
+
+    for (const item of POPULAR_EMOJIS) {
+      expect(screen.getByRole('button', { name: item.name })).toBeInTheDocument();
+    }
+  });
+
+  it('calls onSelect and onClose when an emoji is clicked', async () => {
+    const user = userEvent.setup();
+    const onSelect = vi.fn();
+    const onClose = vi.fn();
+
+    render(<EmojiPicker isOpen={true} onSelect={onSelect} onClose={onClose} />);
+
+    const thumbsUpBtn = screen.getByRole('button', { name: 'Thumbs up' });
+    await user.click(thumbsUpBtn);
+
+    expect(onSelect).toHaveBeenCalledWith('👍');
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('calls onClose when Escape key is pressed', () => {
+    const onClose = vi.fn();
+    render(<EmojiPicker isOpen={true} onSelect={vi.fn()} onClose={onClose} />);
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('calls onClose when clicking outside the picker', () => {
+    const onClose = vi.fn();
+    render(
+      <div>
+        <div data-testid="outside">Outside element</div>
+        <EmojiPicker isOpen={true} onSelect={vi.fn()} onClose={onClose} />
+      </div>,
+    );
+
+    fireEvent.mouseDown(screen.getByTestId('outside'));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('supports keyboard navigation through arrow keys', () => {
+    render(<EmojiPicker isOpen={true} onSelect={vi.fn()} onClose={vi.fn()} />);
+
+    const dialog = screen.getByRole('dialog', { name: /emoji picker/i });
+    const buttons = screen.getAllByRole('button');
+
+    // Focus first button
+    buttons[0]?.focus();
+    expect(document.activeElement).toBe(buttons[0]);
+
+    // ArrowRight moves focus to the next emoji
+    fireEvent.keyDown(dialog, { key: 'ArrowRight' });
+    expect(document.activeElement).toBe(buttons[1]);
+
+    // ArrowLeft moves focus back
+    fireEvent.keyDown(dialog, { key: 'ArrowLeft' });
+    expect(document.activeElement).toBe(buttons[0]);
+  });
+
+  it('moves a full row on ArrowDown/ArrowUp and jumps on Home/End', () => {
+    render(<EmojiPicker isOpen={true} onSelect={vi.fn()} onClose={vi.fn()} />);
+
+    const dialog = screen.getByRole('dialog', { name: /emoji picker/i });
+    const buttons = screen.getAllByRole('button');
+
+    buttons[0]?.focus();
+    fireEvent.keyDown(dialog, { key: 'ArrowDown' });
+    expect(document.activeElement).toBe(buttons[6]);
+    fireEvent.keyDown(dialog, { key: 'ArrowUp' });
+    expect(document.activeElement).toBe(buttons[0]);
+
+    fireEvent.keyDown(dialog, { key: 'End' });
+    expect(document.activeElement).toBe(buttons[buttons.length - 1]);
+    fireEvent.keyDown(dialog, { key: 'Home' });
+    expect(document.activeElement).toBe(buttons[0]);
+  });
+
+  it('returns focus to the trigger on Escape and on select', async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    function Harness() {
+      const triggerRef = React.useRef<HTMLButtonElement>(null);
+      const [open, setOpen] = React.useState(false);
+      return (
+        <div>
+          <button type="button" ref={triggerRef} onClick={() => setOpen(true)}>
+            Open picker
+          </button>
+          <EmojiPicker
+            isOpen={open}
+            onSelect={vi.fn()}
+            onClose={() => {
+              onClose();
+              setOpen(false);
+            }}
+            triggerRef={triggerRef}
+          />
+        </div>
+      );
+    }
+    render(<Harness />);
+    await user.click(screen.getByRole('button', { name: 'Open picker' }));
+    expect(document.activeElement).toHaveAttribute('aria-label', 'Thumbs up');
+    await user.keyboard('{Escape}');
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('button', { name: 'Open picker' })).toHaveFocus();
+  });
+});

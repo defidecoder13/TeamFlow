@@ -1,0 +1,37 @@
+/**
+ * Component tests for PresenceIndicator (Phase 4I.3).
+ *
+ * Verifies accessible labels, role="img", title tooltips, and visual class assignments.
+ */
+
+import { render, screen } from '@testing-library/react';
+import { describe, expect, it } from 'vitest';
+import { PresenceIndicator } from './PresenceIndicator';
+
+describe('PresenceIndicator', () => {
+  it('renders ONLINE status with accessible label and green styling', () => {
+    render(<PresenceIndicator status="ONLINE" />);
+    const indicator = screen.getByRole('img', { name: 'Online' });
+    expect(indicator).toBeInTheDocument();
+    expect(indicator).toHaveAttribute('title', 'Online');
+    expect(indicator).toHaveAttribute('data-testid', 'presence-indicator-online');
+    expect(indicator).toHaveClass('bg-emerald-500');
+  });
+
+  it('renders OFFLINE status with accessible label and muted styling', () => {
+    render(<PresenceIndicator status="OFFLINE" />);
+    const indicator = screen.getByRole('img', { name: 'Offline' });
+    expect(indicator).toBeInTheDocument();
+    expect(indicator).toHaveAttribute('title', 'Offline');
+    expect(indicator).toHaveAttribute('data-testid', 'presence-indicator-offline');
+    expect(indicator).toHaveClass('bg-[#c8c5cb]');
+  });
+
+  it('supports sm and md sizes properly', () => {
+    const { rerender } = render(<PresenceIndicator status="ONLINE" size="sm" />);
+    expect(screen.getByRole('img', { name: 'Online' })).toHaveClass('h-2', 'w-2');
+
+    rerender(<PresenceIndicator status="ONLINE" size="md" />);
+    expect(screen.getByRole('img', { name: 'Online' })).toHaveClass('h-2.5', 'w-2.5');
+  });
+});

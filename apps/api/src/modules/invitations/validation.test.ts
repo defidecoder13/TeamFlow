@@ -22,9 +22,15 @@ describe('invitation validation', () => {
     expect(
       createInvitationSchema.safeParse({ email: 'a@b.co', invitedById: 'someone' }).success,
     ).toBe(false);
-    expect(createInvitationSchema.safeParse({ email: 'a@b.co', role: 'ADMIN' }).success).toBe(
-      false,
-    );
+    expect(
+      createInvitationSchema.safeParse({ email: 'a@b.co', role: 'ADMIN' }).success,
+    ).toBe(true);
+    expect(
+      createInvitationSchema.safeParse({ email: 'a@b.co', role: 'OWNER' }).success,
+    ).toBe(false);
+    expect(
+      createInvitationSchema.safeParse({ email: 'a@b.co', role: 'GUEST' }).success,
+    ).toBe(false);
     expect(createInvitationSchema.safeParse({ email: 'a@b.co', token: 'x' }).success).toBe(false);
     expect(createInvitationSchema.safeParse({ email: 'a@b.co', workspaceId: 'ws' }).success).toBe(
       false,

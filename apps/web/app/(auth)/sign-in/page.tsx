@@ -15,6 +15,10 @@ export default async function SignInPage({
   searchParams: Promise<{ status?: string; next?: string }>;
 }) {
   const { status, next } = await searchParams;
+  // `status=account-created` is approved UI reserved for future entry points
+  // (e.g. admin-provisioned or email-verified accounts). The current sign-up
+  // flow establishes a session immediately and routes through ProfileSetupStep
+  // → /app, so it intentionally does not link here — do not remove.
   const notice =
     status === 'account-created' ? 'Account created — sign in to continue.' : undefined;
 

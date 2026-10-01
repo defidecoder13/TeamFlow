@@ -6,7 +6,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useNotifications, type NotificationsState } from './use-notifications';
-import type { NotificationItem, NotificationPage } from './notifications';
+import type { NotificationFilter, NotificationItem, NotificationPage } from './notifications';
 
 const {
   fetchMock,
@@ -400,5 +400,156 @@ describe('useNotifications', () => {
     }
     expect(state.items.find((n) => n.id === 'n-3')?.readAt).toBeNull();
     expect(state.items.find((n) => n.id === 'n-1')?.readAt).not.toBeNull();
+  });
+
+  describe('filters', () => {
+    function realtimeNew(id: string, overrides: Partial<NotificationItem> = {}) {
+      const fresh = item(id, overrides);
+      return {
+        type: 'notification:new',
+        notification: {
+          ...fresh,
+          createdAt: fresh.createdAt.toISOString(),
+          readAt: fresh.readAt ? fresh.readAt.toISOString() : null,
+        },
+      } as never;
+    }
+
+    it('sends unreadOnly and type to the backend, including combined', async () => {
+      fetchMock.mockResolvedValueOnce(page(['n-1'], false));
+      const { result, rerender } = renderHook(
+        ({ filter }: { filter: NotificationFilter }) => useNotifications('ws-1', filter),
+        { initialProps: { filter: { unreadOnly: false } as NotificationFilter } },
+      );
+      await waitFor(() => {
+        expect(result.current.state.status).toBe('ready');
+      });
+      expect(fetchMock).toHaveBeenLastCalledWith(
+        expect.anything(),
+        'ws-1',
+        expect.not.objectContaining({ unreadOnly: true, type: expect.anything() }),
+      );
+
+      fetchMock.mockResolvedValueOnce(page([], false));
+      rerender({ filter: { unreadOnly: true, type: 'MENTION' } });
+      await waitFor(() => {
+        expect(fetchMock).toHaveBeenLastCalledWith(
+          expect.anything(),
+          'ws-1',
+          expect.objectContaining({ unreadOnly: true, type: 'MENTION' }),
+        );
+      });
+    });
+
+    it('reloads the list when the filter changes', async () => {
+      fetchMock.mockResolvedValueOnce(page(['n-1', 'n-2'], false));
+      const { result, rerender } = renderHook(
+        ({ filter }: { filter: NotificationFilter }) => useNotifications('ws-1', filter),
+        { initialProps: { filter: { unreadOnly: false } as NotificationFilter } },
+      );
+      await waitFor(() => {
+        expect(readyIds(result.current.state)).toEqual(['n-1', 'n-2']);
+      });
+
+      fetchMock.mockResolvedValueOnce(page(['n-1'], false));
+      rerender({ filter: { unreadOnly: true } });
+      await waitFor(() => {
+        expect(readyIds(result.current.state)).toEqual(['n-1']);
+      });
+    });
+
+    it('inserts only matching realtime arrivals under a filter', async () => {
+      fetchMock.mockResolvedValueOnce(page([], false));
+      const { result } = renderHook(() =>
+        useNotifications('ws-1', { unreadOnly: false, type: 'MENTION' }),
+      );
+      await waitFor(() => {
+        expect(result.current.state.status).toBe('ready');
+      });
+
+      act(() => {
+        for (const handler of handlers.new) {
+          handler(realtimeNew('n-1', { type: 'MENTION' }));
+          handler(realtimeNew('n-2', { type: 'DM_MESSAGE' }));
+        }
+      });
+      expect(readyIds(result.current.state)).toEqual(['n-1']);
+    });
+
+    it('inserts unread arrivals under the Unread filter', async () => {
+      fetchMock.mockResolvedValueOnce(page([], false));
+      const { result } = renderHook(() => useNotifications('ws-1', { unreadOnly: true }));
+      await waitFor(() => {
+        expect(result.current.state.status).toBe('ready');
+      });
+
+      act(() => {
+        for (const handler of handlers.new) {
+          handler(realtimeNew('n-1'));
+        }
+      });
+      expect(readyIds(result.current.state)).toEqual(['n-1']);
+    });
+
+    it('removes rows on read events under the Unread filter', async () => {
+      fetchMock.mockResolvedValueOnce(page(['n-1', 'n-2'], false));
+      const { result } = renderHook(() => useNotifications('ws-1', { unreadOnly: true }));
+      await waitFor(() => {
+        expect(readyIds(result.current.state)).toEqual(['n-1', 'n-2']);
+      });
+
+      act(() => {
+        for (const handler of handlers.read) {
+          handler({
+            type: 'notification:read',
+            id: 'n-1',
+            workspaceId: 'ws-1',
+            readAt: '2026-09-06T13:00:00.000Z',
+          } as never);
+        }
+      });
+      expect(readyIds(result.current.state)).toEqual(['n-2']);
+
+      act(() => {
+        for (const handler of handlers.readAll) {
+          handler({
+            type: 'notification:read-all',
+            workspaceId: 'ws-1',
+            readAt: '2026-09-06T14:00:00.000Z',
+            updatedCount: 1,
+          } as never);
+        }
+      });
+      expect(readyIds(result.current.state)).toEqual([]);
+    });
+
+    it('removes optimistically on mark-read under Unread and restores on failure', async () => {
+      fetchMock.mockResolvedValueOnce(page(['n-1', 'n-2'], false));
+      const { result } = renderHook(() => useNotifications('ws-1', { unreadOnly: true }));
+      await waitFor(() => {
+        expect(readyIds(result.current.state)).toEqual(['n-1', 'n-2']);
+      });
+
+      markOneMock.mockResolvedValueOnce({ ok: false, kind: 'error', message: 'Down.' });
+      await act(async () => {
+        await result.current.markRead('n-1');
+      });
+      expect(readyIds(result.current.state)).toEqual(['n-1', 'n-2']);
+      expect(result.current.actionError).toBe('Down.');
+    });
+
+    it('removes optimistically on mark-all-read under Unread and restores on failure', async () => {
+      fetchMock.mockResolvedValueOnce(page(['n-1', 'n-2'], false));
+      const { result } = renderHook(() => useNotifications('ws-1', { unreadOnly: true }));
+      await waitFor(() => {
+        expect(readyIds(result.current.state)).toEqual(['n-1', 'n-2']);
+      });
+
+      markAllMock.mockResolvedValueOnce({ ok: false, kind: 'error', message: 'Down.' });
+      await act(async () => {
+        result.current.markAllRead();
+      });
+      expect(readyIds(result.current.state)).toEqual(['n-1', 'n-2']);
+    });
   });
 });

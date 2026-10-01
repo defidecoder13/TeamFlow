@@ -27,6 +27,7 @@ import {
   markDirectConversationRead,
   removeConversationParticipant,
   renameGroupConversation,
+  toConversationCreatedPayload,
 } from './service';
 import {
   addConversationParticipantSchema,
@@ -337,9 +338,10 @@ describe('direct-messages domain & service logic', () => {
       recipientId: 'u-2',
     });
 
-    expect(res1.id).toBe('dm-conv-1');
-    expect(res1.participant).toEqual(user2);
-    expect(res1.peer).toEqual(user2);
+    expect(res1.conversation.id).toBe('dm-conv-1');
+    expect(res1.created).toBe(false);
+    expect(res1.conversation.participant).toEqual(user2);
+    expect(res1.conversation.peer).toEqual(user2);
 
     // Call B -> A (inverted order)
     const res2 = await getOrCreateDirectConversation(prisma, {
@@ -348,9 +350,10 @@ describe('direct-messages domain & service logic', () => {
       recipientId: 'u-1',
     });
 
-    expect(res2.id).toBe('dm-conv-1');
-    expect(res2.participant).toEqual(user1);
-    expect(res2.peer).toEqual(user1);
+    expect(res2.conversation.id).toBe('dm-conv-1');
+    expect(res2.created).toBe(false);
+    expect(res2.conversation.participant).toEqual(user1);
+    expect(res2.conversation.peer).toEqual(user1);
   });
 
   it('handles concurrent creation race (P2002 unique constraint)', async () => {
@@ -380,7 +383,8 @@ describe('direct-messages domain & service logic', () => {
       recipientId: 'u-2',
     });
 
-    expect(res.id).toBe('dm-conv-1');
+    expect(res.conversation.id).toBe('dm-conv-1');
+    expect(res.created).toBe(false);
   });
 
   it('listUserDirectConversations implements keyset pagination on (updatedAt, id) DESC', async () => {
@@ -1284,6 +1288,16 @@ describe('Phase 4F.2 - Direct Messages HTTP Endpoints', () => {
       expect(mockPrisma.directMessageReadState.findMany).toHaveBeenCalledTimes(1);
       expect(mockPrisma.message.findMany).toHaveBeenCalledTimes(1);
 
+      // The single candidates query is bounded at the read cutoff instead of
+      // scanning the full history.
+      const where = mockPrisma.message.findMany.mock.calls[0]?.[0]?.where as
+        { OR?: Array<{ createdAt?: { gte?: Date } }> } | undefined;
+      const branches = where?.OR ?? [];
+      expect(branches.length).toBeGreaterThan(0);
+      expect(
+        branches.some((branch) => branch.createdAt?.gte?.getTime() === dateRead.getTime()),
+      ).toBe(true);
+
       expect(map.get('dm-1')).toEqual({
         conversationId: 'dm-1',
         unreadCount: 1, // Only peer's unread message, self-message excluded
@@ -1762,5 +1776,58 @@ describe('Phase 4F.2 - Direct Messages HTTP Endpoints', () => {
         await request(app).post('/api/direct-messages/grp-1/leave').expect(401);
       });
     });
+  });
+});
+
+describe('toConversationCreatedPayload (conversation:created fan-out)', () => {
+  const base = {
+    id: 'dm-9',
+    workspaceId: 'ws-1',
+    type: 'DIRECT' as const,
+    name: null,
+    createdAt: new Date('2026-09-10T00:00:00.000Z'),
+    updatedAt: new Date('2026-09-10T00:00:00.000Z'),
+    participants: [
+      { id: 'u-a', name: 'A', email: 'a@x.invalid', image: null, role: 'MEMBER' as const },
+      { id: 'u-b', name: 'B', email: 'b@x.invalid', image: null, role: 'MEMBER' as const },
+    ],
+    participant: null,
+    peer: null,
+    participantCount: 2,
+    currentUserRole: 'MEMBER' as const,
+    unreadCount: 3,
+    hasUnread: true,
+    lastReadMessageId: 'm-old',
+  };
+
+  it('mirrors peer/role per recipient and zeroes read state', () => {
+    const forA = toConversationCreatedPayload(base, 'u-a');
+    expect(forA.peer?.id).toBe('u-b');
+    expect(forA.participant?.id).toBe('u-b');
+    expect(forA.currentUserRole).toBe('MEMBER');
+    expect(forA.unreadCount).toBe(0);
+    expect(forA.hasUnread).toBe(false);
+    expect(forA.lastReadMessageId).toBeNull();
+
+    const forB = toConversationCreatedPayload(base, 'u-b');
+    expect(forB.peer?.id).toBe('u-a');
+  });
+
+  it('keeps group payloads peer-free with per-recipient roles', () => {
+    const group = {
+      ...base,
+      type: 'GROUP' as const,
+      name: 'Crew',
+      participants: [
+        ...base.participants,
+        { id: 'u-c', name: 'C', email: 'c@x.invalid', image: null, role: 'ADMIN' as const },
+      ],
+      participantCount: 3,
+    };
+    const forC = toConversationCreatedPayload(group, 'u-c');
+    expect(forC.peer).toBeNull();
+    expect(forC.participant).toBeNull();
+    expect(forC.currentUserRole).toBe('ADMIN');
+    expect(forC.participants).toHaveLength(3);
   });
 });

@@ -1,0 +1,6 @@
+{
+  "name": "TeamFlow",
+  "description": "Slack-inspired team collaboration web app with channels, direct messages, search, and workspace administration.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

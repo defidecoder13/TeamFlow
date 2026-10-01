@@ -15,10 +15,10 @@ describe('presence client validation', () => {
     it('accepts valid status strings', () => {
       expect(parsePresenceStatus('ONLINE')).toBe('ONLINE');
       expect(parsePresenceStatus('OFFLINE')).toBe('OFFLINE');
-      expect(parsePresenceStatus('AWAY')).toBe('AWAY');
     });
 
     it('rejects invalid or malformed status strings', () => {
+      expect(parsePresenceStatus('AWAY')).toBeNull();
       expect(parsePresenceStatus('UNKNOWN')).toBeNull();
       expect(parsePresenceStatus(null)).toBeNull();
       expect(parsePresenceStatus(123)).toBeNull();

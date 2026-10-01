@@ -74,6 +74,7 @@ export function createWorkspacesRouter(resolveAuth: () => AuthContext): Router {
         const workspace = await createWorkspace(getPrisma(), {
           userId: authUser.id,
           name: parsed.data.name,
+          slug: parsed.data.slug,
         });
         res.status(201).json({ workspace });
       } catch (error) {
@@ -207,7 +208,8 @@ export function createWorkspacesRouter(resolveAuth: () => AuthContext): Router {
           where: { workspaceId: req.params.workspaceId },
           select: { id: true },
         });
-        const { removeUserFromChannelRoom } = await import('../realtime/index');
+        const { removeUserFromChannelRoom, emitWorkspaceMembershipRemoved } =
+          await import('../realtime/index');
         for (const channel of channels) {
           removeUserFromChannelRoom(channel.id, req.params.userId);
         }
@@ -220,6 +222,7 @@ export function createWorkspacesRouter(resolveAuth: () => AuthContext): Router {
         for (const conv of dmConversations) {
           removeUserFromDirectConversationRoom(conv.id, req.params.userId);
         }
+        emitWorkspaceMembershipRemoved(req.params.workspaceId, req.params.userId);
         res.status(204).end();
       } catch (error) {
         if (error instanceof WorkspaceMemberNotFoundError) {
@@ -360,7 +363,18 @@ export function createWorkspacesRouter(resolveAuth: () => AuthContext): Router {
         return;
       }
       try {
+        // Capture member ids pre-delete (cascades remove the rows): only
+        // these users may learn the workspace id, and only post-commit.
+        const members = await prisma.workspaceMembership.findMany({
+          where: { workspaceId: req.params.workspaceId },
+          select: { userId: true },
+        });
         await deleteWorkspace(prisma, { workspaceId: req.params.workspaceId });
+        const { notifyWorkspaceDeleted } = await import('../realtime/index');
+        await notifyWorkspaceDeleted({
+          workspaceId: req.params.workspaceId,
+          memberUserIds: members.map((m) => m.userId),
+        });
         res.status(204).end();
       } catch (error) {
         if (error instanceof WorkspaceNotFoundError) {

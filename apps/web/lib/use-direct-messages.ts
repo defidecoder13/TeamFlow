@@ -529,13 +529,66 @@ export function useDirectMessages(conversationId: string | null) {
     };
   }, [conversationId, normalizeMessages]);
 
+  /**
+   * Splice a backend-deleted attachment out of a message's local state.
+   * Called only after the DELETE succeeds (via AttachmentDisplay's
+   * onAttachmentDeleted); idempotent no-op when already absent. Other
+   * messages, ordering, and reactions are untouched.
+   */
+  const removeAttachment = useCallback((messageId: string, attachmentId: string) => {
+    setState((current) => {
+      if (current.status !== 'ready') return current;
+      return {
+        ...current,
+        messages: current.messages.map((m) =>
+          m.id === messageId && m.attachments
+            ? { ...m, attachments: m.attachments.filter((a) => a.id !== attachmentId) }
+            : m,
+        ),
+      };
+    });
+  }, []);
+
+  /**
+   * Silent refetch used after attachment uploads so the new files appear
+   * without flipping the feed into its full loading skeleton.
+   */
+  const refresh = useCallback(async () => {
+    if (!conversationId || isLoadingRef.current) return;
+    const targetConversationId = conversationId;
+    isLoadingRef.current = true;
+    try {
+      const apiBase = getApiBaseUrl();
+      const result = await fetchDirectMessages(apiBase, conversationId);
+      if (activeConversationIdRef.current !== targetConversationId || !result.ok) return;
+      const normalized = normalizeMessages(result.data.messages);
+      setState((current) => {
+        if (current.status !== 'ready') return current;
+        return {
+          status: 'ready',
+          messages: mergeMessages(current.messages, normalized, false, {
+            preferIncomingOnTie: true,
+          }),
+          hasMore: result.data.pageInfo.hasMore,
+          nextCursor: current.nextCursor ?? result.data.pageInfo.nextCursor,
+        };
+      });
+    } catch {
+      // Silent — keep existing feed on refresh failure.
+    } finally {
+      isLoadingRef.current = false;
+    }
+  }, [conversationId, normalizeMessages]);
+
   return {
     state,
     retry,
+    refresh,
     loadOlder,
     send,
     edit,
     remove,
+    removeAttachment,
     markRead,
     normalizeMessages,
     isLoadingOlder,

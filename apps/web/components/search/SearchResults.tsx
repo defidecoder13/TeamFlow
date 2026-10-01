@@ -7,9 +7,11 @@ import type {
   SearchResponse,
   UserSearchResult,
 } from '../../lib/search';
+import { channelSearchResultUrl } from '../../lib/search';
 import { UserAvatar } from '../app/UserAvatar';
 import { formatMessageTime } from '../app/message-utils';
 import { SearchIcon, ThreadsIcon } from '../app/icons';
+import { ArrowRight } from 'lucide-react';
 
 /**
  * Safe highlight renderer: matchOffsets are backend-provided UTF-16
@@ -59,7 +61,7 @@ export function HighlightedSnippet({
       parts.push(snippet.slice(cursor, range.start));
     }
     parts.push(
-      <mark key={index} className="rounded-sm bg-amber-200/70 px-px text-inherit">
+      <mark key={index} className="rounded bg-[#EEF2FF] px-1 font-medium text-[#3157D5]">
         {snippet.slice(range.start, range.end)}
       </mark>,
     );
@@ -101,34 +103,40 @@ export function MessageSearchResultItem({
         type="button"
         onClick={() => onOpen(result)}
         aria-label={`${isReply ? 'Thread reply' : 'Message'} from ${result.author.name}, ${new Date(result.createdAt).toLocaleString()}`}
-        className="flex w-full items-start gap-3 rounded-xl border border-transparent px-3 py-3 text-left transition-colors hover:border-stone-200 hover:bg-stone-50 focus:border-stone-300 focus:bg-stone-50 focus:outline-none"
+        className="flex w-full items-start justify-between gap-4 rounded-[12px] border border-[#E4E2DF] bg-white p-4 text-left shadow-2xs transition-all duration-150 ease-out hover:border-[#D2D0CC] hover:shadow-xs focus-visible:border-[#3157D5] focus-visible:outline-2 focus-visible:outline-[#3157D5] group motion-reduce:transition-none cursor-pointer"
       >
-        <div className="shrink-0 pt-0.5">
-          <UserAvatar name={result.author.name} image={result.author.image} size="md" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex min-w-0 items-baseline gap-2">
-            <span className="truncate text-[13px] font-semibold text-stone-900">
-              {result.author.name}
-            </span>
-            <span className="flex min-w-0 shrink items-center gap-1 text-[11px] font-normal text-stone-400">
-              <span className="shrink-0">{formatMessageTime(new Date(result.createdAt))}</span>
-              <span aria-hidden="true" className="shrink-0">
-                ·
-              </span>
-              <LocationLabel result={result} />
-            </span>
+        <div className="flex items-start gap-3 min-w-0">
+          <div className="shrink-0 pt-0.5">
+            <UserAvatar name={result.author.name} image={result.author.image} size="md" />
           </div>
-          <p className="mt-0.5 break-words text-[14px] leading-relaxed text-stone-800 whitespace-pre-wrap">
-            <HighlightedSnippet snippet={result.snippet} matchOffsets={result.matchOffsets} />
-          </p>
-          {isReply && (
-            <p className="mt-1 inline-flex items-center gap-1 text-[11px] font-medium text-stone-500">
-              <ThreadsIcon className="h-3 w-3" aria-hidden="true" />
-              <span>Reply in thread</span>
+          <div className="min-w-0 flex-1">
+            <div className="flex min-w-0 items-baseline gap-2 flex-wrap">
+              <span
+                className="truncate text-[14px] font-semibold text-[#171A21] group-hover:text-[#3157D5] transition-colors"
+                title={result.author.name}
+              >
+                {result.author.name}
+              </span>
+              <span className="flex min-w-0 shrink items-center gap-1 text-[11px] font-normal tabular-nums text-[#737782]">
+                <span className="shrink-0">{formatMessageTime(new Date(result.createdAt))}</span>
+                <span aria-hidden="true" className="shrink-0">
+                  ·
+                </span>
+                <LocationLabel result={result} />
+              </span>
+            </div>
+            <p className="mt-1 break-words text-[13px] leading-relaxed text-[#4F5360] whitespace-pre-wrap">
+              <HighlightedSnippet snippet={result.snippet} matchOffsets={result.matchOffsets} />
             </p>
-          )}
+            {isReply && (
+              <p className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-medium text-[#737782]">
+                <ThreadsIcon className="h-3 w-3" aria-hidden="true" />
+                <span>Reply in thread</span>
+              </p>
+            )}
+          </div>
         </div>
+        <ArrowRight className="w-4 h-4 text-[#737782] group-hover:text-[#3157D5] group-hover:translate-x-0.5 transition-all shrink-0 mt-1" />
       </button>
     </li>
   );
@@ -136,9 +144,11 @@ export function MessageSearchResultItem({
 
 export function UserSearchResultItem({ result }: { result: UserSearchResult }) {
   return (
-    <li className="flex items-center gap-3 px-3 py-2.5">
+    <li className="flex items-center gap-3 px-4 py-3 rounded-[12px] border border-[#E4E2DF] bg-white shadow-2xs">
       <UserAvatar name={result.name} image={result.image} size="md" />
-      <span className="truncate text-[14px] font-medium text-stone-900">{result.name}</span>
+      <span className="truncate text-[14px] font-medium text-[#171A21]" title={result.name}>
+        {result.name}
+      </span>
     </li>
   );
 }
@@ -152,23 +162,45 @@ export function ChannelSearchResultItem({
 }) {
   const label =
     result.kind === 'channel' ? `#${result.name ?? 'channel'}` : (result.name ?? 'Group message');
+  const body = (
+    <>
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] bg-[#EEF2FF] text-[13px] font-semibold text-[#3157D5]">
+        {result.kind === 'channel' ? '#' : '◈'}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[14px] font-semibold text-[#171A21] group-hover:text-[#3157D5] transition-colors" title={label}>
+          {label}
+        </span>
+        {result.kind === 'group_dm' && (
+          <span className="block text-[11px] text-[#737782]">Group message</span>
+        )}
+      </span>
+    </>
+  );
+  // A channel result without a slug has no safe destination
+  // (channelSearchResultUrl returns null). Render it as static content like
+  // the intentionally non-navigable user rows — never a dead button.
+  if (!channelSearchResultUrl(result)) {
+    return (
+      <li>
+        <div className="flex w-full items-center gap-3 rounded-[12px] border border-[#E4E2DF] bg-white px-4 py-3 shadow-2xs">
+          {body}
+        </div>
+      </li>
+    );
+  }
   return (
     <li>
       <button
         type="button"
         onClick={() => onOpen(result)}
         aria-label={`Open ${label}`}
-        className="flex w-full items-center gap-3 rounded-xl border border-transparent px-3 py-2.5 text-left transition-colors hover:border-stone-200 hover:bg-stone-50 focus:border-stone-300 focus:bg-stone-50 focus:outline-none"
+        className="flex w-full items-center justify-between gap-3 rounded-[12px] border border-[#E4E2DF] bg-white px-4 py-3 text-left shadow-2xs transition-all duration-150 ease-out hover:border-[#D2D0CC] hover:shadow-xs focus-visible:border-[#3157D5] focus-visible:outline-2 focus-visible:outline-[#3157D5] group motion-reduce:transition-none cursor-pointer"
       >
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-stone-100 text-[13px] font-semibold text-stone-500">
-          {result.kind === 'channel' ? '#' : '◈'}
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-[14px] font-medium text-stone-900">{label}</span>
-          {result.kind === 'group_dm' && (
-            <span className="block text-[11px] text-stone-400">Group message</span>
-          )}
-        </span>
+        <div className="flex items-center gap-3 min-w-0 flex-1">
+          {body}
+        </div>
+        <ArrowRight className="w-4 h-4 text-[#737782] group-hover:text-[#3157D5] group-hover:translate-x-0.5 transition-all shrink-0" />
       </button>
     </li>
   );
@@ -187,7 +219,7 @@ export function SearchResultList({
     return null;
   }
   return (
-    <ul className="flex flex-col gap-1" aria-label="Search results">
+    <ul className="flex flex-col gap-2.5" aria-label="Search results">
       {response.type === 'messages' &&
         response.results.map((result) => (
           <MessageSearchResultItem key={result.id} result={result} onOpen={onOpenMessage} />
@@ -203,28 +235,34 @@ export function SearchResultList({
 }
 
 export function SearchLoadingState() {
+  // Single announcement via the label; pulse blocks are hidden.
   return (
-    <div className="flex flex-col gap-2" role="status" aria-label="Loading search results">
+    <div className="flex flex-col gap-2.5" role="status" aria-label="Loading search results">
       {[0, 1, 2].map((index) => (
-        <div key={index} className="flex animate-pulse items-start gap-3 px-3 py-3">
-          <div className="h-8 w-8 shrink-0 rounded-full bg-stone-200" />
+        <div
+          key={index}
+          aria-hidden="true"
+          className="flex animate-pulse items-start gap-3 p-4 bg-white border border-[#E4E2DF] rounded-[12px]"
+        >
+          <div className="h-8 w-8 shrink-0 rounded-full bg-[#ECEAE7]" />
           <div className="flex-1 space-y-2">
-            <div className="h-3 w-1/3 rounded bg-stone-200" />
-            <div className="h-3 w-full rounded bg-stone-100" />
+            <div className="h-3 w-1/3 rounded bg-[#ECEAE7]" />
+            <div className="h-3 w-full rounded bg-[#F6F5F3]" />
           </div>
         </div>
       ))}
-      <span className="sr-only">Loading search results…</span>
     </div>
   );
 }
 
 export function SearchEmptyQueryState() {
   return (
-    <div className="flex min-h-[240px] flex-col items-center justify-center gap-2 px-6 py-12 text-center">
-      <SearchIcon className="h-6 w-6 text-stone-300" aria-hidden="true" />
-      <p className="text-[14px] font-medium text-stone-700">Search your workspace</p>
-      <p className="max-w-sm text-[13px] leading-relaxed text-stone-500">
+    <div className="bg-white border border-[#E4E2DF] rounded-[12px] p-8 text-center space-y-2">
+      <div className="w-12 h-12 rounded-full bg-[#F6F5F3] text-[#737782] flex items-center justify-center mx-auto mb-2">
+        <SearchIcon className="h-6 w-6" aria-hidden="true" />
+      </div>
+      <p className="text-[15px] font-semibold text-[#171A21]">Search your workspace</p>
+      <p className="max-w-sm mx-auto text-[13px] leading-relaxed text-[#737782]">
         Enter a keyword above to search messages, people, and channels. Use filters to narrow by
         author, conversation, date, or thread.
       </p>
@@ -232,35 +270,74 @@ export function SearchEmptyQueryState() {
   );
 }
 
-export function SearchNoResultsState({ hasFilters }: { hasFilters: boolean }) {
+export function SearchNoResultsState({
+  query,
+  hasFilters,
+  onClear,
+}: {
+  query: string;
+  hasFilters: boolean;
+  /** Omitted when there is nothing to clear (e.g. no workspace). */
+  onClear?: () => void;
+}) {
   return (
     <div
-      className="flex min-h-[240px] flex-col items-center justify-center gap-2 px-6 py-12 text-center"
+      className="bg-white border border-[#E4E2DF] rounded-[12px] p-8 text-center space-y-3"
       role="status"
     >
-      <p className="text-[14px] font-medium text-stone-700">No results found</p>
-      <p className="max-w-sm text-[13px] leading-relaxed text-stone-500">
+      <div className="w-12 h-12 rounded-full bg-[#F6F5F3] text-[#737782] flex items-center justify-center mx-auto">
+        <SearchIcon className="h-6 w-6" aria-hidden="true" />
+      </div>
+      <h2 className="text-[16px] font-semibold text-[#171A21]">
+        {query ? (
+          <>
+            No results for &ldquo;<span className="font-semibold text-[#171A21]">{query}</span>&rdquo;.
+          </>
+        ) : (
+          'No results found.'
+        )}
+      </h2>
+      <p className="max-w-sm mx-auto text-[13px] leading-relaxed text-[#4F5360]">
         Try another keyword, check your spelling
-        {hasFilters ? ', or remove a filter to broaden the search.' : '.'}
+        {hasFilters ? ', or clear the search to broaden it.' : '.'}
       </p>
+      {onClear ? (
+        <div className="pt-2">
+          <button
+            type="button"
+            onClick={onClear}
+            className="px-4 py-2 bg-[#2E3440] text-white text-[13px] font-medium rounded-[8px] hover:bg-[#1E222A] transition-colors shadow-2xs focus-visible:outline-2 focus-visible:outline-[#3157D5]"
+          >
+            Clear search
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }
 
-export function SearchErrorState({ message, onRetry }: { message: string; onRetry: () => void }) {
+export function SearchErrorState({
+  message,
+  onRetry,
+  actionLabel = 'Try again',
+}: {
+  message: string;
+  onRetry: () => void;
+  actionLabel?: string;
+}) {
   return (
     <div
-      className="flex min-h-[240px] flex-col items-center justify-center gap-3 px-6 py-12 text-center"
+      className="bg-white border border-red-200 rounded-[12px] p-8 text-center space-y-3"
       role="alert"
     >
-      <p className="text-[14px] font-medium text-stone-700">Search failed</p>
-      <p className="max-w-sm text-[13px] leading-relaxed text-stone-500">{message}</p>
+      <p className="text-[15px] font-semibold text-red-700">Search failed</p>
+      <p className="max-w-sm mx-auto text-[13px] leading-relaxed text-[#4F5360]">{message}</p>
       <button
         type="button"
         onClick={onRetry}
-        className="rounded-lg bg-stone-900 px-4 py-2 text-[13px] font-medium text-white transition-colors hover:bg-stone-700 focus:outline-none focus:ring-2 focus:ring-stone-400"
+        className="rounded-[8px] bg-[#2E3440] px-4 py-2 text-[13px] font-medium text-white hover:bg-[#1E222A] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3157D5] active:scale-[0.98] motion-reduce:active:scale-100 shadow-2xs"
       >
-        Retry
+        {actionLabel}
       </button>
     </div>
   );

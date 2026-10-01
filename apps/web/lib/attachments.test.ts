@@ -7,6 +7,7 @@ import {
   uploadBinaryToR2,
   finalizeAttachment,
   uploadSingleAttachmentDraft,
+  deleteAttachment,
   type AttachmentDraft,
 } from './attachments';
 
@@ -248,6 +249,62 @@ describe('attachments lib', () => {
 
       expect(res.ok).toBe(true);
       expect(statusLog).toEqual(['requesting-url', 'uploading', 'finalizing', 'complete']);
+    });
+  });
+
+  describe('deleteAttachment', () => {
+    it('sends DELETE and returns ok on success', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) });
+      global.fetch = mockFetch;
+
+      const res = await deleteAttachment('att-1', 'http://localhost:3001');
+
+      expect(res).toEqual({ ok: true });
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3001/api/attachments/att-1',
+        expect.objectContaining({ method: 'DELETE', credentials: 'include' }),
+      );
+    });
+
+    it('maps 401, 403, and 404 to safe messages', async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 401,
+        json: async () => ({}),
+      });
+      const unauth = await deleteAttachment('att-1', 'http://localhost:3001');
+      expect(unauth.ok).toBe(false);
+      if (!unauth.ok) {
+        expect(unauth.unauthorized).toBe(true);
+      }
+
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 403,
+        json: async () => ({ error: { message: 'Denied.' } }),
+      });
+      const forbidden = await deleteAttachment('att-1', 'http://localhost:3001');
+      expect(forbidden).toEqual({
+        ok: false,
+        error: 'You do not have permission to delete this attachment.',
+      });
+
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 404,
+        json: async () => ({}),
+      });
+      const missing = await deleteAttachment('att-1', 'http://localhost:3001');
+      expect(missing.ok).toBe(false);
+      if (!missing.ok) {
+        expect(missing.error).toContain('been deleted already');
+      }
+    });
+
+    it('returns a network error without throwing', async () => {
+      global.fetch = vi.fn().mockRejectedValue(new Error('offline'));
+      const res = await deleteAttachment('att-1', 'http://localhost:3001');
+      expect(res).toEqual({ ok: false, error: 'Network error deleting attachment.' });
     });
   });
 });

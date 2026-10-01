@@ -11,6 +11,7 @@
 import {
   DeleteObjectCommand,
   GetObjectCommand,
+  HeadBucketCommand,
   HeadObjectCommand,
   PutObjectCommand,
   S3Client,
@@ -33,6 +34,11 @@ export interface StorageService {
   ): Promise<string>;
   deleteObject(key: string): Promise<void>;
   headObject(key: string): Promise<{ size: number; contentType?: string } | null>;
+  /**
+   * Verifies the bucket is reachable with the configured credentials.
+   * Throws on any failure (bad credentials, missing bucket, network).
+   */
+  checkConnectivity(): Promise<void>;
 }
 
 export class R2StorageService implements StorageService {
@@ -106,6 +112,10 @@ export class R2StorageService implements StorageService {
     } catch {
       return null;
     }
+  }
+
+  async checkConnectivity(): Promise<void> {
+    await this.client.send(new HeadBucketCommand({ Bucket: this.bucketName }));
   }
 }
 

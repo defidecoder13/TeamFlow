@@ -5,7 +5,7 @@
  * (`GET /api/workspaces/:workspaceId/presence`).
  */
 
-export const PRESENCE_STATUSES = ['ONLINE', 'OFFLINE', 'AWAY'] as const;
+export const PRESENCE_STATUSES = ['ONLINE', 'OFFLINE'] as const;
 
 export type PresenceStatus = (typeof PRESENCE_STATUSES)[number];
 

@@ -1,8 +1,7 @@
 /**
  * Sign-up form: validates locally, then creates the account through the real
  * Express/Better Auth backend. On success the session is established by
- * Better Auth and the user continues to sign-in (temporary destination until
- * the /app workspace shell exists in a later phase).
+ * Better Auth and the user continues to sign-in.
  */
 
 'use client';
@@ -19,10 +18,10 @@ import {
 import { AuthError } from './AuthError';
 import { AuthField } from './AuthField';
 import { AuthSubmitButton } from './AuthSubmitButton';
-import { AuthSuccessPanel } from './AuthSuccessPanel';
 import { AuthSwitchLink } from './AuthSwitchLink';
 import { LockIcon, MailIcon, PersonIcon } from './field-icons';
 import { PasswordField } from './PasswordField';
+import { ProfileSetupStep } from './ProfileSetupStep';
 
 export function SignUpForm() {
   const [name, setName] = useState('');
@@ -86,25 +85,17 @@ export function SignUpForm() {
   }
 
   if (created) {
-    return (
-      <AuthSuccessPanel
-        title="Account created"
-        actionHref="/sign-in?status=account-created"
-        actionLabel="Continue to sign in"
-      >
-        <p>Your TeamFlow account is ready.</p>
-      </AuthSuccessPanel>
-    );
+    return <ProfileSetupStep name={name} email={email} />;
   }
 
   return (
-    <div>
+    <div className="w-full min-w-0">
       <AuthSwitchLink prompt="Already have an account?" actionLabel="Sign in" href="/sign-in" />
 
-      <h1 className="text-2xl font-semibold tracking-tight text-zinc-900">Create your account</h1>
-      <p className="mt-1.5 text-sm leading-relaxed text-zinc-500">Get started with TeamFlow</p>
+      <h1 className="text-2xl font-semibold tracking-[-0.02em] text-[#171A21]">Create your account</h1>
+      <p className="mt-2 text-sm leading-relaxed text-[#4F5360]">Get started with TeamFlow</p>
 
-      <form onSubmit={handleSubmit} noValidate className="mt-7 space-y-4">
+      <form onSubmit={handleSubmit} noValidate className="mt-8 space-y-4">
         <AuthError message={authError} />
         <AuthField
           id="signup-name"
@@ -159,7 +150,7 @@ export function SignUpForm() {
           onChange={setConfirmation}
           onBlur={() => touch('confirmation')}
         />
-        <div className="pt-2">
+        <div className="pt-3">
           <AuthSubmitButton pending={submitting} pendingLabel="Creating account…">
             Create account
           </AuthSubmitButton>

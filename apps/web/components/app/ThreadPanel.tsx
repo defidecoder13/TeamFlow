@@ -1,17 +1,40 @@
 'use client';
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { Message } from '../../lib/messages';
+import type { MentionMember, MentionSource } from '../../lib/mentions';
 import { useThreadMessages } from '../../lib/use-thread-messages';
+import { useTyping, type TypingContainer } from '../../lib/use-typing';
 import { scrollToMessage, useSeekMessage } from '../../lib/use-deep-link';
+import { TypingIndicator } from './TypingIndicator';
 import { CloseIcon } from './icons';
 import { UserAvatar } from './UserAvatar';
 import { formatMessageTime } from './message-utils';
-import { MessageRow } from './MessageRow';
+import { MessageRow, MessageBody } from './MessageRow';
 import { MessageEditor } from './MessageEditor';
 import { MessageComposer } from './MessageComposer';
+import { AttachmentDisplay } from './AttachmentDisplay';
 import { DeleteMessageDialog } from './DeleteMessageDialog';
 import { MessageReactions } from './MessageReactions';
+import { MessageListSkeleton } from './MessageListSkeleton';
+
+/**
+ * Container-scoped typing display for one open thread. Keyed by thread id
+ * at the call site so switching threads never retains the previous
+ * thread's typing users (the backend contract has no thread identifier).
+ */
+function ThreadTypingIndicator({
+  container,
+  userId,
+  members,
+}: {
+  container: TypingContainer | null;
+  userId: string | null;
+  members?: Array<{ id: string; name: string }>;
+}) {
+  const { typingUserIds } = useTyping(container, { currentUserId: userId });
+  return <TypingIndicator typingUserIds={typingUserIds} members={members} className="mb-1 px-1" />;
+}
 
 interface ThreadPanelProps {
   rootMessage: Message;
@@ -19,6 +42,12 @@ interface ThreadPanelProps {
   onClose: () => void;
   /** Search deep-link: highlight + scroll to this reply once loaded. */
   highlightedReplyId?: string | null;
+  /** Known members for @ mention highlighting + reply-composer autocomplete. */
+  mentionMembers?: MentionMember[];
+  mentionSource?: MentionSource;
+  onRetryMentionMembers?: () => void;
+  /** Members for resolving typing names. Same source as the parent view. */
+  typingMembers?: Array<{ id: string; name: string }>;
 }
 
 export function ThreadPanel({
@@ -26,14 +55,40 @@ export function ThreadPanel({
   userId,
   onClose,
   highlightedReplyId,
+  mentionMembers,
+  mentionSource,
+  onRetryMentionMembers,
+  typingMembers,
 }: ThreadPanelProps) {
+  // Thread typing is container-scoped: the backend typing contract carries
+  // only channelId/conversationId (no thread id), so the panel reflects the
+  // same conversation typing as its parent view — never inferred per-thread
+  // state. Replies composed here emit typing into that container.
+  const threadContainer: TypingContainer | null = useMemo(
+    () =>
+      rootMessage.channelId
+        ? { channelId: rootMessage.channelId }
+        : rootMessage.directMessageConversationId
+          ? { conversationId: rootMessage.directMessageConversationId }
+          : null,
+    [rootMessage.channelId, rootMessage.directMessageConversationId],
+  );
   const panelRef = useRef<HTMLDivElement>(null);
   const repliesScrollRef = useRef<HTMLDivElement>(null);
   const scrollPosBeforeLoadRef = useRef<{ scrollHeight: number; scrollTop: number } | null>(null);
   const prevRepliesCountRef = useRef<number>(0);
 
-  const { state, isLoadingOlder, loadOlderError, retry, loadOlder, send, edit, remove } =
-    useThreadMessages(rootMessage.id, rootMessage.channelId);
+  const {
+    state,
+    isLoadingOlder,
+    loadOlderError,
+    retry,
+    loadOlder,
+    send,
+    edit,
+    remove,
+    removeAttachment,
+  } = useThreadMessages(rootMessage.id, rootMessage.channelId);
 
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingBody, setEditingBody] = useState<string | null>(null);
@@ -130,10 +185,37 @@ export function ThreadPanel({
     });
   }, [replySeekStatus, highlightedReplyId]);
 
-  // Handle Escape key at panel level (cancel edit/delete first, otherwise close panel)
+  // On small screens the panel is a bottom sheet: move focus into it on
+  // open so touch/keyboard users land in the thread. Desktop keeps the
+  // side-panel behavior untouched (no focus steal). On unmount, return
+  // focus to whatever opened the thread (usually the Reply button), like
+  // Dialog does for modals.
   useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
+    const opener = document.activeElement as HTMLElement | null;
+    if (
+      typeof window !== 'undefined' &&
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(max-width: 639px)').matches
+    ) {
+      panelRef.current?.focus({ preventScroll: true });
+    }
+    return () => {
+      if (opener && document.contains(opener)) {
+        opener.focus({ preventScroll: true });
+      }
+    };
+  }, [rootMessage.id]);
+
+  // Handle Escape key at panel level (cancel edit/delete first, otherwise close panel).
+  // Yields to nested dialogs and pickers: if the event started inside one,
+  // its own handler owns the keypress.
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
+        const target = e.target as HTMLElement | null;
+        if (target?.closest?.('[role="dialog"], [role="toolbar"], [role="menu"]')) {
+          return;
+        }
         if (editingMessageId) {
           e.stopPropagation();
           setEditingMessageId(null);
@@ -149,7 +231,7 @@ export function ThreadPanel({
         e.stopPropagation();
         onClose();
       }
-    }
+    };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
@@ -229,190 +311,269 @@ export function ThreadPanel({
   const rootAuthorName = rootMessage.author?.name ?? 'Unknown';
 
   return (
-    <aside
-      ref={panelRef}
-      role="region"
-      aria-label="Thread panel"
-      className="flex h-full w-[380px] sm:w-[420px] lg:w-[440px] shrink-0 flex-col border-l border-stone-200 bg-white"
-    >
-      {/* Thread Header */}
-      <header className="flex h-14 items-center justify-between border-b border-stone-200 px-4">
-        <div className="min-w-0">
-          <h2 className="text-[15px] font-semibold text-stone-900">Thread</h2>
-          <p className="truncate text-[11px] text-stone-500">with {rootAuthorName}</p>
+    <>
+      {/* Mobile backdrop: the sheet overlays the feed below `sm`. Keyboard
+          users close via Escape (handled at panel level); this layer is
+          pointer-only so it never duplicates the header close action. */}
+      <div
+        role="presentation"
+        onClick={onClose}
+        className="fixed inset-0 z-30 bg-[#1a1b22]/40 backdrop-blur-[2px] sm:hidden"
+      />
+      <aside
+        ref={panelRef}
+        role="region"
+        aria-label="Thread panel"
+        tabIndex={-1}
+        className="fixed inset-x-0 bottom-0 top-auto z-40 flex max-h-[85dvh] w-full flex-col rounded-t-2xl border-t border-[#E4E2DF] bg-white transition-[opacity,translate] duration-200 ease-out-expo starting:translate-y-4 starting:opacity-0 sm:static sm:z-auto sm:h-full sm:max-h-none sm:w-[420px] sm:shrink-0 sm:rounded-none sm:border-l sm:border-t-0 sm:starting:translate-x-4 lg:w-[440px]"
+      >
+        {/* Thread Header */}
+        <header className="flex h-14 items-center justify-between border-b border-[#E4E2DF] px-4 bg-white">
+          <div className="min-w-0">
+            <h2 className="text-[15px] font-semibold text-[#171A21]">Thread</h2>
+            <p className="truncate text-[11px] text-[#737782]">with {rootAuthorName}</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close thread"
+            title="Close thread"
+            className="touch-hit flex h-7 w-7 items-center justify-center rounded-[6px] text-[#737782] transition-colors hover:bg-[#F1F0EE] hover:text-[#171A21] focus-visible:outline-2 focus-visible:outline-[#3157D5]"
+          >
+            <CloseIcon className="h-4 w-4" />
+          </button>
+        </header>
+
+        {/* Pinned Root Message */}
+        <div className="border-b border-[#E4E2DF] bg-[#FAF9F8] p-4">
+          {rootMessage.body === null ? (
+            <div>
+              <div className="text-[13px] italic text-[#5f5e61]">Message deleted</div>
+              <MessageReactions messageId={rootMessage.id} currentUserId={userId} isDeleted />
+            </div>
+          ) : (
+            <div className="flex items-start gap-3">
+              <div className="shrink-0 pt-0.5">
+                <UserAvatar name={rootAuthorName} image={rootMessage.author?.image} size="md" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="mb-1 flex items-baseline gap-2 leading-none">
+                  <span className="truncate text-[13px] font-semibold text-[#1a1b22]">
+                    {rootAuthorName}
+                  </span>
+                  <span className="shrink-0 text-[11px] font-normal text-[#5f5e61]">
+                    {formatMessageTime(rootMessage.createdAt)}
+                  </span>
+                </div>
+                <p className="break-words text-[14px] leading-relaxed text-[#1a1b22] whitespace-pre-wrap">
+                  <MessageBody body={rootMessage.body} mentionMembers={mentionMembers} />
+                </p>
+                {rootMessage.attachments && rootMessage.attachments.length > 0 && (
+                  <AttachmentDisplay
+                    attachments={rootMessage.attachments}
+                    currentUserId={null}
+                    messageAuthorId={rootMessage.authorId}
+                  />
+                )}
+                <MessageReactions
+                  messageId={rootMessage.id}
+                  currentUserId={userId}
+                  showAddWhenEmpty
+                />
+              </div>
+            </div>
+          )}
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close thread"
-          title="Close thread"
-          className="flex h-7 w-7 items-center justify-center rounded-md text-stone-400 transition-colors hover:bg-stone-100 hover:text-stone-700 focus:outline-none focus:ring-1 focus:ring-stone-400"
-        >
-          <CloseIcon className="h-4 w-4" />
-        </button>
-      </header>
 
-      {/* Pinned Root Message */}
-      <div className="border-b border-stone-200 bg-stone-50/50 p-4">
-        {rootMessage.body === null ? (
-          <div>
-            <div className="text-[13px] italic text-stone-400">Message deleted</div>
-            <MessageReactions messageId={rootMessage.id} currentUserId={userId} isDeleted />
-          </div>
-        ) : (
-          <div className="flex items-start gap-3">
-            <div className="shrink-0 pt-0.5">
-              <UserAvatar name={rootAuthorName} image={rootMessage.author?.image} size="md" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="mb-1 flex items-baseline gap-2 leading-none">
-                <span className="truncate text-[13px] font-semibold text-stone-900">
-                  {rootAuthorName}
-                </span>
-                <span className="shrink-0 text-[11px] font-normal text-stone-400">
-                  {formatMessageTime(rootMessage.createdAt)}
-                </span>
+        {/* Scrollable Replies Container */}
+        <div className="relative flex min-h-0 flex-1 flex-col">
+          <div
+            ref={repliesScrollRef}
+            onScroll={handleScroll}
+            className="flex min-h-0 flex-1 flex-col overflow-y-auto py-2"
+            data-testid="thread-replies-scroll"
+          >
+            {state.status === 'loading' && (
+              <MessageListSkeleton rows={3} label="Loading replies" className="flex-1" />
+            )}
+
+            {state.status === 'error' && (
+              <div className="m-4 rounded-lg border border-red-200 bg-red-50 p-3 text-center">
+                <p className="text-[13px] text-red-700">{state.message}</p>
+                <button
+                  type="button"
+                  onClick={retry}
+                  className="mt-2 text-xs font-semibold text-red-800 underline hover:text-red-950"
+                >
+                  Retry
+                </button>
               </div>
-              <p className="break-words text-[14px] leading-relaxed text-stone-800 whitespace-pre-wrap">
-                {rootMessage.body}
-              </p>
-              <MessageReactions
-                messageId={rootMessage.id}
-                currentUserId={userId}
-                showAddWhenEmpty
-              />
-            </div>
-          </div>
-        )}
-      </div>
+            )}
 
-      {/* Scrollable Replies Container */}
-      <div className="relative flex min-h-0 flex-1 flex-col">
-        <div
-          ref={repliesScrollRef}
-          onScroll={handleScroll}
-          className="flex min-h-0 flex-1 flex-col overflow-y-auto py-2"
-          data-testid="thread-replies-scroll"
-        >
-          {state.status === 'loading' && (
-            <div className="flex flex-1 items-center justify-center p-8 text-stone-500">
-              <div className="flex items-center gap-2 text-sm">
-                <div className="h-4 w-4 animate-spin rounded-full border-2 border-stone-300 border-t-stone-600" />
-                <span>Loading replies...</span>
+            {state.status === 'unauthenticated' && (
+              <div className="flex flex-1 flex-col items-center justify-center gap-2 p-8 text-center">
+                <p className="text-[14px] font-medium text-[#47464b]">Session expired</p>
+                <p className="text-[12px] text-[#47464b]">
+                  Sign in again to keep following this thread.
+                </p>
+                <a
+                  href="/sign-in"
+                  className="mt-1 rounded-[8px] bg-[#2E3440] px-4 py-2 text-[13px] font-medium text-white transition-colors hover:bg-[#1E222A]"
+                >
+                  Go to sign in
+                </a>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="mt-1 text-[13px] font-medium text-[#1a1b22] underline decoration-[#c8c5cb] underline-offset-4 transition-colors hover:decoration-[#1a1b22]"
+                >
+                  Close thread
+                </button>
               </div>
-            </div>
-          )}
+            )}
 
-          {state.status === 'error' && (
-            <div className="m-4 rounded-lg border border-red-200 bg-red-50 p-3 text-center">
-              <p className="text-[13px] text-red-700">{state.message}</p>
-              <button
-                type="button"
-                onClick={retry}
-                className="mt-2 text-xs font-semibold text-red-800 underline hover:text-red-950"
-              >
-                Retry
-              </button>
-            </div>
-          )}
+            {state.status === 'notFound' && (
+              <div className="flex flex-1 flex-col items-center justify-center gap-2 p-8 text-center">
+                <p className="text-[14px] font-medium text-[#47464b]">Thread unavailable</p>
+                <p className="text-[12px] text-[#47464b]">
+                  This thread no longer exists or you no longer have access to it.
+                </p>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="mt-1 text-[13px] font-medium text-[#1a1b22] underline decoration-[#c8c5cb] underline-offset-4 transition-colors hover:decoration-[#1a1b22]"
+                >
+                  Close thread
+                </button>
+              </div>
+            )}
 
-          {state.status === 'ready' && (
-            <>
-              {/* Load Older Replies */}
-              {hasMore && (
-                <div className="py-2 text-center">
-                  <button
-                    type="button"
-                    onClick={handleLoadOlder}
-                    disabled={isLoadingOlder}
-                    className="rounded-md border border-stone-200 bg-white px-3 py-1 text-[12px] font-medium text-stone-600 shadow-xs hover:bg-stone-50 disabled:opacity-50"
-                  >
-                    {isLoadingOlder ? 'Loading...' : 'Load older replies'}
-                  </button>
-                  {loadOlderError && <p className="mt-1 text-xs text-red-600">{loadOlderError}</p>}
-                </div>
-              )}
-
-              {!hasMore && replies.length > 0 && (
-                <div className="px-4 py-2 text-center text-[11px] text-stone-400">
-                  Start of thread
-                </div>
-              )}
-
-              {/* Empty Thread State */}
-              {replies.length === 0 && (
-                <div className="flex flex-1 flex-col items-center justify-center p-8 text-center text-stone-500">
-                  <p className="text-[14px] font-medium text-stone-700">No replies yet</p>
-                  <p className="text-[12px] text-stone-400">
-                    Start the conversation in this thread!
+            {state.status === 'ready' && (
+              <>
+                {(rootMessage.replyCount ?? replies.length) > 0 && (
+                  <p className="px-4 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-[0.06em] text-[#5f5e61]">
+                    {rootMessage.replyCount ?? replies.length}{' '}
+                    {(rootMessage.replyCount ?? replies.length) === 1 ? 'reply' : 'replies'}
                   </p>
-                </div>
-              )}
+                )}
+                {/* Load Older Replies */}
+                {hasMore && (
+                  <div className="py-2 text-center">
+                    <button
+                      type="button"
+                      onClick={handleLoadOlder}
+                      disabled={isLoadingOlder}
+                      className="rounded-md border border-[#e3e1ec] bg-white px-3 py-1 text-[12px] font-medium text-[#47464b] shadow-xs hover:bg-[#f4f2fd] disabled:opacity-50"
+                    >
+                      {isLoadingOlder ? 'Loading…' : 'Load older replies'}
+                    </button>
+                    {loadOlderError && (
+                      <p className="mt-1 text-xs text-red-600">{loadOlderError}</p>
+                    )}
+                  </div>
+                )}
 
-              {/* Chronological Replies List */}
-              {replies.map((reply, idx) => {
-                const prev = idx > 0 ? replies[idx - 1] : null;
-                const isCurrentUser = reply.authorId === userId;
+                {!hasMore && replies.length > 0 && (
+                  <div className="px-4 py-2 text-center text-[11px] text-[#5f5e61]">
+                    Start of thread
+                  </div>
+                )}
 
-                if (editingMessageId === reply.id) {
+                {/* Empty Thread State */}
+                {replies.length === 0 && (
+                  <div className="flex flex-1 flex-col items-center justify-center p-8 text-center text-[#47464b]">
+                    <p className="text-[14px] font-medium text-[#47464b]">No replies yet</p>
+                    <p className="text-[12px] text-[#5f5e61]">
+                      Start the conversation in this thread.
+                    </p>
+                  </div>
+                )}
+
+                {/* Chronological Replies List */}
+                {replies.map((reply, idx) => {
+                  const prev = idx > 0 ? replies[idx - 1] : null;
+                  const isCurrentUser = reply.authorId === userId;
+
+                  if (editingMessageId === reply.id) {
+                    return (
+                      <MessageEditor
+                        key={reply.id}
+                        message={reply}
+                        isCurrentUser={isCurrentUser}
+                        showTimestamp={true}
+                        previousMessage={prev}
+                        editingBody={editingBody ?? ''}
+                        setEditingBody={setEditingBody}
+                        cancelEdit={handleCancelEdit}
+                        submitEdit={handleEditSubmit}
+                        submitting={submitting}
+                      />
+                    );
+                  }
+
                   return (
-                    <MessageEditor
+                    <MessageRow
                       key={reply.id}
                       message={reply}
+                      currentUserId={userId}
                       isCurrentUser={isCurrentUser}
                       showTimestamp={true}
                       previousMessage={prev}
-                      editingBody={editingBody ?? ''}
-                      setEditingBody={setEditingBody}
-                      cancelEdit={handleCancelEdit}
-                      submitEdit={handleEditSubmit}
-                      submitting={submitting}
+                      mentionMembers={mentionMembers}
+                      highlighted={highlightedReplyId === reply.id}
+                      onEdit={handleEdit}
+                      onDelete={handleDeleteRequest}
+                      onAttachmentDeleted={removeAttachment}
                     />
                   );
-                }
+                })}
+              </>
+            )}
+          </div>
 
-                return (
-                  <MessageRow
-                    key={reply.id}
-                    message={reply}
-                    currentUserId={userId}
-                    isCurrentUser={isCurrentUser}
-                    showTimestamp={true}
-                    previousMessage={prev}
-                    highlighted={highlightedReplyId === reply.id}
-                    onEdit={handleEdit}
-                    onDelete={handleDeleteRequest}
-                  />
-                );
-              })}
-            </>
+          {showJumpToBottom && (
+            <button
+              type="button"
+              onClick={scrollToBottom}
+              aria-label="Jump to latest"
+              className="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full bg-[#000000] px-3 py-1 text-xs font-medium tabular-nums text-white shadow-md transition-[opacity,scale,background-color] duration-160 ease-out-expo starting:scale-90 starting:opacity-0 hover:bg-[#1a1b22] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1f44e4]"
+            >
+              Jump to latest <span aria-hidden="true">↓</span>
+            </button>
           )}
         </div>
 
-        {showJumpToBottom && (
-          <button
-            type="button"
-            onClick={scrollToBottom}
-            className="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full bg-stone-900 px-3 py-1 text-xs font-medium text-white shadow-md transition-opacity hover:bg-stone-800"
-          >
-            Jump to latest ↓
-          </button>
+        {/* Thread Composer — hidden when replies are unavailable so no stale
+          reply controls are exposed */}
+        {state.status !== 'unauthenticated' && state.status !== 'notFound' && (
+          <div className="border-t border-[#E4E2DF] bg-white p-3">
+            <ThreadTypingIndicator
+              key={rootMessage.id}
+              container={threadContainer}
+              userId={userId}
+              members={typingMembers}
+            />
+            <MessageComposer
+              placeholder="Reply..."
+              send={send}
+              disabled={state.status !== 'ready'}
+              container={threadContainer}
+              currentUserId={userId}
+              mentionSource={mentionSource}
+              onRetryMentionMembers={onRetryMentionMembers}
+            />
+          </div>
         )}
-      </div>
 
-      {/* Thread Composer */}
-      <div className="border-t border-stone-200 bg-white p-3">
-        <MessageComposer placeholder="Reply..." send={send} disabled={state.status !== 'ready'} />
-      </div>
-
-      {/* Reply Delete Confirmation Dialog */}
-      <DeleteMessageDialog
-        isOpen={confirmDeleteId !== null}
-        onClose={handleCancelDelete}
-        onConfirm={handleConfirmDelete}
-        deleting={submitting}
-        error={deleteError}
-      />
-    </aside>
+        {/* Reply Delete Confirmation Dialog */}
+        <DeleteMessageDialog
+          isOpen={confirmDeleteId !== null}
+          onClose={handleCancelDelete}
+          onConfirm={handleConfirmDelete}
+          deleting={submitting}
+          error={deleteError}
+        />
+      </aside>
+    </>
   );
 }

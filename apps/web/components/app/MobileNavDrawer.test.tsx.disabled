@@ -1,0 +1,108 @@
+import { fireEvent, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { describe, expect, it, vi } from 'vitest';
+import { MobileNavDrawer } from './MobileNavDrawer';
+
+vi.mock('next/navigation', () => ({
+  usePathname: () => '/app',
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
+}));
+
+vi.mock('./Sidebar', () => ({
+  Sidebar: () => <nav aria-label="Primary">Stub navigation</nav>,
+}));
+
+const { useWorkspacesMock } = vi.hoisted(() => ({
+  useWorkspacesMock: vi.fn(
+    (): {
+      state: { status: string; workspaces: { id: string; name: string; slug: string }[]; current: {
+        id: string;
+        name: string;
+        slug: string;
+      } | null };
+      setCurrentWorkspace: (id: string) => void;
+    } => ({
+      state: { status: 'ready', workspaces: [], current: null },
+      setCurrentWorkspace: vi.fn(),
+    }),
+  ),
+}));
+
+vi.mock('../../lib/use-workspaces', () => ({
+  useWorkspaces: useWorkspacesMock,
+}));
+
+function renderDrawer(open = true) {
+  const onClose = vi.fn();
+  render(
+    <MobileNavDrawer
+      open={open}
+      onClose={onClose}
+      workspaceName="Real Workspace"
+      workspaceId="ws-1"
+      currentUserId="user-1"
+    />,
+  );
+  return onClose;
+}
+
+describe('MobileNavDrawer', () => {
+  it('renders nothing when closed', () => {
+    renderDrawer(false);
+
+    expect(screen.queryByRole('dialog', { name: 'Navigation' })).not.toBeInTheDocument();
+  });
+
+  it('opens with the navigation sheet focused', () => {
+    renderDrawer(true);
+
+    const dialog = screen.getByRole('dialog', { name: 'Navigation' });
+    expect(dialog).toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: 'Primary' })).toBeInTheDocument();
+    expect(document.activeElement).toBe(dialog);
+  });
+
+  it('closes on backdrop click and on Escape', async () => {
+    const user = userEvent.setup();
+    const onClose = renderDrawer(true);
+
+    await user.click(screen.getByRole('button', { name: 'Close navigation' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledTimes(2);
+  });
+
+  it('lists workspaces to switch when the user has more than one', async () => {
+    const user = userEvent.setup();
+    const setCurrentWorkspace = vi.fn();
+    useWorkspacesMock.mockReturnValue({
+      state: {
+        status: 'ready',
+        workspaces: [
+          { id: 'ws-1', name: 'Acme', slug: 'acme' },
+          { id: 'ws-2', name: 'Beta', slug: 'beta' },
+        ],
+        current: { id: 'ws-1', name: 'Acme', slug: 'acme' },
+      },
+      setCurrentWorkspace,
+    });
+
+    render(
+      <MobileNavDrawer
+        open
+        onClose={vi.fn()}
+        workspaceName="Acme"
+        workspaceId="ws-1"
+        currentUserId="user-1"
+      />,
+    );
+
+    const beta = screen.getByRole('button', { name: 'Beta' });
+    expect(
+      screen.getByRole('button', { name: 'Acme' }),
+    ).toHaveAttribute('aria-current', 'page');
+    await user.click(beta);
+    expect(setCurrentWorkspace).toHaveBeenCalledWith('ws-2');
+  });
+});

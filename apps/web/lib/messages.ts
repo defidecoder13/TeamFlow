@@ -653,12 +653,24 @@ export function isMessageTombstone(message: Message): boolean {
  *   (same server version implies equivalent content, and keeping the local
  *   reference avoids needless re-renders).
  */
-export function pickAuthoritativeMessage(local: Message, incoming: Message): Message {
+export function pickAuthoritativeMessage(
+  local: Message,
+  incoming: Message,
+  options: { preferIncomingOnTie?: boolean } = {},
+): Message {
   const incomingDeleted = isMessageTombstone(incoming);
   const localDeleted = isMessageTombstone(local);
   if (incomingDeleted && !localDeleted) return incoming;
   if (localDeleted) return local;
   if (incoming.updatedAt.getTime() > local.updatedAt.getTime()) return incoming;
+  if (
+    options.preferIncomingOnTie &&
+    incoming.updatedAt.getTime() === local.updatedAt.getTime()
+  ) {
+    // Silent refresh after attachment upload: server page is authoritative for
+    // attachments even when message.updatedAt did not change.
+    return incoming;
+  }
   return local;
 }
 
@@ -674,6 +686,7 @@ export function mergeMessages(
   existing: Message[],
   incoming: Message[],
   prepend: boolean,
+  options: { preferIncomingOnTie?: boolean } = {},
 ): Message[] {
   const incomingById = new Map<string, Message>();
   for (const message of incoming) {
@@ -683,7 +696,7 @@ export function mergeMessages(
   const merged = existing.map((message) => {
     existingIds.add(message.id);
     const candidate = incomingById.get(message.id);
-    return candidate ? pickAuthoritativeMessage(message, candidate) : message;
+    return candidate ? pickAuthoritativeMessage(message, candidate, options) : message;
   });
   const fresh = incoming.filter((message) => !existingIds.has(message.id));
   return prepend ? [...fresh, ...merged] : [...merged, ...fresh];
@@ -1285,56 +1298,6 @@ export async function leaveGroupConversation(
   return { ok: true, data: { success: true } };
 }
 
-export async function fetchConversationParticipants(
-  apiBase: string,
-  conversationId: string,
-): Promise<ApiResult<ParticipantProfile[]>> {
-  let res: Response;
-  try {
-    res = await fetch(
-      `${apiBase}/api/direct-messages/${encodeURIComponent(conversationId)}/participants`,
-      {
-        method: 'GET',
-        headers: { Accept: 'application/json' },
-        credentials: 'include',
-      },
-    );
-  } catch {
-    return { ok: false, kind: 'network', message: 'Failed to fetch participants' };
-  }
-
-  if (res.status === 401) {
-    return { ok: false, unauthenticated: true };
-  }
-  if (res.status === 404) {
-    return { ok: false, kind: 'notFound', message: 'Conversation not found' };
-  }
-  if (!res.ok) {
-    return { ok: false, kind: 'error', message: 'Failed to fetch participants' };
-  }
-
-  try {
-    const json = await res.json();
-    if (isRecord(json) && Array.isArray(json.participants)) {
-      const participants: ParticipantProfile[] = [];
-      for (const p of json.participants) {
-        if (isParticipantProfile(p)) {
-          participants.push({
-            ...p,
-            joinedAt: (p as { joinedAt?: string | Date }).joinedAt
-              ? new Date((p as { joinedAt?: string | Date }).joinedAt!)
-              : undefined,
-          });
-        }
-      }
-      return { ok: true, data: participants };
-    }
-  } catch {
-    // ignore
-  }
-  return { ok: false, kind: 'error', message: 'Malformed participants response' };
-}
-
 export async function fetchDirectConversations(
   apiBase: string,
   workspaceId: string,
@@ -1665,71 +1628,6 @@ export async function markDirectConversationRead(
               ? json.readState.lastReadMessageId
               : null,
           lastReadAt: new Date(String(json.readState.lastReadAt)),
-        },
-      };
-    }
-  } catch {
-    // ignore
-  }
-  return { ok: false, kind: 'server', message: 'Invalid response from server' };
-}
-
-export interface DirectUnreadState {
-  conversations: Array<{
-    conversationId: string;
-    unreadCount: number;
-    hasUnread: boolean;
-    lastReadMessageId: string | null;
-  }>;
-  totalUnreadCount: number;
-}
-
-export async function fetchDirectUnreadState(
-  apiBase: string,
-  workspaceId: string,
-): Promise<ApiResult<DirectUnreadState>> {
-  let res: Response;
-  try {
-    res = await fetch(
-      `${apiBase}/api/workspaces/${encodeURIComponent(workspaceId)}/direct-messages/unread`,
-      {
-        method: 'GET',
-        headers: { Accept: 'application/json' },
-        credentials: 'include',
-      },
-    );
-  } catch {
-    return { ok: false, kind: 'network', message: 'Failed to fetch unread state' };
-  }
-
-  if (res.status === 401) {
-    return { ok: false, unauthenticated: true };
-  }
-  if (res.status === 404) {
-    return { ok: false, kind: 'notFound', message: 'Workspace not found' };
-  }
-  if (!res.ok) {
-    return { ok: false, kind: 'server', message: 'Server error loading unread state' };
-  }
-
-  try {
-    const json = await res.json();
-    if (
-      isRecord(json) &&
-      Array.isArray(json.conversations) &&
-      typeof json.totalUnreadCount === 'number'
-    ) {
-      const conversations = json.conversations.filter(isRecord).map((c) => ({
-        conversationId: String(c.conversationId),
-        unreadCount: typeof c.unreadCount === 'number' ? c.unreadCount : 0,
-        hasUnread: typeof c.hasUnread === 'boolean' ? c.hasUnread : false,
-        lastReadMessageId: typeof c.lastReadMessageId === 'string' ? c.lastReadMessageId : null,
-      }));
-      return {
-        ok: true,
-        data: {
-          conversations,
-          totalUnreadCount: json.totalUnreadCount,
         },
       };
     }

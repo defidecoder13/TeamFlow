@@ -41,6 +41,8 @@ model User {
   directMessageParticipants   DirectMessageParticipant[]
   directMessageReadStates     DirectMessageReadState[]
   attachments                 Attachment[]
+  channelUserStates           ChannelUserState[]
+  drafts                      Draft[]
 
   @@unique([email])
   @@map("user")
@@ -114,6 +116,7 @@ model Workspace {
   channels    Channel[]
   directMessageConversations DirectMessageConversation[]
   notifications Notification[]
+  drafts     Draft[]
 
   @@index([slug])
   @@map("workspace")
@@ -142,6 +145,7 @@ model Invitation {
   email       String
   tokenHash   String    @unique
   invitedById String
+  role        WorkspaceRole @default(MEMBER)
   expiresAt   DateTime
   acceptedAt  DateTime?
   revokedAt   DateTime?
@@ -168,6 +172,7 @@ model Channel {
   name        String
   slug        String
   description String?
+  topic       String?
   type        ChannelType @default(PUBLIC)
   createdById String
   createdAt   DateTime    @default(now())
@@ -178,6 +183,7 @@ model Channel {
   memberships ChannelMembership[]
   messages    Message[]
   notifications Notification[]
+  userStates  ChannelUserState[]
 
   @@unique([workspaceId, slug])
   @@index([workspaceId])
@@ -224,6 +230,7 @@ model Message {
   attachments                 Attachment[]
   notifications               Notification[] @relation("NotificationMessage")
   threadNotifications         Notification[] @relation("NotificationThreadRoot")
+  channelReadStates           ChannelUserState[] @relation("ChannelLastReadMessage")
 
   @@index([channelId, createdAt, id])
   @@index([directMessageConversationId, createdAt, id])
@@ -407,6 +414,56 @@ model DirectMessageReadState {
   @@index([conversationId])
   @@index([lastReadMessageId])
   @@map("direct_message_read_state")
+}
+
+model ChannelUserState {
+  id                String   @id
+  channelId         String
+  userId            String
+  lastReadMessageId String?
+  lastReadAt        DateTime @default(now())
+  isStarred         Boolean  @default(false)
+  isMuted           Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  channel         Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lastReadMessage Message? @relation("ChannelLastReadMessage", fields: [lastReadMessageId], references: [id], onDelete: SetNull)
+
+  @@unique([channelId, userId])
+  @@index([userId])
+  @@index([channelId])
+  @@index([lastReadMessageId])
+  @@map("channel_user_state")
+}
+
+enum DraftTargetKind {
+  CHANNEL
+  DIRECT_MESSAGE
+  THREAD
+}
+
+/// One unsent message body per (user, workspace, target). `targetId` is the
+/// channel id, DM conversation id, or thread root message id depending on
+/// `targetKind`. Empty bodies are deleted, never stored.
+model Draft {
+  id          String          @id
+  userId      String
+  workspaceId String
+  targetKind  DraftTargetKind
+  targetId    String
+  body        String
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, workspaceId, targetId])
+  @@index([userId, workspaceId, updatedAt])
+  @@index([workspaceId])
+  @@map("draft")
 }
 
 

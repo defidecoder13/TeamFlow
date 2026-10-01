@@ -10,13 +10,15 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { UserPlus, Mail, Trash2, X } from 'lucide-react';
 import type { PendingInvitation } from '../../lib/invitations';
-import { formatInvitationDate } from '../../lib/invitations';
+import { formatInvitationDate, revokeInvitation } from '../../lib/invitations';
 import type { WorkspaceMember } from '../../lib/members';
 import { getApiBaseUrl } from '../../lib/config';
 import { removeWorkspaceMember, updateWorkspaceMemberRole } from '../../lib/members';
 import type { WorkspaceRole } from '../../lib/workspaces';
 import { usePresence } from '../../lib/use-presence';
+import { Dialog } from './dialog';
 import { InviteMemberDialog } from './InviteMemberDialog';
 import { UserAvatar } from './UserAvatar';
 import { SearchIcon } from './icons';
@@ -67,6 +69,9 @@ export function MembersContent({
   const [actionError, setActionError] = useState<string | null>(null);
   const [actingId, setActingId] = useState<string | null>(null);
   const [confirmRemove, setConfirmRemove] = useState<WorkspaceMember | null>(null);
+  const [confirmRevoke, setConfirmRevoke] = useState<PendingInvitation | null>(null);
+  const [revoking, setRevoking] = useState(false);
+  const [revokeError, setRevokeError] = useState<string | null>(null);
   const { getPresence } = usePresence(workspace.id);
   const canManageMembers = currentUserRole === 'OWNER';
 
@@ -128,34 +133,69 @@ export function MembersContent({
     setActionError(result.message ?? 'Could not remove member.');
   }
 
+  async function handleRevoke(invitation: PendingInvitation) {
+    setRevoking(true);
+    setRevokeError(null);
+    let apiBase: string;
+    try {
+      apiBase = getApiBaseUrl();
+    } catch {
+      setRevoking(false);
+      setRevokeError('Could not connect to API server.');
+      return;
+    }
+    const result = await revokeInvitation(apiBase, workspace.id, invitation.id);
+    setRevoking(false);
+    setConfirmRevoke(null);
+    if (result.ok) {
+      onRetryPending();
+      return;
+    }
+    if (result.kind === 'unauthenticated') {
+      onUnauthenticated();
+      return;
+    }
+    if (result.kind === 'notFound') {
+      // Already accepted, revoked, or expired elsewhere — refresh the list
+      // so the stale row disappears.
+      onRetryPending();
+      return;
+    }
+    setRevokeError(
+      result.kind === 'forbidden'
+        ? 'You do not have permission to revoke invitations.'
+        : (result.message ?? 'Could not revoke invitation.'),
+    );
+  }
+
   return (
-    <div>
-      <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-stone-400">
-        Workspace settings
-      </p>
-      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">
-        <h1 className="text-[26px] font-semibold tracking-tight text-stone-900">Members</h1>
-        <p className="text-sm text-stone-500" aria-live="polite">
-          {members.length === 1 ? '1 member' : `${members.length} members`}
-        </p>
+    <div className="max-w-4xl mx-auto space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#E4E2DF] pb-4">
+        <div>
+          <h1 className="text-[26px] font-semibold text-[#171A21] tracking-tight">Members</h1>
+          <p className="text-[13px] text-[#4F5360] mt-0.5">
+            <span className="tabular-nums font-semibold text-[#171A21]" aria-live="polite">
+              {members.length === 1 ? '1 member' : `${members.length} members`}
+            </span>{' '}
+            in {workspace.name}
+          </p>
+        </div>
         {canInvite ? (
           <button
             type="button"
             onClick={() => setDialogOpen(true)}
-            className="ml-auto inline-flex h-9 items-center justify-center rounded-lg bg-zinc-900 px-3.5 text-[13px] font-medium text-white transition-colors hover:bg-zinc-800"
+            className="px-4 py-2 bg-[#2E3440] text-white text-[13px] font-medium rounded-[8px] hover:bg-[#1E222A] transition-colors flex items-center gap-2 self-start sm:self-auto shadow-2xs active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-[#3157D5]"
           >
-            Invite member
+            <UserPlus className="w-4 h-4" />
+            <span>Invite member</span>
           </button>
         ) : null}
       </div>
-      <p className="mt-1.5 max-w-xl text-sm leading-relaxed text-stone-500">
-        Everyone with access to this workspace.
-      </p>
 
-      <div className="relative mt-5 max-w-md">
+      <div className="relative max-w-md">
         <span
           aria-hidden="true"
-          className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-stone-400"
+          className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#737782]"
         >
           <SearchIcon className="h-4 w-4" />
         </span>
@@ -169,114 +209,142 @@ export function MembersContent({
           placeholder="Search by name or email"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          className="h-10 w-full rounded-lg border border-stone-200 bg-white pl-9 pr-3 text-sm text-stone-900 shadow-[0_1px_2px_rgba(0,0,0,0.04)] outline-none transition-colors placeholder:text-stone-400 hover:border-stone-300 focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
+          className="h-10 w-full rounded-[8px] border border-[#E4E2DF] bg-white pl-9 pr-8 text-[13px] text-[#171A21] outline-none transition-colors placeholder:text-[#737782] hover:border-[#D2D0CC] focus:border-[#3157D5] focus:ring-2 focus:ring-[#EEF2FF]"
         />
+        {query && (
+          <button
+            type="button"
+            onClick={() => setQuery('')}
+            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#737782] hover:text-[#171A21]"
+            aria-label="Clear filter"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        )}
       </div>
 
       {actionError && (
-        <div className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">
+        <div className="rounded-[8px] bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700" role="alert">
           {actionError}
         </div>
       )}
 
       {members.length === 0 ? (
-        <div className="mt-4 rounded-xl border border-dashed border-stone-300 bg-white/60 px-6 py-10 text-center">
-          <p className="text-sm font-medium text-stone-700">No members yet.</p>
+        <div className="bg-white border border-[#E4E2DF] rounded-[12px] p-8 text-center space-y-2 shadow-2xs">
+          <p className="text-[14px] font-semibold text-[#171A21]">No members yet.</p>
         </div>
       ) : visible.length === 0 ? (
-        <div className="mt-4 rounded-xl border border-dashed border-stone-300 bg-white/60 px-6 py-10 text-center">
-          <p className="text-sm font-medium text-stone-700">No members match your search.</p>
-          <p className="mt-1 text-[13px] text-stone-500">Try a different name or email.</p>
+        <div className="bg-white border border-[#E4E2DF] rounded-[12px] p-8 text-center space-y-2 shadow-2xs">
+          <p className="text-[14px] font-semibold text-[#171A21]" role="status">
+            {query ? (
+              <>
+                No members for &ldquo;<span className="font-semibold text-[#171A21]">{query}</span>&rdquo;.
+              </>
+            ) : (
+              'No members match your search.'
+            )}
+          </p>
+          {query ? (
+            <button
+              type="button"
+              onClick={() => setQuery('')}
+              className="mt-2 px-3 py-1.5 text-[12px] font-medium text-[#3157D5] hover:underline"
+            >
+              Clear search
+            </button>
+          ) : (
+            <p className="mt-1 text-[13px] text-[#737782]">Try a different name or email.</p>
+          )}
         </div>
       ) : (
-        <ul className="mt-4 space-y-2" aria-label="Workspace members">
-          {visible.map((member) => {
-            const isCurrentUser = member.user.id === currentUserId;
-            const isOwner = member.role === 'OWNER';
-            const canEditThisMember = canManageMembers && !isOwner;
-            return (
-              <li
-                key={member.id}
-                className="flex items-center gap-3 rounded-lg border border-stone-200 bg-white px-3.5 py-3 shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
-              >
-                <UserAvatar
-                  name={member.user.name}
-                  image={member.user.image}
-                  size="md"
-                  presenceStatus={getPresence(member.user.id).status}
-                />
-                <div className="min-w-0 flex-1">
-                  <p className="flex items-center gap-2 text-sm font-medium text-zinc-900">
-                    <span className="truncate">{member.user.name}</span>
-                    {isCurrentUser ? (
-                      <span className="shrink-0 rounded bg-stone-100 px-1.5 py-0.5 text-[11px] font-medium text-stone-500">
-                        You
+        <div className="bg-white border border-[#E4E2DF] rounded-[12px] shadow-2xs overflow-hidden">
+          <ul className="divide-y divide-[#E4E2DF]" aria-label="Workspace members">
+            {visible.map((member) => {
+              const isCurrentUser = member.user.id === currentUserId;
+              const isOwner = member.role === 'OWNER';
+              const canEditThisMember = canManageMembers && !isOwner;
+              return (
+                <li
+                  key={member.id}
+                  className="flex items-center gap-3 p-4 hover:bg-[#FAF9F8] transition-colors"
+                >
+                  <UserAvatar
+                    name={member.user.name}
+                    image={member.user.image}
+                    size="md"
+                    presenceStatus={getPresence(member.user.id).status}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="flex items-center gap-2 text-[14px] font-semibold text-[#171A21]">
+                      <span className="truncate" title={member.user.name}>
+                        {member.user.name}
                       </span>
-                    ) : null}
-                  </p>
-                  <p className="truncate text-[13px] text-stone-500">{member.user.email}</p>
-                </div>
-                {canEditThisMember ? (
-                  <select
-                    aria-label={`Role for ${member.user.name}`}
-                    value={member.role}
-                    disabled={actingId === member.user.id}
-                    onChange={(e) => void handleRoleChange(member, e.target.value as WorkspaceRole)}
-                    className="shrink-0 rounded-md border border-stone-200 bg-white px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.06em] text-zinc-700 focus:border-zinc-900 focus:outline-none disabled:opacity-50"
-                  >
-                    <option value="ADMIN">Admin</option>
-                    <option value="MEMBER">Member</option>
-                  </select>
-                ) : (
-                  <span
-                    className={`shrink-0 rounded-md px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.06em] ${member.role === 'OWNER' ? 'bg-zinc-900 text-white' : member.role === 'ADMIN' ? 'bg-stone-200 text-zinc-700' : 'bg-stone-100 text-stone-500'}`}
-                  >
-                    {member.role}
-                  </span>
-                )}
-                {canManageMembers && !isOwner ? (
-                  <button
-                    type="button"
-                    disabled={actingId === member.user.id}
-                    onClick={() => setConfirmRemove(member)}
-                    aria-label={`Remove ${member.user.name}`}
-                    className="shrink-0 rounded p-1 text-stone-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
-                    title="Remove from workspace"
-                  >
-                    <svg
-                      className="h-4 w-4"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      strokeWidth="1.5"
-                      stroke="currentColor"
-                      aria-hidden="true"
+                      {isCurrentUser ? (
+                        <span className="shrink-0 rounded-[4px] bg-[#F1F0EE] px-1.5 py-0.5 text-[11px] font-medium text-[#737782]">
+                          You
+                        </span>
+                      ) : null}
+                      {isOwner && (
+                        <span className="shrink-0 rounded-[4px] border border-[#E4E2DF] bg-[#F1F0EE] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-[#737782]">
+                          OWNER
+                        </span>
+                      )}
+                    </p>
+                    <p className="truncate text-[12px] text-[#737782]" title={member.user.email}>
+                      {member.user.email}
+                    </p>
+                  </div>
+                  {canEditThisMember ? (
+                    <select
+                      aria-label={`Role for ${member.user.name}`}
+                      aria-busy={actingId === member.user.id}
+                      value={member.role}
+                      disabled={actingId === member.user.id}
+                      onChange={(e) => void handleRoleChange(member, e.target.value as WorkspaceRole)}
+                      className="shrink-0 rounded-[6px] border border-[#E4E2DF] bg-[#F6F5F3] px-2.5 py-1 text-[12px] font-semibold uppercase tracking-[0.06em] text-[#171A21] outline-none transition-colors hover:border-[#D2D0CC] focus:border-[#3157D5] focus-visible:outline-2 focus-visible:outline-[#3157D5] disabled:opacity-50"
                     >
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                ) : null}
-              </li>
-            );
-          })}
-        </ul>
+                      <option value="ADMIN">Admin</option>
+                      <option value="MEMBER">Member</option>
+                    </select>
+                  ) : !isOwner ? (
+                    <span
+                      className="shrink-0 rounded-[4px] border border-[#E4E2DF] bg-[#F1F0EE] px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.06em] text-[#737782]"
+                    >
+                      {member.role}
+                    </span>
+                  ) : null}
+                  {canManageMembers && !isOwner ? (
+                    <button
+                      type="button"
+                      disabled={actingId === member.user.id}
+                      aria-busy={actingId === member.user.id}
+                      onClick={() => setConfirmRemove(member)}
+                      aria-label={`Remove ${member.user.name}`}
+                      className="shrink-0 rounded-[6px] p-1.5 text-[#737782] transition-colors hover:bg-rose-50 hover:text-[#C94A45] focus-visible:outline-2 focus-visible:outline-[#3157D5] disabled:opacity-50"
+                      title="Remove from workspace"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
       )}
       {confirmRemove && (
-        <div
-          role="presentation"
-          className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/40 p-4 backdrop-blur-[2px]"
-          onClick={() => setConfirmRemove(null)}
+        <Dialog
+          open
+          onClose={() => setConfirmRemove(null)}
+          labelledBy="confirm-remove-title"
+          size="sm"
+          dismissable={!actingId}
         >
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="confirm-remove-title"
-            onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-sm rounded-xl border border-stone-200 bg-white p-6 shadow-[0_20px_48px_-8px_rgba(24,24,27,0.12)]"
-          >
-            <h2 id="confirm-remove-title" className="text-sm font-semibold text-zinc-900">
+          <div>
+            <h2 id="confirm-remove-title" className="text-base font-semibold text-[#171A21]">
               Remove {confirmRemove.user.name}?
             </h2>
-            <p className="mt-2 text-sm text-stone-600">
+            <p className="mt-2 text-sm text-[#4F5360]">
               They will lose access to this workspace and its private channels. This cannot be
               undone without re-inviting.
             </p>
@@ -285,7 +353,7 @@ export function MembersContent({
                 type="button"
                 onClick={() => setConfirmRemove(null)}
                 disabled={!!actingId}
-                className="rounded-lg border border-stone-300 bg-white px-3.5 py-1.5 text-sm font-medium text-stone-700 hover:border-stone-400 disabled:opacity-50"
+                className="rounded-[8px] border border-[#E4E2DF] bg-white px-3.5 py-1.5 text-sm font-medium text-[#4F5360] transition-colors hover:bg-[#F1F0EE] hover:text-[#171A21] focus-visible:outline-2 focus-visible:outline-[#3157D5] disabled:opacity-50"
               >
                 Cancel
               </button>
@@ -293,57 +361,130 @@ export function MembersContent({
                 type="button"
                 onClick={() => void handleRemove(confirmRemove)}
                 disabled={!!actingId}
-                className="rounded-lg bg-red-600 px-3.5 py-1.5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                aria-busy={!!actingId}
+                className="rounded-[8px] bg-[#C94A45] px-3.5 py-1.5 text-sm font-medium text-white transition-colors hover:bg-rose-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#C94A45] disabled:opacity-50 shadow-2xs"
               >
-                {actingId === confirmRemove.user.id ? 'Removing…' : 'Remove'}
+                {actingId === confirmRemove.user.id ? 'Removing…' : 'Remove member'}
               </button>
             </div>
           </div>
-        </div>
+        </Dialog>
+      )}
+      {confirmRevoke && (
+        <Dialog
+          open
+          onClose={() => setConfirmRevoke(null)}
+          labelledBy="confirm-revoke-title"
+          size="sm"
+          dismissable={!revoking}
+        >
+          <div>
+            <h2 id="confirm-revoke-title" className="text-base font-semibold text-[#171A21]">
+              Revoke invitation for {confirmRevoke.email}?
+            </h2>
+            <p className="mt-2 text-sm text-[#4F5360]">
+              They will no longer be able to use the invitation link to join. This cannot be undone
+              without re-inviting.
+            </p>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setConfirmRevoke(null)}
+                disabled={revoking}
+                className="rounded-[8px] border border-[#E4E2DF] bg-white px-3.5 py-1.5 text-sm font-medium text-[#4F5360] transition-colors hover:bg-[#F1F0EE] hover:text-[#171A21] focus-visible:outline-2 focus-visible:outline-[#3157D5] disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleRevoke(confirmRevoke)}
+                disabled={revoking}
+                aria-busy={revoking}
+                className="rounded-[8px] bg-[#C94A45] px-3.5 py-1.5 text-sm font-medium text-white transition-colors hover:bg-rose-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#C94A45] disabled:opacity-50 shadow-2xs"
+              >
+                {revoking ? 'Revoking…' : 'Revoke invitation'}
+              </button>
+            </div>
+          </div>
+        </Dialog>
       )}
 
       {canInvite ? (
-        <section aria-labelledby="pending-invitations-heading" className="mt-8">
-          <h2 id="pending-invitations-heading" className="text-[13px] font-semibold text-stone-900">
-            Pending invitations
+        <section aria-labelledby="pending-invitations-heading" className="mt-8 space-y-3">
+          <h2 id="pending-invitations-heading" className="text-[15px] font-semibold text-[#171A21]">
+            Pending invitations {pending.length > 0 ? `(${pending.length})` : ''}
           </h2>
           {pendingLoading ? (
-            <div role="status" aria-label="Loading pending invitations" className="mt-3 space-y-2">
-              <span className="sr-only">Loading pending invitations…</span>
+            <div role="status" aria-label="Loading pending invitations" className="space-y-2">
               {[0, 1].map((row) => (
                 <div
                   key={row}
                   aria-hidden="true"
-                  className="h-[52px] animate-pulse rounded-lg border border-stone-200 bg-white"
+                  className="h-[52px] animate-pulse rounded-[12px] border border-[#E4E2DF] bg-white"
                 />
               ))}
             </div>
           ) : pendingError ? (
-            <div className="mt-3 rounded-lg border border-stone-200 bg-white px-3.5 py-3 text-[13px] text-stone-600">
+            <div className="rounded-[12px] border border-[#E4E2DF] bg-white px-4 py-3 text-[13px] text-[#4F5360]">
               <p role="alert">{pendingError}</p>
               <button
                 type="button"
                 onClick={onRetryPending}
-                className="mt-2 font-medium text-zinc-900 underline decoration-zinc-300 underline-offset-4 transition-colors hover:decoration-zinc-900"
+                className="mt-2 rounded font-medium text-[#3157D5] underline hover:text-[#171A21] focus-visible:outline-2 focus-visible:outline-[#3157D5]"
               >
-                Try again
+                Try loading invitations again
               </button>
             </div>
           ) : pending.length === 0 ? null : (
-            <ul className="mt-3 space-y-2" aria-label="Pending invitations">
-              {pending.map((invitation) => (
-                <li
-                  key={invitation.id}
-                  className="rounded-lg border border-stone-200 bg-white px-3.5 py-3 shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
+            <>
+              {revokeError && (
+                <div
+                  className="rounded-[8px] bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700"
+                  role="alert"
                 >
-                  <p className="truncate text-sm font-medium text-zinc-900">{invitation.email}</p>
-                  <p className="mt-0.5 text-[13px] text-stone-500">
-                    Invited by {invitation.invitedBy.name} · Expires{' '}
-                    {formatInvitationDate(invitation.expiresAt)}
-                  </p>
-                </li>
-              ))}
-            </ul>
+                  {revokeError}
+                </div>
+              )}
+              <div className="bg-white border border-[#E4E2DF] rounded-[12px] shadow-2xs divide-y divide-[#E4E2DF] overflow-hidden">
+                <ul aria-label="Pending invitations" className="divide-y divide-[#E4E2DF]">
+                  {pending.map((invitation) => (
+                    <li
+                      key={invitation.id}
+                      className="flex items-center gap-3 p-4 hover:bg-[#FAF9F8] transition-colors"
+                    >
+                      <div className="w-8 h-8 rounded-[6px] bg-[#EEF2FF] text-[#3157D5] flex items-center justify-center shrink-0">
+                        <Mail className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p
+                          className="truncate text-[13px] font-semibold text-[#171A21]"
+                          title={invitation.email}
+                        >
+                          {invitation.email}
+                        </p>
+                        <p className="mt-0.5 truncate text-[12px] text-[#737782]">
+                          Invited by {invitation.invitedBy.name} · Expires{' '}
+                          {formatInvitationDate(invitation.expiresAt)}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        disabled={revoking}
+                        onClick={() => {
+                          setRevokeError(null);
+                          setConfirmRevoke(invitation);
+                        }}
+                        aria-label={`Revoke invitation for ${invitation.email}`}
+                        className="px-2.5 py-1 text-[12px] font-medium text-[#C94A45] hover:bg-rose-50 border border-rose-200 rounded-[6px] transition-colors shrink-0 disabled:opacity-50"
+                        title="Revoke invitation"
+                      >
+                        Revoke
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </>
           )}
         </section>
       ) : null}

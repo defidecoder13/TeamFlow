@@ -1,30 +1,37 @@
 /**
- * Narrow far-left workspace rail (Phase 4K.4: functional switching/creation).
+ * Narrow far-left workspace rail — Stitch "Workspace Home — TeamFlow" reference.
  *
- * Loads the caller's workspaces via useWorkspaces (authoritative), indicates
- * the active workspace (persisted in localStorage, fallback to first), allows
- * switching (updates stored ID + navigates to /app), and provides creation
- * via the existing CreateWorkspace form in a dialog. Visual style preserved
- * from the Phase 1D placeholder; disabled placeholders removed.
+ * Live reference: Stitch project projects/8727821180897355571
+ * ("Workspace Home — TeamFlow" screen). Light 60px rail: brand tile, hairline
+ * divider, workspace switcher (active = charcoal tile + left indicator,
+ * inactive = white bordered tile), dashed add-workspace affordance.
+ *
+ * Behavior (authoritative, from useWorkspaces): indicates the active
+ * workspace (persisted in localStorage, fallback to first), switches
+ * (updates stored ID + navigates to /app), and creates via the existing
+ * CreateWorkspace form in a dialog. The switcher list only renders when
+ * there is something to switch between (2+ workspaces), so a lone workspace
+ * is identified once in the sidebar header instead of twice. No remote
+ * logo hotlinks: the brand tile uses the local TeamFlowLogo mark.
  */
 
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useWorkspaces } from '../../lib/use-workspaces';
+import { TeamFlowLogo } from '../brand/TeamFlowLogo';
 import { CreateWorkspace } from './CreateWorkspace';
-import { PlusIcon } from './icons';
-import { UserAvatar } from './UserAvatar';
-import type { SessionUser } from '../../lib/auth-guard';
+import { Dialog } from './dialog';
+import { CloseIcon, PlusIcon } from './icons';
 
 function workspaceInitial(name: string): string {
   return name.trim().charAt(0).toUpperCase() || 'T';
 }
 
-export function WorkspaceRail({ user }: { user: SessionUser }) {
+export function WorkspaceRail() {
   const router = useRouter();
-  const { state: workspacesState, retry, addWorkspace, setCurrentWorkspace } = useWorkspaces(true);
+  const { state: workspacesState, retry, addWorkspace, setCurrentWorkspace } = useWorkspaces();
   const [createOpen, setCreateOpen] = useState(false);
 
   const handleSwitch = useCallback(
@@ -45,15 +52,7 @@ export function WorkspaceRail({ user }: { user: SessionUser }) {
     [addWorkspace, router],
   );
 
-  // Close dialog on Escape
-  useEffect(() => {
-    if (!createOpen) return;
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape') setCreateOpen(false);
-    }
-    document.addEventListener('keydown', onKeyDown);
-    return () => document.removeEventListener('keydown', onKeyDown);
-  }, [createOpen]);
+  // Close dialog on Escape — handled by the shared Dialog primitive.
 
   const isReady = workspacesState.status === 'ready';
   const workspaces = isReady ? workspacesState.workspaces : [];
@@ -63,123 +62,118 @@ export function WorkspaceRail({ user }: { user: SessionUser }) {
     <>
       <nav
         aria-label="Workspaces"
-        className="hidden w-14 shrink-0 flex-col items-center border-r border-stone-200 bg-white py-3 md:flex"
+        className="hidden w-[60px] shrink-0 flex-col items-center justify-between border-r border-[#e3e1ec]/60 bg-[#fbf8ff] py-3.5 md:flex"
       >
-        <span
-          aria-hidden="true"
-          className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-stone-900 text-sm font-semibold text-white"
-        >
-          T
-        </span>
-
-        <div className="mt-4 flex flex-col items-center gap-2">
-          {workspacesState.status === 'loading' || workspacesState.status === 'idle' ? (
-            <div
-              role="status"
-              aria-label="Loading workspaces"
-              className="flex flex-col items-center gap-2"
-            >
-              <span className="sr-only">Loading workspaces…</span>
-              {[0, 1].map((i) => (
-                <div
-                  key={i}
-                  aria-hidden="true"
-                  className="h-9 w-9 animate-pulse rounded-[10px] bg-stone-100"
-                />
-              ))}
-            </div>
-          ) : workspacesState.status === 'error' ? (
-            <div className="flex flex-col items-center gap-2">
-              <span className="text-[11px] text-red-600" role="alert">
-                Failed
-              </span>
-              <button
-                type="button"
-                onClick={retry}
-                className="text-[11px] font-medium text-zinc-900 underline"
-                aria-label="Retry loading workspaces"
-              >
-                Retry
-              </button>
-            </div>
-          ) : workspaces.length === 0 ? (
-            <span className="px-2 text-center text-[11px] leading-tight text-stone-400">
-              No workspaces
-            </span>
-          ) : (
-            workspaces.map((ws) => {
-              const active = ws.id === currentId;
-              return (
-                <button
-                  key={ws.id}
-                  type="button"
-                  onClick={() => handleSwitch(ws.id)}
-                  aria-label={`Switch to ${ws.name}`}
-                  aria-current={active ? 'page' : undefined}
-                  title={ws.name}
-                  className={`flex h-9 w-9 items-center justify-center rounded-[10px] text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-stone-900 ${
-                    active
-                      ? 'bg-stone-900 text-white ring-2 ring-stone-900/70 ring-offset-2 ring-offset-white'
-                      : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
-                  }`}
-                >
-                  {workspaceInitial(ws.name)}
-                </button>
-              );
-            })
-          )}
-          <button
-            type="button"
-            onClick={() => setCreateOpen(true)}
-            aria-label="Create new workspace"
-            title="Create new workspace"
-            className="flex h-9 w-9 items-center justify-center rounded-[10px] border border-dashed border-stone-300 text-stone-400 transition-colors hover:border-stone-400 hover:text-stone-600 focus-visible:outline-2 focus-visible:outline-stone-900"
+        <div className="flex flex-col items-center gap-4 w-full">
+          <span
+            title="TeamFlow"
+            className="flex h-10 w-10 items-center justify-center rounded-xl border border-[#e3e1ec]/80 bg-white p-1.5 text-[#1a1b22] shadow-[0_1px_2px_rgba(24,24,27,0.04)]"
           >
-            <PlusIcon />
-          </button>
+            <TeamFlowLogo size={24} showWordmark={false} />
+          </span>
+          <div className="h-px w-7 bg-[#e3e1ec]/70" aria-hidden="true" />
+          <div className="flex flex-col items-center gap-2.5 w-full">
+            {workspacesState.status === 'loading' || workspacesState.status === 'idle' ? (
+              <div
+                role="status"
+                aria-label="Loading workspaces"
+                className="flex flex-col items-center gap-1.5"
+              >
+                <span className="sr-only">Loading workspaces…</span>
+                {[0, 1].map((i) => (
+                  <div
+                    key={i}
+                    aria-hidden="true"
+                    className="h-10 w-10 animate-pulse rounded-xl bg-white/60"
+                  />
+                ))}
+              </div>
+            ) : workspacesState.status === 'error' ? (
+              <div className="flex flex-col items-center gap-1.5">
+                <span
+                  className="px-1 text-center text-[11px] leading-tight text-red-700"
+                  role="alert"
+                >
+                  Couldn&apos;t load workspaces
+                </span>
+                <button
+                  type="button"
+                  onClick={retry}
+                  className="rounded text-[11px] font-medium text-[#1a1b22] underline transition-colors focus-visible:outline-2 focus-visible:outline-[#1f44e4]"
+                  aria-label="Retry loading workspaces"
+                >
+                  Retry
+                </button>
+              </div>
+            ) : workspacesState.status === 'unauthenticated' ? (
+              <span className="px-2 text-center text-[11px] leading-tight text-[#47464b]">
+                Sign in required
+              </span>
+            ) : workspaces.length <= 1 ? null : (
+              workspaces.map((ws) => {
+                const active = ws.id === currentId;
+                return (
+                  <button
+                    key={ws.id}
+                    type="button"
+                    onClick={() => handleSwitch(ws.id)}
+                    aria-label={`Switch to ${ws.name}`}
+                    aria-current={active ? 'page' : undefined}
+                    title={ws.name}
+                    className={`touch-hit relative flex h-10 w-10 items-center justify-center rounded-xl text-sm transition-colors focus-visible:outline-2 focus-visible:outline-[#1f44e4] ${
+                      active
+                        ? 'bg-[#18181b] font-semibold text-white shadow-[0_1px_2px_rgba(24,24,27,0.04)] ring-2 ring-[#1a1b22]/10'
+                        : 'border border-[#e3e1ec] bg-white font-medium text-[#47464b] shadow-[0_1px_2px_rgba(24,24,27,0.04)] hover:border-[#c8c5cb] hover:text-[#1a1b22]'
+                    }`}
+                  >
+                    {active ? (
+                      <span
+                        className="absolute -left-[14px] top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full bg-[#18181b]"
+                        aria-hidden="true"
+                      />
+                    ) : null}
+                    {workspaceInitial(ws.name)}
+                  </button>
+                );
+              })
+            )}
+            <button
+              type="button"
+              onClick={() => setCreateOpen(true)}
+              aria-label="Create new workspace"
+              title="Create new workspace"
+              className="touch-hit flex h-10 w-10 items-center justify-center rounded-xl border border-dashed border-[#e3e1ec] text-[#5f5e61] shadow-[0_1px_2px_rgba(24,24,27,0.04)] transition-colors hover:border-[#c8c5cb] hover:text-[#1a1b22] focus-visible:outline-2 focus-visible:outline-[#1f44e4]"
+            >
+              <PlusIcon />
+            </button>
+          </div>
         </div>
 
-        <div className="mt-auto" title={`${user.name} (${user.email})`}>
-          <UserAvatar name={user.name} image={user.image} size="md" />
-        </div>
+        <div aria-hidden="true" />
       </nav>
 
       {createOpen && (
-        <div
-          role="presentation"
-          className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/40 p-4 backdrop-blur-[2px]"
-          onClick={() => setCreateOpen(false)}
+        <Dialog
+          open
+          onClose={() => setCreateOpen(false)}
+          labelledBy="create-workspace-title"
+          size="md"
         >
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="create-workspace-title"
-            onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-md rounded-xl border border-stone-200 bg-white p-6 shadow-[0_20px_48px_-8px_rgba(24,24,27,0.12)]"
-          >
+          <div>
             <div className="flex items-start justify-between">
-              <h2 id="create-workspace-title" className="text-base font-semibold text-zinc-900">
+              <h2 id="create-workspace-title" className="text-base font-semibold text-[#1a1b22]">
                 Create workspace
               </h2>
               <button
                 type="button"
                 onClick={() => setCreateOpen(false)}
                 aria-label="Close dialog"
-                className="rounded-lg p-1 text-stone-400 hover:bg-stone-100 hover:text-stone-600"
+                className="touch-hit rounded-lg p-1 text-[#5f5e61] transition-colors hover:bg-[#f4f2fd] hover:text-[#47464b] focus-visible:outline-2 focus-visible:outline-[#1f44e4]"
               >
-                <svg
-                  className="h-5 w-5"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  strokeWidth="1.5"
-                  stroke="currentColor"
-                  aria-hidden="true"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
+                <CloseIcon className="h-5 w-5" />
               </button>
             </div>
-            <p className="mt-1 text-sm text-stone-500">
+            <p className="mt-1 text-sm text-[#47464b]">
               A workspace is where your team collaborates.
             </p>
             <CreateWorkspace
@@ -193,13 +187,13 @@ export function WorkspaceRail({ user }: { user: SessionUser }) {
               <button
                 type="button"
                 onClick={() => setCreateOpen(false)}
-                className="rounded-lg border border-stone-300 bg-white px-3.5 py-1.5 text-sm font-medium text-stone-700 hover:border-stone-400"
+                className="rounded-lg border border-[#c8c5cb] bg-white px-3.5 py-1.5 text-sm font-medium text-[#47464b] transition-colors hover:border-[#c8c5cb] focus-visible:outline-2 focus-visible:outline-[#1f44e4]"
               >
                 Cancel
               </button>
             </div>
           </div>
-        </div>
+        </Dialog>
       )}
     </>
   );
