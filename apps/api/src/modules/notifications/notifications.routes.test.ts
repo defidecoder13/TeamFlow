@@ -14,29 +14,29 @@
 import { randomUUID } from 'node:crypto';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { createClerkFakes, requestAs } from '../../test-utils/clerk-fakes';
 import { createApp } from '../../app';
 import { getPrisma } from '../auth/prisma';
 
 vi.setConfig({ testTimeout: 90000, hookTimeout: 300000 });
 
-const LIVE =
-  !!process.env.DATABASE_URL && !!process.env.BETTER_AUTH_SECRET && !!process.env.BETTER_AUTH_URL;
+const LIVE = !!process.env.DATABASE_URL && !!process.env.CLERK_SECRET_KEY;
 const liveDescribe = LIVE ? describe : describe.skip;
 
-const ORIGIN = process.env.BETTER_AUTH_URL ?? 'http://localhost:4000';
+const ORIGIN = 'http://localhost:4000';
 const RUN = `${Date.now().toString(36)}${randomUUID().slice(0, 8)}`;
-const email = (who: string) => `notifapi-${RUN}-${who}@example.invalid`;
-const PASSWORD = 'notifapi-test-password-0123456789';
+const fakes = createClerkFakes('notifications-routes');
+const email = (who: string) => fakes.emailFor(who);
 
 liveDescribe('notification read API (live database)', () => {
-  const app = createApp();
+  const app = createApp(fakes.appDeps());
   const createdWorkspaceIds: string[] = [];
   const createdEmails: string[] = [];
 
-  let owner: ReturnType<typeof request.agent>;
-  let rita: ReturnType<typeof request.agent>;
-  let omar: ReturnType<typeof request.agent>;
-  let xena: ReturnType<typeof request.agent>;
+  let owner: ReturnType<typeof requestAs>;
+  let rita: ReturnType<typeof requestAs>;
+  let omar: ReturnType<typeof requestAs>;
+  let xena: ReturnType<typeof requestAs>;
 
   let ws1 = '';
   let ws2 = '';
@@ -49,15 +49,13 @@ liveDescribe('notification read API (live database)', () => {
   let xenaId = '';
   let rootId = '';
 
-  async function signUp(who: string, name: string): Promise<ReturnType<typeof request.agent>> {
-    const agent = request.agent(app);
-    const res = await agent
-      .post('/api/auth/sign-up/email')
-      .set('Origin', ORIGIN)
-      .send({ name, email: email(who), password: PASSWORD });
-    expect(res.status).toBeLessThan(300);
+  async function signUp(who: string, name: string): Promise<ReturnType<typeof requestAs>> {
+    fakes.setProfile(who, { name });
     createdEmails.push(email(who));
-    return agent;
+    // First sight provisions the local user row through the fake directory.
+    const me = await request(app).get('/api/me').set(fakes.headersFor(who));
+    expect(me.status).toBe(200);
+    return requestAs(app, fakes, who);
   }
 
   async function userIdFor(who: string): Promise<string> {
@@ -66,7 +64,7 @@ liveDescribe('notification read API (live database)', () => {
   }
 
   const listAs = (
-    agent: ReturnType<typeof request.agent>,
+    agent: ReturnType<typeof requestAs>,
     workspaceId: string,
     params: Record<string, string> = {},
   ) => agent.get(`/api/workspaces/${workspaceId}/notifications`).query(params);
@@ -143,7 +141,7 @@ liveDescribe('notification read API (live database)', () => {
     groupId = group.body.conversation.id as string;
 
     async function postChannel(
-      agent: ReturnType<typeof request.agent>,
+      agent: ReturnType<typeof requestAs>,
       channelId: string,
       body: string,
     ): Promise<string> {

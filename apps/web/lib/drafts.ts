@@ -7,6 +7,7 @@
  */
 
 import type { ApiResult, Message } from './messages';
+import { authedFetch } from './session-token';
 
 export type DraftTargetKind = 'CHANNEL' | 'DIRECT_MESSAGE' | 'THREAD';
 
@@ -121,7 +122,7 @@ export async function fetchWorkspaceDrafts(
   const url = `/api/workspaces/${encodeURIComponent(workspaceId)}/drafts`;
   let res: Response;
   try {
-    res = await fetch(`${apiBase}${url}`, {
+    res = await authedFetch(`${apiBase}${url}`, {
       method: 'GET',
       headers: { Accept: 'application/json' },
       credentials: 'include',
@@ -175,7 +176,7 @@ export async function saveWorkspaceDraft(
   const url = `/api/workspaces/${encodeURIComponent(workspaceId)}/drafts`;
   let res: Response;
   try {
-    res = await fetch(`${apiBase}${url}`, {
+    res = await authedFetch(`${apiBase}${url}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       credentials: 'include',
@@ -228,7 +229,7 @@ export async function deleteWorkspaceDraft(
   const url = `/api/workspaces/${encodeURIComponent(workspaceId)}/drafts/${encodeURIComponent(draftId)}`;
   let res: Response;
   try {
-    res = await fetch(`${apiBase}${url}`, {
+    res = await authedFetch(`${apiBase}${url}`, {
       method: 'DELETE',
       headers: { Accept: 'application/json' },
       credentials: 'include',

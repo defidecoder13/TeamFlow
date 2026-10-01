@@ -12,6 +12,7 @@
  * memory for that flow — never localStorage, never logged.
  */
 
+import { authedFetch } from './session-token';
 export interface InvitationInvitee {
   id: string;
   name: string;
@@ -147,7 +148,7 @@ export async function createInvitation(
 ): Promise<CreateInvitationResult> {
   let response: Response;
   try {
-    response = await fetch(
+    response = await authedFetch(
       `${apiBaseUrl}/api/workspaces/${encodeURIComponent(workspaceId)}/invitations`,
       {
         method: 'POST',
@@ -189,7 +190,7 @@ export async function fetchPendingInvitations(
 > {
   let response: Response;
   try {
-    response = await fetch(
+    response = await authedFetch(
       `${apiBaseUrl}/api/workspaces/${encodeURIComponent(workspaceId)}/invitations`,
       { credentials: 'include', cache: 'no-store' },
     );
@@ -224,7 +225,7 @@ export async function revokeInvitation(
 ): Promise<RevokeInvitationResult> {
   let response: Response;
   try {
-    response = await fetch(
+    response = await authedFetch(
       `${apiBaseUrl}/api/workspaces/${encodeURIComponent(workspaceId)}/invitations/${encodeURIComponent(invitationId)}`,
       { method: 'DELETE', credentials: 'include' },
     );
@@ -263,7 +264,7 @@ export async function acceptInvitation(
   async function attempt(): Promise<AcceptInvitationResult | 'conflict'> {
     let response: Response;
     try {
-      response = await fetch(`${apiBaseUrl}/api/invitations/accept`, {
+      response = await authedFetch(`${apiBaseUrl}/api/invitations/accept`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },

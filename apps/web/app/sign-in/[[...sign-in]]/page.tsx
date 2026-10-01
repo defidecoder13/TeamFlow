@@ -1,7 +1,8 @@
+import { SignIn } from '@clerk/nextjs';
 import type { Metadata } from 'next';
 import { AuthBrandPanel } from '../../../components/auth/AuthBrandPanel';
 import { AuthLayout } from '../../../components/auth/AuthLayout';
-import { SignInForm } from '../../../components/auth/SignInForm';
+import { ClerkReady } from '../../../components/auth/ClerkReady';
 import { getSafeReturnTo } from '../../../lib/auth-guard';
 
 export const metadata: Metadata = {
@@ -15,12 +16,9 @@ export default async function SignInPage({
   searchParams: Promise<{ status?: string; next?: string }>;
 }) {
   const { status, next } = await searchParams;
-  // `status=account-created` is approved UI reserved for future entry points
-  // (e.g. admin-provisioned or email-verified accounts). The current sign-up
-  // flow establishes a session immediately and routes through ProfileSetupStep
-  // → /app, so it intentionally does not link here — do not remove.
   const notice =
     status === 'account-created' ? 'Account created — sign in to continue.' : undefined;
+  const returnTo = getSafeReturnTo(next ?? null) ?? undefined;
 
   return (
     <AuthLayout
@@ -33,7 +31,26 @@ export default async function SignInPage({
         />
       }
     >
-      <SignInForm notice={notice} returnTo={getSafeReturnTo(next ?? null) ?? undefined} />
+      <div className="w-full min-w-0">
+        {notice ? (
+          <p
+            role="status"
+            className="mb-5 rounded-lg border border-[#E2E1E1] bg-[#FAF9F8] px-3.5 py-3 text-[13px] leading-snug text-[#171A21]"
+          >
+            {notice}
+          </p>
+        ) : null}
+
+        <div className="flex justify-center">
+          <ClerkReady label="Loading sign in">
+            <SignIn
+              forceRedirectUrl={returnTo}
+              fallbackRedirectUrl="/app"
+              signUpUrl="/sign-up"
+            />
+          </ClerkReady>
+        </div>
+      </div>
     </AuthLayout>
   );
 }

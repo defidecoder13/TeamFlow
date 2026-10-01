@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useApp } from '../../lib/mock-context';
+import { useRouter } from '../../lib/mock-hooks/useRouter';
 import { useNotificationPreferences } from '../../lib/use-notification-preferences';
 import type {
   NotificationDelivery,
@@ -11,6 +12,7 @@ type MentionChoice = 'ALL' | 'NONE';
 
 export const SettingsNotificationsView: React.FC = () => {
   const { showToast } = useApp();
+  const { push } = useRouter();
   const { state, isSaving, saveError, clearSaveError, savePreferences, retry } =
     useNotificationPreferences();
 
@@ -127,6 +129,23 @@ export const SettingsNotificationsView: React.FC = () => {
                 </button>
               </div>
             </div>
+          </div>
+        )}
+
+        {state.status === 'unauthenticated' && (
+          <div
+            role="status"
+            className="bg-white border border-[#E4E2DF] rounded-[12px] p-6 shadow-2xs text-[13px] text-[#737782]"
+          >
+            <p className="font-medium text-[#171A21]">Please sign in</p>
+            <p className="mt-1">Your session has expired. Sign in again to manage notifications.</p>
+            <button
+              type="button"
+              onClick={() => push('/sign-in')}
+              className="mt-3 rounded-[8px] bg-[#2E3440] px-4 py-2 text-[13px] font-medium text-white transition-colors hover:bg-[#1E222A] focus-visible:outline-2 focus-visible:outline-[#3157D5]"
+            >
+              Go to sign in
+            </button>
           </div>
         )}
 

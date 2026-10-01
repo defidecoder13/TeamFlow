@@ -20,6 +20,9 @@ function resolvePort(): number {
 }
 
 const port = resolvePort();
+if (!process.env.CLERK_SECRET_KEY || process.env.CLERK_SECRET_KEY.trim().length === 0) {
+  throw new Error('CLERK_SECRET_KEY is not set. Configure it in the API environment.');
+}
 const app = createApp();
 const httpServer = http.createServer(app);
 

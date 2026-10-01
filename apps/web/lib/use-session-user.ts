@@ -1,7 +1,9 @@
 'use client';
 
+import { useAuth } from '@clerk/nextjs';
 import { useEffect, useState } from 'react';
 import { getApiBaseUrl } from './config';
+import { authedFetch } from './session-token';
 
 export interface SessionUser {
   id: string;
@@ -23,6 +25,7 @@ export function useSessionUser(): SessionState & {
   refresh: () => void;
   setUser: (user: SessionUser) => void;
 } {
+  const { isLoaded, isSignedIn } = useAuth();
   const [state, setState] = useState<SessionState>({ status: 'loading' });
   const [attempt, setAttempt] = useState(0);
 
@@ -31,6 +34,16 @@ export function useSessionUser(): SessionState & {
 
   useEffect(() => {
     let cancelled = false;
+
+    if (!isLoaded) {
+      setState({ status: 'loading' });
+      return;
+    }
+    if (!isSignedIn) {
+      // No Clerk session: never hit the API with an anonymous request.
+      setState({ status: 'unauthenticated' });
+      return;
+    }
 
     async function load() {
       let apiBase: string;
@@ -44,8 +57,9 @@ export function useSessionUser(): SessionState & {
       }
 
       try {
-        const response = await fetch(`${apiBase}/api/me`, {
-          credentials: 'include',
+        // Bearer token attached by authedFetch; the API provisions the local
+        // user record on first sight (Clerk user id → local membership id).
+        const response = await authedFetch(`${apiBase}/api/me`, {
           cache: 'no-store',
         });
 
@@ -97,7 +111,7 @@ export function useSessionUser(): SessionState & {
     return () => {
       cancelled = true;
     };
-  }, [attempt]);
+  }, [attempt, isLoaded, isSignedIn]);
 
   return { ...state, refresh, setUser } as SessionState & {
     refresh: () => void;

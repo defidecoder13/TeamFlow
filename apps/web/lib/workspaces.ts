@@ -11,6 +11,7 @@
  * trusts. Malformed data is rejected, never rendered.
  */
 
+import { authedFetch } from './session-token';
 export const WORKSPACE_ROLES = ['OWNER', 'ADMIN', 'MEMBER'] as const;
 
 export type WorkspaceRole = (typeof WORKSPACE_ROLES)[number];
@@ -69,7 +70,7 @@ export type FetchWorkspacesResult =
 export async function fetchWorkspaces(apiBaseUrl: string): Promise<FetchWorkspacesResult> {
   let response: Response;
   try {
-    response = await fetch(`${apiBaseUrl}/api/workspaces`, {
+    response = await authedFetch(`${apiBaseUrl}/api/workspaces`, {
       credentials: 'include',
       cache: 'no-store',
     });
@@ -156,7 +157,7 @@ export async function createWorkspace(
 ): Promise<CreateWorkspaceResult> {
   let response: Response;
   try {
-    response = await fetch(`${apiBaseUrl}/api/workspaces`, {
+    response = await authedFetch(`${apiBaseUrl}/api/workspaces`, {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
@@ -213,7 +214,7 @@ export async function updateWorkspace(
 ): Promise<UpdateWorkspaceResult> {
   let response: Response;
   try {
-    response = await fetch(`${apiBaseUrl}/api/workspaces/${encodeURIComponent(workspaceId)}`, {
+    response = await authedFetch(`${apiBaseUrl}/api/workspaces/${encodeURIComponent(workspaceId)}`, {
       method: 'PATCH',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
@@ -259,7 +260,7 @@ export async function deleteWorkspace(
 ): Promise<DeleteWorkspaceResult> {
   let response: Response;
   try {
-    response = await fetch(`${apiBaseUrl}/api/workspaces/${encodeURIComponent(workspaceId)}`, {
+    response = await authedFetch(`${apiBaseUrl}/api/workspaces/${encodeURIComponent(workspaceId)}`, {
       method: 'DELETE',
       credentials: 'include',
       cache: 'no-store',

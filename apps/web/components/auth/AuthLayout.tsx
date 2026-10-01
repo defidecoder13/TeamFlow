@@ -50,7 +50,7 @@ export function AuthLayout({ brand, children }: AuthLayoutProps) {
             aria-label="Authentication"
             className="flex w-full min-w-0 items-center justify-center bg-white px-6 py-10 sm:px-12 lg:px-14 lg:py-16"
           >
-            <div className="w-full max-w-sm min-w-0">
+            <div className="w-full max-w-md min-w-0">
               <div className="mb-8 flex items-center gap-2.5 lg:hidden">
                 <TeamFlowLogo
                   size={24}

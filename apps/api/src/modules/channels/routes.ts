@@ -1,7 +1,7 @@
 /**
  * Channel HTTP boundary (Phase 3A).
  *
- * All routes sit behind `requireAuth` — identity comes exclusively from the
+ * All routes sit behind `requireClerkAuth` — identity comes exclusively from the
  * session (`req.authUser`). Workspace membership gates every operation;
  * private channels additionally require channel membership (resolved in
  * `authorization.ts`). Missing/inaccessible resources share one 404 shape so
@@ -9,9 +9,8 @@
  */
 
 import { Router, type NextFunction, type Request, type Response } from 'express';
-import type { AuthContext } from '../auth/index';
 import { getPrisma } from '../auth/prisma';
-import { requireAuth } from '../auth/session';
+import { requireClerkAuth, type ClerkRouteOptions } from '../auth/index';
 import { getMembershipRole } from '../workspaces/authorization';
 import { canUpdateChannel, getAccessibleChannel } from './authorization';
 import {
@@ -78,11 +77,11 @@ function requireSessionUser(req: Request, res: Response): { id: string } | null 
   return authUser;
 }
 
-export function createChannelsRouter(resolveAuth: () => AuthContext): Router {
+export function createChannelsRouter(options: ClerkRouteOptions = {}): Router {
   // mergeParams: mounted at `/api/workspaces/:workspaceId/channels` and must
   // see the parent mount's `workspaceId` (Express 4 drops it otherwise).
   const router = Router({ mergeParams: true });
-  router.use(requireAuth(resolveAuth));
+  router.use(requireClerkAuth(options));
 
   router.post(
     '/',

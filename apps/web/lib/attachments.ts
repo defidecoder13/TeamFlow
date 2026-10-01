@@ -6,6 +6,7 @@
  */
 
 import { getApiBaseUrl } from './config';
+import { authedFetch } from './session-token';
 
 export const MAX_ATTACHMENTS_PER_MESSAGE = 5;
 export const MAX_ATTACHMENT_SIZE_BYTES = 25 * 1024 * 1024; // 25 MB
@@ -128,7 +129,7 @@ export async function requestUploadUrl(
 ): Promise<{ ok: true; data: InitUploadResponse } | { ok: false; error: string }> {
   const base = apiBase || getApiBaseUrl();
   try {
-    const res = await fetch(
+    const res = await authedFetch(
       `${base}/api/messages/${encodeURIComponent(messageId)}/attachments/upload-url`,
       {
         method: 'POST',
@@ -214,7 +215,7 @@ export async function finalizeAttachment(
 ): Promise<{ ok: true; data: Attachment } | { ok: false; error: string }> {
   const base = apiBase || getApiBaseUrl();
   try {
-    const res = await fetch(
+    const res = await authedFetch(
       `${base}/api/messages/${encodeURIComponent(messageId)}/attachments/finalize`,
       {
         method: 'POST',
@@ -367,7 +368,7 @@ export async function fetchAttachmentDownloadUrl(
 
   const base = apiBase || getApiBaseUrl();
   try {
-    const res = await fetch(
+    const res = await authedFetch(
       `${base}/api/attachments/${encodeURIComponent(attachmentId)}/download-url`,
       {
         method: 'GET',
@@ -419,7 +420,7 @@ export async function deleteAttachment(
 ): Promise<{ ok: true } | { ok: false; error: string; unauthorized?: boolean }> {
   const base = apiBase || getApiBaseUrl();
   try {
-    const res = await fetch(`${base}/api/attachments/${encodeURIComponent(attachmentId)}`, {
+    const res = await authedFetch(`${base}/api/attachments/${encodeURIComponent(attachmentId)}`, {
       method: 'DELETE',
       headers: { Accept: 'application/json' },
       credentials: 'include',

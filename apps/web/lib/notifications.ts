@@ -7,6 +7,7 @@
  */
 
 import type { ApiResult } from './messages';
+import { authedFetch } from './session-token';
 
 export type NotificationType = 'MENTION' | 'DM_MESSAGE' | 'GROUP_MESSAGE' | 'THREAD_REPLY';
 
@@ -233,7 +234,7 @@ export async function fetchNotifications(
     (query ? `?${query}` : '');
   let res: Response;
   try {
-    res = await fetch(url, {
+    res = await authedFetch(url, {
       method: 'GET',
       headers: { Accept: 'application/json' },
       credentials: 'include',
@@ -289,7 +290,7 @@ export async function markNotificationRead(
 ): Promise<ApiResult<NotificationItem>> {
   let res: Response;
   try {
-    res = await fetch(
+    res = await authedFetch(
       `${apiBase}/api/workspaces/${encodeURIComponent(workspaceId)}/notifications/${encodeURIComponent(notificationId)}/read`,
       { method: 'POST', headers: { Accept: 'application/json' }, credentials: 'include' },
     );
@@ -323,7 +324,7 @@ export async function markAllNotificationsRead(
 ): Promise<ApiResult<{ updatedCount: number }>> {
   let res: Response;
   try {
-    res = await fetch(
+    res = await authedFetch(
       `${apiBase}/api/workspaces/${encodeURIComponent(workspaceId)}/notifications/read-all`,
       { method: 'POST', headers: { Accept: 'application/json' }, credentials: 'include' },
     );

@@ -1,38 +1,28 @@
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { createClerkFakes, requestAs } from '../../test-utils/clerk-fakes';
 import { createApp } from '../../app';
 import { getPrisma } from './prisma';
 
 vi.setConfig({ testTimeout: 30000, hookTimeout: 120000 });
 
-const LIVE =
-  !!process.env.DATABASE_URL && !!process.env.BETTER_AUTH_SECRET && !!process.env.BETTER_AUTH_URL;
+const LIVE = !!process.env.DATABASE_URL && !!process.env.CLERK_SECRET_KEY;
 const liveDescribe = LIVE ? describe : describe.skip;
 
-const ORIGIN = process.env.BETTER_AUTH_URL ?? 'http://localhost:4000';
+const ORIGIN = 'http://localhost:4000';
 const RUN = `${Date.now().toString(36)}${Math.floor(Math.random() * 1e6).toString(36)}`;
-const email = (who: string) => `prof-${RUN}-${who}@example.invalid`;
-const PASSWORD = 'profile-test-password-0123456789';
+
+const fakes = createClerkFakes(`prof-${RUN}`);
+const email = (who: string) => fakes.emailFor(who);
 
 liveDescribe('profile API (live database)', () => {
-  const app = createApp();
+  const app = createApp(fakes.appDeps());
   const createdEmails: string[] = [];
-
-  async function signUp(who: string, name: string) {
-    const agent = request.agent(app);
-    const res = await agent
-      .post('/api/auth/sign-up/email')
-      .set('Origin', ORIGIN)
-      .send({ name, email: email(who), password: PASSWORD });
-    expect(res.status).toBeLessThan(300);
-    createdEmails.push(email(who));
-    return agent;
-  }
-
-  let alice: ReturnType<typeof request.agent>;
+  const alice = requestAs(app, fakes, 'alice');
 
   beforeAll(async () => {
-    alice = await signUp('alice', 'Alice Original');
+    fakes.setProfile('alice', { name: 'Alice Original' });
+    createdEmails.push(email('alice'));
   }, 60000);
 
   afterAll(async () => {
@@ -163,7 +153,11 @@ liveDescribe('profile API (live database)', () => {
   });
 
   it('userId in body rejected and cannot update another user', async () => {
-    const bob = await signUp('bob', 'Bob');
+    fakes.setProfile('bob', { name: 'Bob' });
+    createdEmails.push(email('bob'));
+    const bob = requestAs(app, fakes, 'bob');
+    // Provision bob first so his row exists.
+    expect((await bob.get('/api/me')).status).toBe(200);
     const bobUser = await getPrisma().user.findUniqueOrThrow({ where: { email: email('bob') } });
     // Alice tries to send bob's id — should be rejected via strict
     const res = await alice

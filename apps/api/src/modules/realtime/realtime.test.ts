@@ -1,9 +1,8 @@
 import http from 'node:http';
-import { betterAuth } from 'better-auth';
-import { memoryAdapter } from 'better-auth/adapters/memory';
 import { io as ioc, type Socket as ClientSocket } from 'socket.io-client';
 import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createClerkFakes } from '../../test-utils/clerk-fakes';
 import { createApp } from '../../app';
 import {
   closeRealtime,
@@ -35,39 +34,47 @@ vi.mock('../direct-messages/authorization', () => ({
   authorizeDirectConversationAccess: authorizeDirectConversationAccessMock,
 }));
 
+const fakes = createClerkFakes('realtime');
+
 vi.mock('../auth/prisma', () => ({
-  getPrisma: () => ({}),
+  getPrisma: () => ({
+    user: {
+      // Deterministic clerk ids mirror createClerkFakes('realtime').
+      findUnique: async ({ where }: { where: { clerkId: string } }) => {
+        if (where.clerkId === 'clerk-test-realtime-user') {
+          return {
+            id: 'u-rt-1',
+            name: 'Realtime User',
+            email: 'rt@example.invalid',
+            image: null,
+            emailVerified: false,
+          };
+        }
+        if (where.clerkId === 'clerk-test-realtime-user2') {
+          return {
+            id: 'u-rt-2',
+            name: 'Realtime User Two',
+            email: 'rt-two@example.invalid',
+            image: null,
+            emailVerified: false,
+          };
+        }
+        return null;
+      },
+    },
+  }),
 }));
-
-const TEST_AUTH_URL = 'http://localhost:4000';
-const TEST_USER = {
-  name: 'Realtime User',
-  email: 'realtime@test.teamflow.local',
-  password: 'realtime-test-password-12345',
-};
-
-function createTestAuth() {
-  return betterAuth({
-    secret: 'realtime-test-secret-0123456789abcdef-0123456789abcdef',
-    baseURL: TEST_AUTH_URL,
-    database: memoryAdapter({ user: [], session: [], account: [], verification: [] }),
-    emailAndPassword: { enabled: true },
-    rateLimit: { enabled: false },
-  });
-}
 
 describe('Realtime Gateway (Socket.IO)', () => {
   let server: http.Server;
   let serverPort: number;
-  let authCookie: string;
-  let auth: ReturnType<typeof createTestAuth>;
+  let authToken: string;
   let app: ReturnType<typeof createApp>;
 
   beforeAll(async () => {
-    auth = createTestAuth();
-    app = createApp({ auth });
+    app = createApp(fakes.appDeps());
     server = http.createServer(app);
-    initRealtime(server, () => auth);
+    initRealtime(server, fakes.appDeps());
 
     await new Promise<void>((resolve) => {
       server.listen(0, () => {
@@ -79,15 +86,7 @@ describe('Realtime Gateway (Socket.IO)', () => {
       });
     });
 
-    const agent = request.agent(app);
-    const signUpRes = await agent
-      .post('/api/auth/sign-up/email')
-      .set('Origin', TEST_AUTH_URL)
-      .send(TEST_USER);
-
-    expect(signUpRes.status).toBeLessThan(300);
-    const cookies = signUpRes.headers['set-cookie'];
-    authCookie = Array.isArray(cookies) ? cookies[0]! : (cookies as unknown as string);
+    authToken = fakes.tokenFor('user');
   });
 
   afterAll(async () => {
@@ -100,11 +99,11 @@ describe('Realtime Gateway (Socket.IO)', () => {
     authorizeDirectConversationAccessMock.mockReset();
   });
 
-  function createClient(cookie?: string): ClientSocket {
+  function createClient(token?: string): ClientSocket {
     return ioc(`http://localhost:${serverPort}`, {
       transports: ['websocket'],
       autoConnect: false,
-      extraHeaders: cookie ? { Cookie: cookie } : undefined,
+      auth: token ? { token } : undefined,
     });
   }
 
@@ -123,7 +122,7 @@ describe('Realtime Gateway (Socket.IO)', () => {
   });
 
   it('authenticates socket connection with valid session cookie', async () => {
-    const client = createClient(authCookie);
+    const client = createClient(authToken);
 
     await new Promise<void>((resolve, reject) => {
       client.on('connect', () => resolve());
@@ -136,7 +135,7 @@ describe('Realtime Gateway (Socket.IO)', () => {
   });
 
   it('allows joining authorized channel and rejects unauthorized channel', async () => {
-    const client = createClient(authCookie);
+    const client = createClient(authToken);
     await new Promise<void>((resolve) => {
       client.on('connect', () => resolve());
       client.connect();
@@ -168,8 +167,8 @@ describe('Realtime Gateway (Socket.IO)', () => {
   });
 
   it('isolates events between different channel rooms', async () => {
-    const clientA = createClient(authCookie);
-    const clientB = createClient(authCookie);
+    const clientA = createClient(authToken);
+    const clientB = createClient(authToken);
 
     await Promise.all([
       new Promise<void>((resolve) => {
@@ -221,7 +220,7 @@ describe('Realtime Gateway (Socket.IO)', () => {
   });
 
   it('emits message:updated and message:deleted to channel room', async () => {
-    const client = createClient(authCookie);
+    const client = createClient(authToken);
     await new Promise<void>((resolve) => {
       client.on('connect', () => resolve());
       client.connect();
@@ -276,7 +275,7 @@ describe('Realtime Gateway (Socket.IO)', () => {
   });
 
   it('allows joining authorized direct conversation and rejects unauthorized access', async () => {
-    const client = createClient(authCookie);
+    const client = createClient(authToken);
     await new Promise<void>((resolve) => {
       client.on('connect', () => resolve());
       client.connect();
@@ -307,8 +306,8 @@ describe('Realtime Gateway (Socket.IO)', () => {
   });
 
   it('isolates events between different direct conversation rooms', async () => {
-    const clientA = createClient(authCookie);
-    const clientB = createClient(authCookie);
+    const clientA = createClient(authToken);
+    const clientB = createClient(authToken);
 
     await Promise.all([
       new Promise<void>((resolve) => {
@@ -366,8 +365,8 @@ describe('Realtime Gateway (Socket.IO)', () => {
   });
 
   it('isolates events between channel rooms and direct conversation rooms', async () => {
-    const channelClient = createClient(authCookie);
-    const dmClient = createClient(authCookie);
+    const channelClient = createClient(authToken);
+    const dmClient = createClient(authToken);
 
     await Promise.all([
       new Promise<void>((resolve) => {
@@ -441,7 +440,7 @@ describe('Realtime Gateway (Socket.IO)', () => {
   });
 
   it('emits message:updated and message:deleted to direct conversation room', async () => {
-    const client = createClient(authCookie);
+    const client = createClient(authToken);
     await new Promise<void>((resolve) => {
       client.on('connect', () => resolve());
       client.connect();
@@ -502,7 +501,7 @@ describe('Realtime Gateway (Socket.IO)', () => {
   });
 
   it('emits conversation:read event to direct conversation room', async () => {
-    const client = createClient(authCookie);
+    const client = createClient(authToken);
     await new Promise<void>((resolve) => {
       client.on('connect', () => resolve());
       client.connect();
@@ -541,25 +540,15 @@ describe('Realtime Gateway (Socket.IO)', () => {
     client.disconnect();
   });
 
-  let secondUserCounter = 0;
-  async function signUpSecondUser(
+  async function provisionSecondUser(
     app: ReturnType<typeof createApp>,
-  ): Promise<{ cookie: string; userId: string }> {
-    secondUserCounter += 1;
-    const agent = request.agent(app);
-    const res = await agent
-      .post('/api/auth/sign-up/email')
-      .set('Origin', TEST_AUTH_URL)
-      .send({
-        name: 'Realtime User Two',
-        email: `realtime-two-${secondUserCounter}@test.teamflow.local`,
-        password: 'realtime-test-password-12345',
-      });
-    expect(res.status).toBeLessThan(300);
-    const cookies = res.headers['set-cookie'];
-    const cookie = Array.isArray(cookies) ? cookies[0]! : (cookies as unknown as string);
-    const userId = (res.body as { user: { id: string } }).user.id;
-    return { cookie, userId };
+  ): Promise<{ token: string; userId: string }> {
+    const me = await request(app).get('/api/me').set(fakes.headersFor('user2'));
+    expect(me.status).toBe(200);
+    return {
+      token: fakes.tokenFor('user2'),
+      userId: (me.body as { user: { id: string } }).user.id,
+    };
   }
 
   function notificationPayload(recipientUserId: string) {
@@ -583,16 +572,15 @@ describe('Realtime Gateway (Socket.IO)', () => {
   }
 
   it('auto-joins the authenticated user room and isolates notification delivery', async () => {
-    const second = await signUpSecondUser(app);
+    const second = await provisionSecondUser(app);
     const firstUserId = (
-      await request(app).post('/api/auth/sign-in/email').set('Origin', TEST_AUTH_URL).send({
-        email: TEST_USER.email,
-        password: TEST_USER.password,
-      })
-    ).body.user.id as string;
+      (await request(app).get('/api/me').set(fakes.headersFor('user'))).body as {
+        user: { id: string };
+      }
+    ).user.id;
 
-    const clientA = createClient(authCookie);
-    const clientB = createClient(second.cookie);
+    const clientA = createClient(authToken);
+    const clientB = createClient(second.token);
 
     await Promise.all([
       new Promise<void>((resolve) => {
@@ -628,7 +616,7 @@ describe('Realtime Gateway (Socket.IO)', () => {
   });
 
   it('ignores unknown client events without breaking the connection', async () => {
-    const client = createClient(authCookie);
+    const client = createClient(authToken);
     await new Promise<void>((resolve) => {
       client.on('connect', () => resolve());
       client.connect();
@@ -643,9 +631,9 @@ describe('Realtime Gateway (Socket.IO)', () => {
   });
 
   it('delivers notification:read and notification:read-all to the recipient room only', async () => {
-    const second = await signUpSecondUser(app);
-    const clientA = createClient(authCookie);
-    const clientB = createClient(second.cookie);
+    const second = await provisionSecondUser(app);
+    const clientA = createClient(authToken);
+    const clientB = createClient(second.token);
 
     await Promise.all([
       new Promise<void>((resolve) => {
@@ -704,9 +692,9 @@ describe('Realtime Gateway (Socket.IO)', () => {
   });
 
   it('delivers membership-removal events only to the removed user room', async () => {
-    const second = await signUpSecondUser(app);
-    const clientA = createClient(authCookie);
-    const clientB = createClient(second.cookie);
+    const second = await provisionSecondUser(app);
+    const clientA = createClient(authToken);
+    const clientB = createClient(second.token);
 
     await Promise.all([
       new Promise<void>((resolve) => {

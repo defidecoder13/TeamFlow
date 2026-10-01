@@ -1,15 +1,14 @@
 /**
  * Workspace HTTP boundary (Phase 2A).
  *
- * All routes sit behind `requireAuth` — identity comes exclusively from the
+ * All routes sit behind `requireClerkAuth` — identity comes exclusively from the
  * session (`req.authUser`). Membership/role checks use `authorization.ts`;
  * the unique-constraint-safe creation lives in `service.ts`.
  */
 
 import { Router, type NextFunction, type Request, type Response } from 'express';
-import type { AuthContext } from '../auth/index';
 import { getPrisma } from '../auth/prisma';
-import { requireAuth } from '../auth/session';
+import { requireClerkAuth, type ClerkRouteOptions } from '../auth/index';
 import { presenceRegistry } from '../realtime/presence';
 import { canDeleteWorkspace, canEditMetadata, getMembershipRole } from './authorization';
 import {
@@ -51,9 +50,9 @@ function asyncRoute(handler: (req: Request, res: Response) => Promise<void>) {
   };
 }
 
-export function createWorkspacesRouter(resolveAuth: () => AuthContext): Router {
+export function createWorkspacesRouter(options: ClerkRouteOptions = {}): Router {
   const router = Router();
-  router.use(requireAuth(resolveAuth));
+  router.use(requireClerkAuth(options));
 
   router.post(
     '/',

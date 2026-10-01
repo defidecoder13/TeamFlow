@@ -2,14 +2,13 @@
  * Workspace mentions HTTP boundary (Audit 12).
  *
  * GET `/api/workspaces/:workspaceId/mentions` — list messages that mention
- * the caller, newest first. Behind `requireAuth`; membership resolves inside
+ * the caller, newest first. Behind `requireClerkAuth`; membership resolves inside
  * the service (shared 404 for missing/inaccessible).
  */
 
 import { Router, type NextFunction, type Request, type Response } from 'express';
-import type { AuthContext } from '../auth/index';
 import { getPrisma } from '../auth/prisma';
-import { requireAuth } from '../auth/session';
+import { requireClerkAuth, type ClerkRouteOptions } from '../auth/index';
 import {
   listWorkspaceMentions,
   MentionListNotFoundError,
@@ -43,11 +42,11 @@ function asyncRoute(handler: (req: Request, res: Response) => Promise<void>) {
   };
 }
 
-export function createWorkspaceMentionsRouter(resolveAuth: () => AuthContext): Router {
+export function createWorkspaceMentionsRouter(options: ClerkRouteOptions = {}): Router {
   // mergeParams: mounted at `/api/workspaces/:workspaceId/mentions` and must
   // see the parent mount's `workspaceId`.
   const router = Router({ mergeParams: true });
-  router.use(requireAuth(resolveAuth));
+  router.use(requireClerkAuth(options));
 
   router.get(
     '/',

@@ -2,12 +2,20 @@ import { renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useSessionUser } from './use-session-user';
 
-const { fetchMock } = vi.hoisted(() => ({ fetchMock: vi.fn() }));
+const { fetchMock, clerkAuthState } = vi.hoisted(() => ({
+  fetchMock: vi.fn(),
+  clerkAuthState: { value: { isLoaded: true, isSignedIn: true } },
+}));
 
 vi.stubGlobal('fetch', fetchMock);
 
+vi.mock('@clerk/nextjs', () => ({
+  useAuth: () => clerkAuthState.value,
+}));
+
 beforeEach(() => {
   fetchMock.mockReset();
+  clerkAuthState.value = { isLoaded: true, isSignedIn: true };
   vi.stubEnv('NEXT_PUBLIC_API_URL', 'http://localhost:4000');
 });
 
@@ -75,5 +83,21 @@ describe('useSessionUser', () => {
       throw new Error('expected error');
     }
     expect(result.current.message).not.toContain('ECONNREFUSED');
+  });
+
+  it('stays loading while Clerk resolves, without calling the API', () => {
+    clerkAuthState.value = { isLoaded: false, isSignedIn: false };
+    const { result } = renderHook(() => useSessionUser());
+
+    expect(result.current.status).toBe('loading');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('reports unauthenticated without fetching when Clerk has no session', () => {
+    clerkAuthState.value = { isLoaded: true, isSignedIn: false };
+    const { result } = renderHook(() => useSessionUser());
+
+    expect(result.current.status).toBe('unauthenticated');
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

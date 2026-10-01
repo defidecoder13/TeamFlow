@@ -74,9 +74,20 @@ export const SettingsIndexView: React.FC = () => {
             <h1 className="text-[26px] font-semibold text-[#171A21] tracking-tight">Settings</h1>
           </div>
           <div role="status" className="text-[13px] text-[#4F5360]">
-            {session.status === 'error'
-              ? session.message
-              : 'Please sign in to manage your settings.'}
+            <p>
+              {session.status === 'error'
+                ? session.message
+                : 'Please sign in to manage your settings.'}
+            </p>
+            {session.status === 'unauthenticated' ? (
+              <button
+                type="button"
+                onClick={() => push('/sign-in')}
+                className="mt-3 rounded-[8px] bg-[#2E3440] px-4 py-2 text-[13px] font-medium text-white transition-colors hover:bg-[#1E222A] focus-visible:outline-2 focus-visible:outline-[#3157D5]"
+              >
+                Go to sign in
+              </button>
+            ) : null}
           </div>
         </div>
       </main>
@@ -132,10 +143,11 @@ export const SettingsIndexView: React.FC = () => {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {settingsCards.map((card) => (
-            <div
+            <button
               key={card.title}
+              type="button"
               onClick={() => push(card.url)}
-              className="p-5 bg-white border border-[#E4E2DF] hover:border-[#D2D0CC] rounded-[12px] shadow-2xs hover:shadow-xs transition-all cursor-pointer group flex flex-col justify-between"
+              className="p-5 bg-white border border-[#E4E2DF] hover:border-[#D2D0CC] rounded-[12px] shadow-2xs hover:shadow-xs transition-all cursor-pointer group flex flex-col justify-between text-left w-full focus-visible:outline-2 focus-visible:outline-[#3157D5]"
             >
               <div>
                 <div className="flex items-center justify-between mb-3">
@@ -156,7 +168,7 @@ export const SettingsIndexView: React.FC = () => {
                 <span>Manage</span>
                 <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
               </div>
-            </div>
+            </button>
           ))}
         </div>
       </div>

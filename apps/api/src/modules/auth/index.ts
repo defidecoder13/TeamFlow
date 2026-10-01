@@ -1,19 +1,20 @@
 /**
- * Authentication module boundary.
+ * Authentication module boundary (Clerk migration).
  *
- * Phase 1A established the Better Auth instance (lazy) and Prisma accessor.
- * Phase 1B adds server-side session helpers and the identity route:
- *
- *   request → Better Auth session → authenticated user → route handler
+ * request → verified Clerk session → provisioned local user → route handler
  */
 
-export { getAuth, getTrustedOrigins, type Auth, type AuthContext } from './auth';
 export { getPrisma } from './prisma';
 export { createMeRouter } from './me';
 export {
-  getSessionUser,
-  requireAuth,
-  toSafeUser,
-  type MeResponse,
-  type SafeAuthUser,
-} from './session';
+  getClerkAuthUser,
+  getClerkSession,
+  provisionClerkUser,
+  requireClerkAuth,
+  verifyBearerToken,
+  type ClerkDirectory,
+  type ClerkDirectoryUser,
+  type ClerkRouteOptions,
+  type ClerkTokenVerifier,
+} from './clerk';
+export { toSafeUser, type MeResponse, type SafeAuthUser } from './session';

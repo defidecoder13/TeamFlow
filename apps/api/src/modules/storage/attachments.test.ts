@@ -1,12 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import request from 'supertest';
-import { betterAuth } from 'better-auth';
-import { memoryAdapter } from 'better-auth/adapters/memory';
 import type { PrismaClient } from '@teamflow/db';
+import { createClerkFakes } from '../../test-utils/clerk-fakes';
 import { createApp } from '../../app';
 import { cleanUpMessageR2Objects, type StorageService } from './index';
 
+const fakes = createClerkFakes('attachments');
+
+const mockUsers: Record<string, { id: string; name: string; email: string; image: null; emailVerified: boolean }> = {
+  [fakes.clerkIdFor('userA')]: { id: 'u-a', name: 'Attachment User A', email: fakes.emailFor('userA'), image: null, emailVerified: false },
+  [fakes.clerkIdFor('userB')]: { id: 'u-b', name: 'Attachment User B', email: fakes.emailFor('userB'), image: null, emailVerified: false },
+};
+
 const mockPrisma = {
+  user: { findUnique: vi.fn() },
   message: {
     findUnique: vi.fn(),
   },
@@ -58,57 +65,17 @@ vi.mock('./r2', async (importOriginal) => {
 });
 
 describe('Phase 4J.1 - Attachments & Storage Domain & HTTP Endpoints', () => {
-  const TEST_AUTH_URL = 'http://localhost:4000';
-  let auth: ReturnType<typeof createTestAuth>;
   let app: ReturnType<typeof createApp>;
 
-  function createTestAuth() {
-    return betterAuth({
-      secret: 'attachments-test-secret-0123456789abcdef-0123456789abcdef',
-      baseURL: TEST_AUTH_URL,
-      database: memoryAdapter({ user: [], session: [], account: [], verification: [] }),
-      emailAndPassword: { enabled: true },
-      rateLimit: { enabled: false },
-    });
-  }
-
-  let authCookieUserA: string;
-  let userIdA: string;
-  let authCookieUserB: string;
-  let userIdB: string;
+  const userIdA = 'u-a';
+  const userIdB = 'u-b';
 
   beforeEach(async () => {
     vi.clearAllMocks();
-    auth = createTestAuth();
-    app = createApp({ auth });
-
-    // User A
-    const resA = await request(app)
-      .post('/api/auth/sign-up/email')
-      .set('Origin', TEST_AUTH_URL)
-      .send({
-        name: 'Attachment User A',
-        email: 'user-a@teamflow.local',
-        password: 'password-123456',
-      });
-    expect(resA.status).toBe(200);
-    const cookiesA = resA.headers['set-cookie'];
-    authCookieUserA = Array.isArray(cookiesA) ? cookiesA.join('; ') : (cookiesA ?? '');
-    userIdA = (resA.body as { user: { id: string } }).user.id;
-
-    // User B
-    const resB = await request(app)
-      .post('/api/auth/sign-up/email')
-      .set('Origin', TEST_AUTH_URL)
-      .send({
-        name: 'Attachment User B',
-        email: 'user-b@teamflow.local',
-        password: 'password-123456',
-      });
-    expect(resB.status).toBe(200);
-    const cookiesB = resB.headers['set-cookie'];
-    authCookieUserB = Array.isArray(cookiesB) ? cookiesB.join('; ') : (cookiesB ?? '');
-    userIdB = (resB.body as { user: { id: string } }).user.id;
+    app = createApp(fakes.appDeps());
+    mockPrisma.user.findUnique.mockImplementation(({ where }: { where: { clerkId: string } }) =>
+      Promise.resolve(mockUsers[where.clerkId] ?? null),
+    );
   });
 
   describe('Unauthenticated access', () => {
@@ -139,21 +106,21 @@ describe('Phase 4J.1 - Attachments & Storage Domain & HTTP Endpoints', () => {
       // Empty filename
       const res1 = await request(app)
         .post('/api/messages/msg-1/attachments/upload-url')
-        .set('Cookie', authCookieUserA)
+        .set(fakes.headersFor('userA'))
         .send({ originalName: '', mimeType: 'image/png', size: 100 });
       expect(res1.status).toBe(400);
 
       // Unsupported MIME
       const res2 = await request(app)
         .post('/api/messages/msg-1/attachments/upload-url')
-        .set('Cookie', authCookieUserA)
+        .set(fakes.headersFor('userA'))
         .send({ originalName: 'app.exe', mimeType: 'application/x-msdownload', size: 100 });
       expect(res2.status).toBe(400);
 
       // Oversize
       const res3 = await request(app)
         .post('/api/messages/msg-1/attachments/upload-url')
-        .set('Cookie', authCookieUserA)
+        .set(fakes.headersFor('userA'))
         .send({ originalName: 'huge.zip', mimeType: 'application/zip', size: 30 * 1024 * 1024 });
       expect(res3.status).toBe(400);
     });
@@ -163,7 +130,7 @@ describe('Phase 4J.1 - Attachments & Storage Domain & HTTP Endpoints', () => {
 
       const res = await request(app)
         .post('/api/messages/nonexistent/attachments/upload-url')
-        .set('Cookie', authCookieUserA)
+        .set(fakes.headersFor('userA'))
         .send({ originalName: 'pic.png', mimeType: 'image/png', size: 100 });
 
       expect(res.status).toBe(404);
@@ -187,7 +154,7 @@ describe('Phase 4J.1 - Attachments & Storage Domain & HTTP Endpoints', () => {
 
       const res = await request(app)
         .post('/api/messages/msg-1/attachments/upload-url')
-        .set('Cookie', authCookieUserA) // User A is caller
+        .set(fakes.headersFor('userA')) // User A is caller
         .send({ originalName: 'pic.png', mimeType: 'image/png', size: 100 });
 
       expect(res.status).toBe(403);
@@ -215,7 +182,7 @@ describe('Phase 4J.1 - Attachments & Storage Domain & HTTP Endpoints', () => {
 
       const res = await request(app)
         .post('/api/messages/msg-1/attachments/upload-url')
-        .set('Cookie', authCookieUserA)
+        .set(fakes.headersFor('userA'))
         .send({ originalName: 'document.pdf', mimeType: 'application/pdf', size: 5000 });
 
       expect(res.status).toBe(200);
@@ -246,7 +213,7 @@ describe('Phase 4J.1 - Attachments & Storage Domain & HTTP Endpoints', () => {
 
       const res = await request(app)
         .post('/api/messages/msg-1/attachments/upload-url')
-        .set('Cookie', authCookieUserA)
+        .set(fakes.headersFor('userA'))
         .send({ originalName: 'another.pdf', mimeType: 'application/pdf', size: 1000 });
 
       expect(res.status).toBe(409);
@@ -290,7 +257,7 @@ describe('Phase 4J.1 - Attachments & Storage Domain & HTTP Endpoints', () => {
 
       const res = await request(app)
         .post('/api/messages/msg-1/attachments/finalize')
-        .set('Cookie', authCookieUserA)
+        .set(fakes.headersFor('userA'))
         .send({
           storageKey,
           originalName: 'photo.png',
@@ -330,7 +297,7 @@ describe('Phase 4J.1 - Attachments & Storage Domain & HTTP Endpoints', () => {
 
       const res = await request(app)
         .post('/api/messages/msg-1/attachments/finalize')
-        .set('Cookie', authCookieUserA)
+        .set(fakes.headersFor('userA'))
         .send({
           storageKey: 'workspaces/ws-other/messages/msg-other/att-123',
           originalName: 'photo.png',
@@ -373,7 +340,7 @@ describe('Phase 4J.1 - Attachments & Storage Domain & HTTP Endpoints', () => {
 
       const res = await request(app)
         .get('/api/attachments/att-1/download-url')
-        .set('Cookie', authCookieUserB); // User B is authorized workspace member
+        .set(fakes.headersFor('userB')); // User B is authorized workspace member
 
       expect(res.status).toBe(200);
       expect(res.body).toEqual({
@@ -413,7 +380,7 @@ describe('Phase 4J.1 - Attachments & Storage Domain & HTTP Endpoints', () => {
 
       const res = await request(app)
         .get('/api/attachments/att-priv/download-url')
-        .set('Cookie', authCookieUserB);
+        .set(fakes.headersFor('userB'));
 
       expect(res.status).toBe(404);
     });
@@ -446,7 +413,7 @@ describe('Phase 4J.1 - Attachments & Storage Domain & HTTP Endpoints', () => {
 
       const res = await request(app)
         .delete('/api/attachments/att-1')
-        .set('Cookie', authCookieUserA);
+        .set(fakes.headersFor('userA'));
 
       expect(res.status).toBe(200);
       expect(res.body).toEqual({ success: true, attachmentId: 'att-1' });
@@ -480,7 +447,7 @@ describe('Phase 4J.1 - Attachments & Storage Domain & HTTP Endpoints', () => {
 
       const res = await request(app)
         .delete('/api/attachments/att-1')
-        .set('Cookie', authCookieUserB); // User B is not uploader or author
+        .set(fakes.headersFor('userB')); // User B is not uploader or author
 
       expect(res.status).toBe(403);
     });
@@ -511,7 +478,7 @@ describe('Phase 4J.1 - Attachments & Storage Domain & HTTP Endpoints', () => {
 
       const res = await request(app)
         .post('/api/messages/msg-dm/attachments/upload-url')
-        .set('Cookie', authCookieUserA)
+        .set(fakes.headersFor('userA'))
         .send({ originalName: 'dm-doc.pdf', mimeType: 'application/pdf', size: 1024 });
 
       expect(res.status).toBe(200);
@@ -566,7 +533,7 @@ describe('Phase 4J.1 - Attachments & Storage Domain & HTTP Endpoints', () => {
 
       const res = await request(app)
         .post('/api/messages/msg-1/attachments/finalize')
-        .set('Cookie', authCookieUserA)
+        .set(fakes.headersFor('userA'))
         .send({
           storageKey,
           originalName: 'photo.png',
@@ -603,7 +570,7 @@ describe('Phase 4J.1 - Attachments & Storage Domain & HTTP Endpoints', () => {
 
       const res = await request(app)
         .post('/api/messages/msg-1/attachments/finalize')
-        .set('Cookie', authCookieUserA)
+        .set(fakes.headersFor('userA'))
         .send({
           storageKey,
           originalName: 'photo.png',
@@ -618,7 +585,7 @@ describe('Phase 4J.1 - Attachments & Storage Domain & HTTP Endpoints', () => {
     it('rejects path traversal attempts in storageKey during finalization', async () => {
       const res = await request(app)
         .post('/api/messages/msg-1/attachments/finalize')
-        .set('Cookie', authCookieUserA)
+        .set(fakes.headersFor('userA'))
         .send({
           storageKey: 'workspaces/ws-1/messages/msg-1/../../../etc/passwd',
           originalName: 'passwd',
@@ -663,7 +630,7 @@ describe('Phase 4J.1 - Attachments & Storage Domain & HTTP Endpoints', () => {
 
       const res = await request(app)
         .post('/api/messages/msg-1/attachments/finalize')
-        .set('Cookie', authCookieUserA)
+        .set(fakes.headersFor('userA'))
         .send({ storageKey, originalName: 'race.png', mimeType: 'image/png', size: 1024 });
 
       if (res.status === 403) {

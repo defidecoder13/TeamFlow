@@ -1,8 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import request from 'supertest';
-import { betterAuth } from 'better-auth';
-import { memoryAdapter } from 'better-auth/adapters/memory';
 import type { PrismaClient } from '@teamflow/db';
+import { createClerkFakes } from '../../test-utils/clerk-fakes';
 import { createApp } from '../../app';
 import {
   addMessageReaction,
@@ -13,6 +12,31 @@ import {
 } from './service';
 
 const mockPrisma = {
+  user: {
+    // Deterministic clerk ids mirror createClerkFakes('reactions').
+    findUnique: vi.fn(async ({ where }: { where: { clerkId: string } }) => {
+      const users: Record<
+        string,
+        { id: string; name: string; email: string; image: null; emailVerified: boolean }
+      > = {
+        'clerk-test-reactions-userA': {
+          id: 'u-a',
+          name: 'Reaction User A',
+          email: 'reaction-a@example.invalid',
+          image: null,
+          emailVerified: false,
+        },
+        'clerk-test-reactions-userB': {
+          id: 'u-b',
+          name: 'Reaction User B',
+          email: 'reaction-b@example.invalid',
+          image: null,
+          emailVerified: false,
+        },
+      };
+      return users[where.clerkId] ?? null;
+    }),
+  },
   message: {
     findUnique: vi.fn(),
     findMany: vi.fn(),
@@ -360,24 +384,12 @@ describe('Phase 4E.1 - Message Reactions Domain & Service Logic', () => {
 });
 
 describe('Phase 4E.1 - Message Reactions HTTP Endpoints (createMessagesRouter)', () => {
-  const TEST_AUTH_URL = 'http://localhost:4000';
-  let auth: ReturnType<typeof createTestAuth>;
+  const fakes = createClerkFakes('reactions');
   let app: ReturnType<typeof createApp>;
-
-  function createTestAuth() {
-    return betterAuth({
-      secret: 'reactions-test-secret-0123456789abcdef-0123456789abcdef',
-      baseURL: TEST_AUTH_URL,
-      database: memoryAdapter({ user: [], session: [], account: [], verification: [] }),
-      emailAndPassword: { enabled: true },
-      rateLimit: { enabled: false },
-    });
-  }
 
   beforeEach(() => {
     vi.clearAllMocks();
-    auth = createTestAuth();
-    app = createApp({ auth });
+    app = createApp(fakes.appDeps());
   });
 
   it('rejects unauthenticated requests with 401', async () => {
@@ -392,46 +404,25 @@ describe('Phase 4E.1 - Message Reactions HTTP Endpoints (createMessagesRouter)',
   });
 
   describe('authenticated reaction operations', () => {
-    let authCookieUserA: string;
     let userIdA: string;
-    let authCookieUserB: string;
     let userIdB: string;
 
     beforeEach(async () => {
-      // Create User A
-      const resA = await request(app)
-        .post('/api/auth/sign-up/email')
-        .set('Origin', TEST_AUTH_URL)
-        .send({
-          name: 'Reaction User A',
-          email: 'user-a@teamflow.local',
-          password: 'password-123456',
-        });
-      expect(resA.status).toBe(200);
-      const cookiesA = resA.headers['set-cookie'];
-      authCookieUserA = Array.isArray(cookiesA) ? cookiesA.join('; ') : (cookiesA ?? '');
-      userIdA = (resA.body as { user: { id: string } }).user.id;
+      // Provision both identities (first sight through the fake directory).
+      const meA = await request(app).get('/api/me').set(fakes.headersFor('userA'));
+      expect(meA.status).toBe(200);
+      userIdA = (meA.body as { user: { id: string } }).user.id;
 
-      // Create User B
-      const resB = await request(app)
-        .post('/api/auth/sign-up/email')
-        .set('Origin', TEST_AUTH_URL)
-        .send({
-          name: 'Reaction User B',
-          email: 'user-b@teamflow.local',
-          password: 'password-123456',
-        });
-      expect(resB.status).toBe(200);
-      const cookiesB = resB.headers['set-cookie'];
-      authCookieUserB = Array.isArray(cookiesB) ? cookiesB.join('; ') : (cookiesB ?? '');
-      userIdB = (resB.body as { user: { id: string } }).user.id;
+      const meB = await request(app).get('/api/me').set(fakes.headersFor('userB'));
+      expect(meB.status).toBe(200);
+      userIdB = (meB.body as { user: { id: string } }).user.id;
     });
 
     describe('POST /api/messages/:messageId/reactions validation', () => {
       it('rejects missing emoji with 400', async () => {
         const res = await request(app)
           .post('/api/messages/msg-1/reactions')
-          .set('Cookie', authCookieUserA)
+          .set(fakes.headersFor('userA'))
           .send({});
         expect(res.status).toBe(400);
         expect((res.body as { error: { code: string } }).error.code).toBe('VALIDATION_ERROR');
@@ -440,7 +431,7 @@ describe('Phase 4E.1 - Message Reactions HTTP Endpoints (createMessagesRouter)',
       it('rejects empty string emoji with 400', async () => {
         const res = await request(app)
           .post('/api/messages/msg-1/reactions')
-          .set('Cookie', authCookieUserA)
+          .set(fakes.headersFor('userA'))
           .send({ emoji: '   ' });
         expect(res.status).toBe(400);
         expect((res.body as { error: { code: string } }).error.code).toBe('VALIDATION_ERROR');
@@ -449,7 +440,7 @@ describe('Phase 4E.1 - Message Reactions HTTP Endpoints (createMessagesRouter)',
       it('rejects emoji exceeding max character limit (16) with 400', async () => {
         const res = await request(app)
           .post('/api/messages/msg-1/reactions')
-          .set('Cookie', authCookieUserA)
+          .set(fakes.headersFor('userA'))
           .send({ emoji: '👍'.repeat(20) });
         expect(res.status).toBe(400);
         expect((res.body as { error: { code: string } }).error.code).toBe('VALIDATION_ERROR');
@@ -458,7 +449,7 @@ describe('Phase 4E.1 - Message Reactions HTTP Endpoints (createMessagesRouter)',
       it('rejects emoji containing control characters or newlines with 400', async () => {
         const res = await request(app)
           .post('/api/messages/msg-1/reactions')
-          .set('Cookie', authCookieUserA)
+          .set(fakes.headersFor('userA'))
           .send({ emoji: '👍\n' });
         expect(res.status).toBe(400);
         expect((res.body as { error: { code: string } }).error.code).toBe('VALIDATION_ERROR');
@@ -467,7 +458,7 @@ describe('Phase 4E.1 - Message Reactions HTTP Endpoints (createMessagesRouter)',
       it('rejects client-supplied unknown fields like userId with 400', async () => {
         const res = await request(app)
           .post('/api/messages/msg-1/reactions')
-          .set('Cookie', authCookieUserA)
+          .set(fakes.headersFor('userA'))
           .send({ emoji: '👍', userId: 'spoofed-id' });
         expect(res.status).toBe(400);
         expect((res.body as { error: { code: string } }).error.code).toBe('VALIDATION_ERROR');
@@ -485,7 +476,7 @@ describe('Phase 4E.1 - Message Reactions HTTP Endpoints (createMessagesRouter)',
 
         const res = await request(app)
           .post('/api/messages/msg-priv/reactions')
-          .set('Cookie', authCookieUserA)
+          .set(fakes.headersFor('userA'))
           .send({ emoji: '👍' });
 
         expect(res.status).toBe(404);
@@ -510,7 +501,7 @@ describe('Phase 4E.1 - Message Reactions HTTP Endpoints (createMessagesRouter)',
 
         const res = await request(app)
           .post('/api/messages/msg-1/reactions')
-          .set('Cookie', authCookieUserA)
+          .set(fakes.headersFor('userA'))
           .send({ emoji: '🚀' });
 
         expect(res.status).toBe(201);
@@ -543,7 +534,7 @@ describe('Phase 4E.1 - Message Reactions HTTP Endpoints (createMessagesRouter)',
 
         const res = await request(app)
           .post('/api/messages/msg-1/reactions')
-          .set('Cookie', authCookieUserA)
+          .set(fakes.headersFor('userA'))
           .send({ emoji: '🚀' });
 
         expect(res.status).toBe(409);
@@ -565,7 +556,7 @@ describe('Phase 4E.1 - Message Reactions HTTP Endpoints (createMessagesRouter)',
 
         const res = await request(app)
           .post('/api/messages/msg-1/reactions')
-          .set('Cookie', authCookieUserA)
+          .set(fakes.headersFor('userA'))
           .send({ emoji: '👍' });
 
         expect(res.status).toBe(409);
@@ -586,7 +577,7 @@ describe('Phase 4E.1 - Message Reactions HTTP Endpoints (createMessagesRouter)',
 
         const res = await request(app)
           .delete('/api/messages/msg-1/reactions/%F0%9F%91%8D')
-          .set('Cookie', authCookieUserA);
+          .set(fakes.headersFor('userA'));
 
         expect(res.status).toBe(200);
         expect(res.body).toEqual({ success: true, message: 'Reaction removed.' });
@@ -610,7 +601,7 @@ describe('Phase 4E.1 - Message Reactions HTTP Endpoints (createMessagesRouter)',
 
         const res = await request(app)
           .delete('/api/messages/msg-1/reactions/%F0%9F%91%8D')
-          .set('Cookie', authCookieUserB);
+          .set(fakes.headersFor('userB'));
 
         expect(res.status).toBe(404);
         expect((res.body as { error: { code: string; message: string } }).error.message).toBe(
@@ -629,7 +620,7 @@ describe('Phase 4E.1 - Message Reactions HTTP Endpoints (createMessagesRouter)',
 
         const res = await request(app)
           .get('/api/messages/msg-priv/reactions')
-          .set('Cookie', authCookieUserA);
+          .set(fakes.headersFor('userA'));
 
         expect(res.status).toBe(404);
       });
@@ -666,7 +657,7 @@ describe('Phase 4E.1 - Message Reactions HTTP Endpoints (createMessagesRouter)',
 
         const res = await request(app)
           .get('/api/messages/msg-1/reactions')
-          .set('Cookie', authCookieUserA);
+          .set(fakes.headersFor('userA'));
 
         expect(res.status).toBe(200);
         expect(res.body).toEqual([
@@ -695,7 +686,7 @@ describe('Phase 4E.1 - Message Reactions HTTP Endpoints (createMessagesRouter)',
 
         const res = await request(app)
           .get('/api/messages/msg-empty/reactions')
-          .set('Cookie', authCookieUserA);
+          .set(fakes.headersFor('userA'));
 
         expect(res.status).toBe(200);
         expect(res.body).toEqual([]);
@@ -724,7 +715,7 @@ describe('Phase 4E.1 - Message Reactions HTTP Endpoints (createMessagesRouter)',
         // Add reaction to root message
         const rootRes = await request(app)
           .post('/api/messages/root-msg/reactions')
-          .set('Cookie', authCookieUserA)
+          .set(fakes.headersFor('userA'))
           .send({ emoji: '👍' });
 
         expect(rootRes.status).toBe(201);
@@ -750,7 +741,7 @@ describe('Phase 4E.1 - Message Reactions HTTP Endpoints (createMessagesRouter)',
         // Add reaction to thread reply
         const replyRes = await request(app)
           .post('/api/messages/reply-msg/reactions')
-          .set('Cookie', authCookieUserB)
+          .set(fakes.headersFor('userB'))
           .send({ emoji: '❤️' });
 
         expect(replyRes.status).toBe(201);
@@ -774,7 +765,7 @@ describe('Phase 4E.1 - Message Reactions HTTP Endpoints (createMessagesRouter)',
 
         const getReplyRes = await request(app)
           .get('/api/messages/reply-msg/reactions')
-          .set('Cookie', authCookieUserB);
+          .set(fakes.headersFor('userB'));
 
         expect(getReplyRes.status).toBe(200);
         expect(getReplyRes.body).toEqual([
@@ -807,7 +798,7 @@ describe('Phase 4E.1 - Message Reactions HTTP Endpoints (createMessagesRouter)',
 
         const r1 = await request(app)
           .post('/api/messages/reply-1/reactions')
-          .set('Cookie', authCookieUserA)
+          .set(fakes.headersFor('userA'))
           .send({ emoji: '🎉' });
         expect(r1.status).toBe(201);
 
@@ -829,7 +820,7 @@ describe('Phase 4E.1 - Message Reactions HTTP Endpoints (createMessagesRouter)',
 
         const r2 = await request(app)
           .post('/api/messages/reply-2/reactions')
-          .set('Cookie', authCookieUserA)
+          .set(fakes.headersFor('userA'))
           .send({ emoji: '🚀' });
         expect(r2.status).toBe(201);
       });
@@ -855,7 +846,7 @@ describe('Phase 4E.1 - Message Reactions HTTP Endpoints (createMessagesRouter)',
 
         const res1 = await request(app)
           .post('/api/messages/msg-1/reactions')
-          .set('Cookie', authCookieUserA)
+          .set(fakes.headersFor('userA'))
           .send({ emoji: '👍' });
         expect(res1.status).toBe(201);
 
@@ -876,7 +867,7 @@ describe('Phase 4E.1 - Message Reactions HTTP Endpoints (createMessagesRouter)',
 
         const res2 = await request(app)
           .post('/api/messages/msg-1/reactions')
-          .set('Cookie', authCookieUserA)
+          .set(fakes.headersFor('userA'))
           .send({ emoji: '❤️' });
         expect(res2.status).toBe(201);
       });
@@ -892,7 +883,7 @@ describe('Phase 4E.1 - Message Reactions HTTP Endpoints (createMessagesRouter)',
 
         const delRes = await request(app)
           .delete('/api/messages/msg-1/reactions/%F0%9F%91%8D')
-          .set('Cookie', authCookieUserA);
+          .set(fakes.headersFor('userA'));
         expect(delRes.status).toBe(200);
 
         // Verify remaining reactions query returns only ❤️
@@ -913,7 +904,7 @@ describe('Phase 4E.1 - Message Reactions HTTP Endpoints (createMessagesRouter)',
 
         const getRes = await request(app)
           .get('/api/messages/msg-1/reactions')
-          .set('Cookie', authCookieUserA);
+          .set(fakes.headersFor('userA'));
 
         expect(getRes.status).toBe(200);
         expect(getRes.body).toHaveLength(1);
@@ -929,7 +920,7 @@ describe('Phase 4E.1 - Message Reactions HTTP Endpoints (createMessagesRouter)',
 
         const res = await request(app)
           .delete('/api/messages/msg-priv/reactions/%F0%9F%91%8D')
-          .set('Cookie', authCookieUserA);
+          .set(fakes.headersFor('userA'));
 
         expect(res.status).toBe(404);
       });

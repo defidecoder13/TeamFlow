@@ -3,13 +3,12 @@
  *
  * GET/PUT `/api/workspaces/:workspaceId/drafts` and
  * DELETE `/api/workspaces/:workspaceId/drafts/:draftId`.
- * Behind `requireAuth`; membership resolves inside the service.
+ * Behind `requireClerkAuth`; membership resolves inside the service.
  */
 
 import { Router, type NextFunction, type Request, type Response } from 'express';
-import type { AuthContext } from '../auth/index';
 import { getPrisma } from '../auth/prisma';
-import { requireAuth } from '../auth/session';
+import { requireClerkAuth, type ClerkRouteOptions } from '../auth/index';
 import {
   deleteWorkspaceDraft,
   DraftForbiddenError,
@@ -54,9 +53,9 @@ function asyncRoute(handler: (req: Request, res: Response) => Promise<void>) {
   };
 }
 
-export function createWorkspaceDraftsRouter(resolveAuth: () => AuthContext): Router {
+export function createWorkspaceDraftsRouter(options: ClerkRouteOptions = {}): Router {
   const router = Router({ mergeParams: true });
-  router.use(requireAuth(resolveAuth));
+  router.use(requireClerkAuth(options));
 
   router.get(
     '/',

@@ -8,9 +8,8 @@
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import request from 'supertest';
-import { betterAuth } from 'better-auth';
-import { memoryAdapter } from 'better-auth/adapters/memory';
 import type { PrismaClient } from '@teamflow/db';
+import { createClerkFakes } from '../../test-utils/clerk-fakes';
 import { createApp } from '../../app';
 import { buildSnippet } from './service';
 import { encodeSearchCursor } from './cursor';
@@ -26,6 +25,20 @@ const {
   const mockTxQueryRawUnsafe = vi.fn();
   const mockTxExecuteRawUnsafe = vi.fn().mockResolvedValue([]);
   const mockPrisma = {
+    user: {
+      // Deterministic clerk id mirrors createClerkFakes('search').
+      findUnique: vi.fn(async ({ where }: { where: { clerkId: string } }) =>
+        where.clerkId === 'clerk-test-search-user'
+          ? {
+              id: 'u-search-1',
+              name: 'Search Tester',
+              email: 'search@example.invalid',
+              image: null,
+              emailVerified: false,
+            }
+          : null,
+      ),
+    },
     workspaceMembership: { findUnique: vi.fn() },
     channel: { findMany: vi.fn() },
     channelMembership: { findMany: vi.fn() },
@@ -64,18 +77,6 @@ vi.mock('../direct-messages/authorization', () => ({
   authorizeDirectConversationAccess: (...args: unknown[]) =>
     mockAuthorizeDirectConversationAccess(...args),
 }));
-
-const TEST_AUTH_URL = 'http://localhost:4000';
-
-function createTestAuth() {
-  return betterAuth({
-    secret: 'search-test-secret-0123456789abcdef-0123456789abcdef',
-    baseURL: TEST_AUTH_URL,
-    database: memoryAdapter({ user: [], session: [], account: [], verification: [] }),
-    emailAndPassword: { enabled: true },
-    rateLimit: { enabled: false },
-  });
-}
 
 function messageRow(overrides: Record<string, unknown> = {}) {
   return {
@@ -143,7 +144,7 @@ describe('buildSnippet', () => {
 
 describe('search API (mocked database)', () => {
   let app: ReturnType<typeof createApp>;
-  let authCookie: string;
+  const fakes = createClerkFakes('search');
 
   beforeEach(async () => {
     vi.clearAllMocks();
@@ -156,23 +157,14 @@ describe('search API (mocked database)', () => {
     mockTxQueryRawUnsafe.mockResolvedValue([]);
     mockPrisma.message.findMany.mockResolvedValue([]);
 
-    const auth = createTestAuth();
-    app = createApp({ auth });
-    const res = await request(app)
-      .post('/api/auth/sign-up/email')
-      .set('Origin', TEST_AUTH_URL)
-      .send({
-        name: 'Search Tester',
-        email: 'search-tester@teamflow.local',
-        password: 'search-pass-1234',
-      });
-    expect(res.status).toBe(200);
-    const cookies = res.headers['set-cookie'];
-    authCookie = Array.isArray(cookies) ? cookies.join('; ') : (cookies ?? '');
+    app = createApp(fakes.appDeps());
   });
 
   const search = (params: Record<string, string>) =>
-    request(app).get('/api/workspaces/ws-1/search').set('Cookie', authCookie).query(params);
+    request(app)
+      .get('/api/workspaces/ws-1/search')
+      .set(fakes.headersFor('user'))
+      .query(params);
 
   it('rejects unauthenticated search with 401', async () => {
     const res = await request(app).get('/api/workspaces/ws-1/search').query({ q: 'hi' });

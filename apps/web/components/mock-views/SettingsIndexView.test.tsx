@@ -122,13 +122,17 @@ describe('SettingsIndexView', () => {
     expect(screen.getByRole('status', { name: 'Loading settings' })).toBeInTheDocument();
   });
 
-  it('asks unauthenticated visitors to sign in without rendering cards', () => {
+  it('asks unauthenticated visitors to sign in without rendering cards', async () => {
+    const user = userEvent.setup();
     setShell({ session: { status: 'unauthenticated' } as SessionState });
     render(<SettingsIndexView />);
     expect(
       screen.getByText('Please sign in to manage your settings.'),
     ).toBeInTheDocument();
     expect(screen.queryByText('Profile & account')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /go to sign in/i }));
+    expect(pushMock).toHaveBeenCalledWith('/sign-in');
   });
 
   it('surfaces session load errors', () => {

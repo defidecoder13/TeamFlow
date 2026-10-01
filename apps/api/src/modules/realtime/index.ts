@@ -10,15 +10,14 @@
  */
 
 import type { Server as HttpServer } from 'node:http';
-import { fromNodeHeaders } from 'better-auth/node';
 import { Server as SocketIOServer, type Socket } from 'socket.io';
 import {
-  getAuth,
-  getTrustedOrigins,
-  toSafeUser,
-  type AuthContext,
+  provisionClerkUser,
+  verifyBearerToken,
+  type ClerkRouteOptions,
   type SafeAuthUser,
 } from '../auth/index';
+import { getTrustedOrigins } from '../../cors';
 import { getPrisma } from '../auth/prisma';
 import { authorizeChannelAccess } from '../messages/authorization';
 import { authorizeDirectConversationAccess } from '../direct-messages/authorization';
@@ -269,11 +268,11 @@ let ioInstance: SocketIOServer<
 > | null = null;
 
 /**
- * Initialize Socket.IO on the HTTP server with Better Auth session validation.
+ * Initialize Socket.IO on the HTTP server with Clerk token validation.
  */
 export function initRealtime(
   httpServer: HttpServer,
-  resolveAuth: () => AuthContext = getAuth,
+  options: ClerkRouteOptions = {},
 ): SocketIOServer<ClientToServerEvents, ServerToClientEvents, Record<string, never>, SocketData> {
   const trustedOrigins = getTrustedOrigins();
 
@@ -290,23 +289,26 @@ export function initRealtime(
     transports: ['polling', 'websocket'],
   });
 
-  // Authentication middleware using existing Better Auth session cookie
+  // Authentication middleware: the client sends its Clerk session token in
+  // the handshake auth payload (cookies do not cross origins to the API).
   io.use(
     async (
       socket: Socket<ClientToServerEvents, ServerToClientEvents, Record<string, never>, SocketData>,
       next,
     ) => {
       try {
-        const auth = resolveAuth();
-        const session = await auth.api.getSession({
-          headers: fromNodeHeaders(socket.request.headers),
-        });
-
-        if (!session?.user) {
+        const raw = (socket.handshake.auth as { token?: unknown } | undefined)?.token;
+        const token = typeof raw === 'string' ? raw : null;
+        const session = await verifyBearerToken(token, options.verify);
+        if (!session) {
+          return next(new Error('UNAUTHENTICATED'));
+        }
+        const user = await provisionClerkUser(getPrisma(), session.clerkId, options.directory);
+        if (!user) {
           return next(new Error('UNAUTHENTICATED'));
         }
 
-        socket.data.user = toSafeUser(session.user);
+        socket.data.user = user;
         next();
       } catch {
         next(new Error('UNAUTHENTICATED'));

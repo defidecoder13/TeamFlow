@@ -5,6 +5,7 @@
  * (`GET /api/workspaces/:workspaceId/presence`).
  */
 
+import { authedFetch } from './session-token';
 export const PRESENCE_STATUSES = ['ONLINE', 'OFFLINE'] as const;
 
 export type PresenceStatus = (typeof PRESENCE_STATUSES)[number];
@@ -84,7 +85,7 @@ export async function fetchWorkspacePresence(
 ): Promise<FetchWorkspacePresenceResult> {
   let response: Response;
   try {
-    response = await fetch(
+    response = await authedFetch(
       `${apiBaseUrl}/api/workspaces/${encodeURIComponent(workspaceId)}/presence`,
       {
         credentials: 'include',

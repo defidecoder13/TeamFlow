@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
+import { Show, UserButton } from '@clerk/nextjs';
 import { TeamFlowLogo } from '../brand/TeamFlowLogo';
 
 const NAV_ITEMS = [
@@ -13,20 +14,6 @@ const NAV_ITEMS = [
 type NavHref = (typeof NAV_ITEMS)[number]['href'];
 
 const FONT_STACK = "font-['Inter',ui-sans-serif,system-ui,sans-serif]";
-
-function PersonIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 20 20"
-      fill="currentColor"
-      aria-hidden="true"
-      focusable="false"
-      className={className ?? 'h-[18px] w-[18px]'}
-    >
-      <path d="M10 10a3.75 3.75 0 1 0 0-7.5A3.75 3.75 0 0 0 10 10Zm-6.5 7.5c0-3.59 2.91-6 6.5-6s6.5 2.41 6.5 6v.5h-13v-.5Z" />
-    </svg>
-  );
-}
 
 export function NewLandingNavbar() {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -144,32 +131,29 @@ export function NewLandingNavbar() {
 
         {/* RIGHT: desktop actions */}
         <div className="hidden items-center gap-4 md:flex">
-          <Link
-            href="/sign-in"
-            className="rounded px-2.5 py-1.5 text-[13px] font-medium text-[#4F5360] transition-colors hover:bg-[#F0EFF2] hover:text-[#171A21] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3157D5] motion-reduce:transition-none"
-          >
-            Sign In
-          </Link>
-          <Link
-            href="/sign-up"
-            className="group inline-flex items-center gap-1.5 rounded-lg bg-black bg-[#2E3440] px-4 py-2 text-[13px] font-medium text-white shadow-xs transition-[background-color,scale] duration-150 ease-out-expo hover:bg-[#1F242C] active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3157D5] motion-reduce:transition-none motion-reduce:active:scale-100"
-          >
-            Start Free
-            <span
-              aria-hidden="true"
-              className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transition-none motion-reduce:group-hover:translate-x-0"
+          <Show when="signed-out">
+            <Link
+              href="/sign-in"
+              className="rounded px-2.5 py-1.5 text-[13px] font-medium text-[#4F5360] transition-colors hover:bg-[#F0EFF2] hover:text-[#171A21] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3157D5] motion-reduce:transition-none"
             >
-              →
-            </span>
-          </Link>
-          {/* Decorative avatar — visual parity with source, not an account control */}
-          <div
-            aria-hidden="true"
-            data-testid="navbar-avatar"
-            className="flex h-8 w-8 items-center justify-center rounded-full bg-[#2E3440] text-white shadow-xs"
-          >
-            <PersonIcon />
-          </div>
+              Sign In
+            </Link>
+            <Link
+              href="/sign-up"
+              className="group inline-flex items-center gap-1.5 rounded-lg bg-black bg-[#2E3440] px-4 py-2 text-[13px] font-medium text-white shadow-xs transition-[background-color,scale] duration-150 ease-out-expo hover:bg-[#1F242C] active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3157D5] motion-reduce:transition-none motion-reduce:active:scale-100"
+            >
+              Start Free
+              <span
+                aria-hidden="true"
+                className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transition-none motion-reduce:group-hover:translate-x-0"
+              >
+                →
+              </span>
+            </Link>
+          </Show>
+          <Show when="signed-in">
+            <UserButton />
+          </Show>
         </div>
 
         {/* MOBILE: hamburger */}
@@ -260,20 +244,27 @@ export function NewLandingNavbar() {
           </ul>
           <div aria-hidden="true" className="my-3 h-px bg-[#E2E1E1]" />
           <div className="flex flex-col gap-2">
-            <Link
-              href="/sign-in"
-              onClick={closeMenu}
-              className="inline-flex h-11 items-center justify-center rounded-lg px-5 text-[14px] font-medium text-[#171A21] transition-colors hover:bg-[#F0EFF2] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3157D5] motion-reduce:transition-none"
-            >
-              Sign In
-            </Link>
-            <Link
-              href="/sign-up"
-              onClick={closeMenu}
-              className="inline-flex h-11 items-center justify-center gap-1.5 rounded-lg bg-black bg-[#2E3440] px-5 text-[14px] font-medium text-white transition-colors hover:bg-[#1F242C] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3157D5] motion-reduce:transition-none"
-            >
-              Start Free <span aria-hidden="true">→</span>
-            </Link>
+            <Show when="signed-out">
+              <Link
+                href="/sign-in"
+                onClick={closeMenu}
+                className="inline-flex h-11 items-center justify-center rounded-lg px-5 text-[14px] font-medium text-[#171A21] transition-colors hover:bg-[#F0EFF2] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3157D5] motion-reduce:transition-none"
+              >
+                Sign In
+              </Link>
+              <Link
+                href="/sign-up"
+                onClick={closeMenu}
+                className="inline-flex h-11 items-center justify-center gap-1.5 rounded-lg bg-black bg-[#2E3440] px-5 text-[14px] font-medium text-white transition-colors hover:bg-[#1F242C] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3157D5] motion-reduce:transition-none"
+              >
+                Start Free <span aria-hidden="true">→</span>
+              </Link>
+            </Show>
+            <Show when="signed-in">
+              <div className="flex h-11 items-center justify-center">
+                <UserButton />
+              </div>
+            </Show>
           </div>
         </nav>
       </div>

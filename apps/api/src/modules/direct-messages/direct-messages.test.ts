@@ -1,8 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import request from 'supertest';
-import { betterAuth } from 'better-auth';
-import { memoryAdapter } from 'better-auth/adapters/memory';
 import type { PrismaClient } from '@teamflow/db';
+import { createClerkFakes } from '../../test-utils/clerk-fakes';
 import { createApp } from '../../app';
 import {
   authorizeDirectConversationAccess,
@@ -48,7 +47,18 @@ import {
   MessageNotFoundError,
 } from '../messages/service';
 
+const fakes = createClerkFakes('direct-messages');
+
+const CANNED_USER = {
+  id: 'u-clerk-1',
+  name: 'DM Tester',
+  email: 'dm-tester@example.invalid',
+  image: null,
+  emailVerified: false,
+};
+
 const mockPrisma = {
+  user: { findUnique: vi.fn().mockResolvedValue({ ...CANNED_USER }) },
   directMessageConversation: {
     findUnique: vi.fn(),
     findMany: vi.fn(),
@@ -726,24 +736,12 @@ describe('direct-messages container invariant, threads & reactions', () => {
 });
 
 describe('Phase 4F.2 - Direct Messages HTTP Endpoints', () => {
-  const TEST_AUTH_URL = 'http://localhost:4000';
-  let auth: ReturnType<typeof createTestAuth>;
   let app: ReturnType<typeof createApp>;
-
-  function createTestAuth() {
-    return betterAuth({
-      secret: 'dm-test-secret-0123456789abcdef-0123456789abcdef',
-      baseURL: TEST_AUTH_URL,
-      database: memoryAdapter({ user: [], session: [], account: [], verification: [] }),
-      emailAndPassword: { enabled: true },
-      rateLimit: { enabled: false },
-    });
-  }
 
   beforeEach(() => {
     vi.resetAllMocks();
-    auth = createTestAuth();
-    app = createApp({ auth });
+    mockPrisma.user.findUnique.mockResolvedValue({ ...CANNED_USER });
+    app = createApp(fakes.appDeps());
   });
 
   describe('unauthenticated requests return 401', () => {
@@ -778,28 +776,16 @@ describe('Phase 4F.2 - Direct Messages HTTP Endpoints', () => {
   });
 
   describe('authenticated DM operations', () => {
-    let authCookie: string;
     let userId: string;
 
     beforeEach(async () => {
-      const res = await request(app)
-        .post('/api/auth/sign-up/email')
-        .set('Origin', TEST_AUTH_URL)
-        .send({
-          name: 'DM Tester',
-          email: 'dm-tester@teamflow.local',
-          password: 'dm-test-password-1234',
-        });
-      expect(res.status).toBe(200);
-      const cookies = res.headers['set-cookie'];
-      authCookie = Array.isArray(cookies) ? cookies.join('; ') : (cookies ?? '');
-      userId = (res.body as { user: { id: string } }).user.id;
+      userId = CANNED_USER.id;
     });
 
     it('rejects field injection in POST /api/workspaces/:ws/direct-messages with 400', async () => {
       const res = await request(app)
         .post('/api/workspaces/ws-1/direct-messages')
-        .set('Cookie', authCookie)
+        .set(fakes.headersFor('user'))
         .send({ recipientId: 'u-2', smuggledField: 'injected' });
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('VALIDATION_ERROR');
@@ -808,7 +794,7 @@ describe('Phase 4F.2 - Direct Messages HTTP Endpoints', () => {
     it('rejects self-DM with 400 Bad Request', async () => {
       const res = await request(app)
         .post('/api/workspaces/ws-1/direct-messages')
-        .set('Cookie', authCookie)
+        .set(fakes.headersFor('user'))
         .send({ recipientId: userId });
       expect(res.status).toBe(400);
       expect(res.body.error.message).toBe('Cannot start a direct message with yourself.');
@@ -819,7 +805,7 @@ describe('Phase 4F.2 - Direct Messages HTTP Endpoints', () => {
 
       const res = await request(app)
         .post('/api/workspaces/ws-foreign/direct-messages')
-        .set('Cookie', authCookie)
+        .set(fakes.headersFor('user'))
         .send({ recipientId: 'u-2' });
       expect(res.status).toBe(404);
     });
@@ -831,7 +817,7 @@ describe('Phase 4F.2 - Direct Messages HTTP Endpoints', () => {
 
       const res = await request(app)
         .post('/api/workspaces/ws-1/direct-messages')
-        .set('Cookie', authCookie)
+        .set(fakes.headersFor('user'))
         .send({ recipientId: 'u-outsider' });
       expect(res.status).toBe(400);
       expect(res.body.error.message).toBe('Recipient is not a member of this workspace.');
@@ -856,7 +842,7 @@ describe('Phase 4F.2 - Direct Messages HTTP Endpoints', () => {
 
       const res = await request(app)
         .post('/api/workspaces/ws-1/direct-messages')
-        .set('Cookie', authCookie)
+        .set(fakes.headersFor('user'))
         .send({ recipientId: 'u-2' });
 
       expect(res.status).toBe(200);
@@ -871,7 +857,7 @@ describe('Phase 4F.2 - Direct Messages HTTP Endpoints', () => {
     it('rejects invalid cursor in GET /api/workspaces/:ws/direct-messages with 400', async () => {
       const res = await request(app)
         .get('/api/workspaces/ws-1/direct-messages?cursor=malformed-cursor')
-        .set('Cookie', authCookie);
+        .set(fakes.headersFor('user'));
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('VALIDATION_ERROR');
     });
@@ -886,14 +872,14 @@ describe('Phase 4F.2 - Direct Messages HTTP Endpoints', () => {
 
       const res = await request(app)
         .get('/api/direct-messages/dm-private')
-        .set('Cookie', authCookie);
+        .set(fakes.headersFor('user'));
       expect(res.status).toBe(404);
     });
 
     it('rejects field injection in POST /api/direct-messages/:id/messages with 400', async () => {
       const res = await request(app)
         .post('/api/direct-messages/dm-1/messages')
-        .set('Cookie', authCookie)
+        .set(fakes.headersFor('user'))
         .send({
           body: 'Smuggled message',
           channelId: 'ch-1',
@@ -941,7 +927,7 @@ describe('Phase 4F.2 - Direct Messages HTTP Endpoints', () => {
 
       const res = await request(app)
         .post('/api/direct-messages/dm-1/messages')
-        .set('Cookie', authCookie)
+        .set(fakes.headersFor('user'))
         .send({ body: 'Hello secure DM' });
 
       expect(res.status).toBe(201);
@@ -961,7 +947,7 @@ describe('Phase 4F.2 - Direct Messages HTTP Endpoints', () => {
 
       const res = await request(app)
         .post('/api/direct-messages/dm-1/read')
-        .set('Cookie', authCookie)
+        .set(fakes.headersFor('user'))
         .send({});
 
       expect(res.status).toBe(404);
@@ -995,7 +981,7 @@ describe('Phase 4F.2 - Direct Messages HTTP Endpoints', () => {
 
       const res = await request(app)
         .post('/api/direct-messages/dm-1/read')
-        .set('Cookie', authCookie)
+        .set(fakes.headersFor('user'))
         .send({ messageId: 'm-1' });
 
       expect(res.status).toBe(200);
@@ -1012,7 +998,7 @@ describe('Phase 4F.2 - Direct Messages HTTP Endpoints', () => {
 
       const res = await request(app)
         .get('/api/workspaces/ws-1/direct-messages/unread')
-        .set('Cookie', authCookie);
+        .set(fakes.headersFor('user'));
 
       expect(res.status).toBe(200);
       expect(res.body.conversations).toBeDefined();
@@ -1747,13 +1733,7 @@ describe('Phase 4F.2 - Direct Messages HTTP Endpoints', () => {
     });
 
     describe('HTTP Endpoints', () => {
-      const auth = betterAuth({
-        database: memoryAdapter({}),
-      });
-
-      const app = createApp({
-        auth,
-      });
+      const app = createApp(fakes.appDeps());
 
       it('rejects unauthenticated requests to group DM endpoints with 401', async () => {
         await request(app)

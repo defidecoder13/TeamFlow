@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { io as ioc, type Socket as ClientSocket } from 'socket.io-client';
+import { createClerkFakes } from '../../test-utils/clerk-fakes';
 import { createApp } from '../../app';
 import { getPrisma } from '../auth/prisma';
 import { closeRealtime, initRealtime } from '../realtime/index';
@@ -13,14 +14,13 @@ import { closeRealtime, initRealtime } from '../realtime/index';
 // SKIPPED without auth/database env so `pnpm test` stays green everywhere.
 vi.setConfig({ testTimeout: 60000, hookTimeout: 180000 });
 
-const LIVE =
-  !!process.env.DATABASE_URL && !!process.env.BETTER_AUTH_SECRET && !!process.env.BETTER_AUTH_URL;
+const LIVE = !!process.env.DATABASE_URL && !!process.env.CLERK_SECRET_KEY;
 const liveDescribe = LIVE ? describe : describe.skip;
 
-const ORIGIN = process.env.BETTER_AUTH_URL ?? 'http://localhost:4000';
+const ORIGIN = 'http://localhost:4000';
 const RUN = `${Date.now().toString(36)}${randomUUID().slice(0, 8)}`;
-const email = (who: string) => `wscc-${RUN}-${who}@example.invalid`;
-const PASSWORD = 'channel-created-test-password-0123456789';
+const fakes = createClerkFakes('channel-created');
+const email = (who: string) => fakes.emailFor(who);
 
 interface ReceivedEvent {
   type: string;
@@ -28,7 +28,7 @@ interface ReceivedEvent {
 }
 
 liveDescribe('creation lifecycle realtime sync (live database + sockets)', () => {
-  const app = createApp();
+  const app = createApp(fakes.appDeps());
   let server: http.Server;
   let baseUrl = '';
   const sockets: ClientSocket[] = [];
@@ -36,24 +36,21 @@ liveDescribe('creation lifecycle realtime sync (live database + sockets)', () =>
   const createdEmails: string[] = [];
 
   async function signUp(who: string, name: string): Promise<string> {
-    const res = await request(app)
-      .post('/api/auth/sign-up/email')
-      .set('Origin', ORIGIN)
-      .send({ name, email: email(who), password: PASSWORD });
-    expect(res.status).toBeLessThan(300);
+    fakes.setProfile(who, { name });
     createdEmails.push(email(who));
-    const cookies = res.headers['set-cookie'] as unknown;
-    const list = Array.isArray(cookies) ? cookies : cookies ? [cookies] : [];
-    return list.map((c) => String(c).split(';')[0]).join('; ');
+    // First sight provisions the local user row through the fake directory.
+    const me = await request(app).get('/api/me').set(fakes.headersFor(who));
+    expect(me.status).toBe(200);
+    return fakes.tokenFor(who);
   }
 
-  async function connectSocket(cookie: string): Promise<{
+  async function connectSocket(token: string): Promise<{
     socket: ClientSocket;
     received: ReceivedEvent[];
   }> {
     const received: ReceivedEvent[] = [];
     const socket = ioc(baseUrl, {
-      extraHeaders: { Cookie: cookie },
+      auth: { token },
       transports: ['websocket'],
     });
     sockets.push(socket);
@@ -93,14 +90,14 @@ liveDescribe('creation lifecycle realtime sync (live database + sockets)', () =>
   }
 
   let ws1 = '';
-  let ownerCookie = '';
-  let mateCookie = '';
-  let thirdCookie = '';
-  let outsiderCookie = '';
+  let ownerToken = '';
+  let mateToken = '';
+  let thirdToken = '';
+  let outsiderToken = '';
 
   beforeAll(async () => {
     server = http.createServer(app);
-    initRealtime(server);
+    initRealtime(server, fakes.appDeps());
     await new Promise<void>((resolve) => {
       server.listen(0, () => {
         const addr = server.address();
@@ -111,15 +108,15 @@ liveDescribe('creation lifecycle realtime sync (live database + sockets)', () =>
       });
     });
 
-    ownerCookie = await signUp('owner', 'CC Owner');
-    mateCookie = await signUp('mate', 'CC Mate');
-    thirdCookie = await signUp('third', 'CC Third');
-    outsiderCookie = await signUp('outsider', 'CC Outsider');
+    ownerToken = await signUp('owner', 'CC Owner');
+    mateToken = await signUp('mate', 'CC Mate');
+    thirdToken = await signUp('third', 'CC Third');
+    outsiderToken = await signUp('outsider', 'CC Outsider');
 
     const res = await request(app)
       .post('/api/workspaces')
       .set('Origin', ORIGIN)
-      .set('Cookie', ownerCookie)
+      .set(fakes.headersFor('owner'))
       .send({ name: `Lifecycle HQ ${RUN}` });
     expect(res.status).toBe(201);
     ws1 = res.body.workspace.id as string;
@@ -153,16 +150,28 @@ liveDescribe('creation lifecycle realtime sync (live database + sockets)', () =>
     }
   });
 
-  function postAs(cookie: string, url: string, body: Record<string, unknown>) {
-    return request(app).post(url).set('Origin', ORIGIN).set('Cookie', cookie).send(body);
+  function postAs(token: string, url: string, body: Record<string, unknown>) {
+    return request(app)
+      .post(url)
+      .set('Origin', ORIGIN)
+      .set('Authorization', `Bearer ${token}`)
+      .send(body);
   }
 
-  function patchAs(cookie: string, url: string, body: Record<string, unknown>) {
-    return request(app).patch(url).set('Origin', ORIGIN).set('Cookie', cookie).send(body);
+  function patchAs(token: string, url: string, body: Record<string, unknown>) {
+    return request(app)
+      .patch(url)
+      .set('Origin', ORIGIN)
+      .set('Authorization', `Bearer ${token}`)
+      .send(body);
   }
 
-  function deleteAs(cookie: string, url: string) {
-    return request(app).delete(url).set('Origin', ORIGIN).set('Cookie', cookie).send({});
+  function deleteAs(token: string, url: string) {
+    return request(app)
+      .delete(url)
+      .set('Origin', ORIGIN)
+      .set('Authorization', `Bearer ${token}`)
+      .send({});
   }
 
   it('fans public channel creation out to workspace members only', async () => {
@@ -170,15 +179,15 @@ liveDescribe('creation lifecycle realtime sync (live database + sockets)', () =>
     const mateEvents: ReceivedEvent[] = [];
     const outsiderEvents: ReceivedEvent[] = [];
     const ownerSocket = ioc(baseUrl, {
-      extraHeaders: { Cookie: ownerCookie },
+      auth: { token: ownerToken },
       transports: ['websocket'],
     });
     const mateSocket = ioc(baseUrl, {
-      extraHeaders: { Cookie: mateCookie },
+      auth: { token: mateToken },
       transports: ['websocket'],
     });
     const outsiderSocket = ioc(baseUrl, {
-      extraHeaders: { Cookie: outsiderCookie },
+      auth: { token: outsiderToken },
       transports: ['websocket'],
     });
     sockets.push(ownerSocket, mateSocket, outsiderSocket);
@@ -205,7 +214,7 @@ liveDescribe('creation lifecycle realtime sync (live database + sockets)', () =>
       ),
     );
 
-    const res = await postAs(ownerCookie, `/api/workspaces/${ws1}/channels`, {
+    const res = await postAs(ownerToken, `/api/workspaces/${ws1}/channels`, {
       name: `Announce ${RUN}`,
       type: 'PUBLIC',
     });
@@ -243,11 +252,11 @@ liveDescribe('creation lifecycle realtime sync (live database + sockets)', () =>
   });
 
   it('restricts private channel creation to channel members', async () => {
-    const { socket: ownerSocket, received: ownerEvents } = await connectSocket(ownerCookie);
-    const { received: mateEvents } = await connectSocket(mateCookie);
+    const { socket: ownerSocket, received: ownerEvents } = await connectSocket(ownerToken);
+    const { received: mateEvents } = await connectSocket(mateToken);
     void ownerSocket;
 
-    const res = await postAs(ownerCookie, `/api/workspaces/${ws1}/channels`, {
+    const res = await postAs(ownerToken, `/api/workspaces/${ws1}/channels`, {
       name: `Vault ${RUN}`,
       type: 'PRIVATE',
     });
@@ -268,11 +277,11 @@ liveDescribe('creation lifecycle realtime sync (live database + sockets)', () =>
   });
 
   it('notifies both participants on 1:1 creation with mirrored peers, and stays silent on re-open', async () => {
-    const { received: ownerEvents } = await connectSocket(ownerCookie);
-    const { received: mateEvents } = await connectSocket(mateCookie);
+    const { received: ownerEvents } = await connectSocket(ownerToken);
+    const { received: mateEvents } = await connectSocket(mateToken);
 
     const mate = await getPrisma().user.findUniqueOrThrow({ where: { email: email('mate') } });
-    const created = await postAs(ownerCookie, `/api/workspaces/${ws1}/direct-messages`, {
+    const created = await postAs(ownerToken, `/api/workspaces/${ws1}/direct-messages`, {
       recipientId: mate.id,
     });
     expect(created.status).toBe(200);
@@ -303,7 +312,7 @@ liveDescribe('creation lifecycle realtime sync (live database + sockets)', () =>
 
     const ownerCount = ownerEvents.length;
     const mateCount = mateEvents.length;
-    const reopened = await postAs(ownerCookie, `/api/workspaces/${ws1}/direct-messages`, {
+    const reopened = await postAs(ownerToken, `/api/workspaces/${ws1}/direct-messages`, {
       recipientId: mate.id,
     });
     expect(reopened.status).toBe(200);
@@ -313,14 +322,14 @@ liveDescribe('creation lifecycle realtime sync (live database + sockets)', () =>
   });
 
   it('notifies every group participant with role-correct payloads', async () => {
-    const { received: ownerEvents } = await connectSocket(ownerCookie);
-    const { received: mateEvents } = await connectSocket(mateCookie);
-    const { received: thirdEvents } = await connectSocket(thirdCookie);
+    const { received: ownerEvents } = await connectSocket(ownerToken);
+    const { received: mateEvents } = await connectSocket(mateToken);
+    const { received: thirdEvents } = await connectSocket(thirdToken);
 
     const prisma = getPrisma();
     const mate = await prisma.user.findUniqueOrThrow({ where: { email: email('mate') } });
     const third = await prisma.user.findUniqueOrThrow({ where: { email: email('third') } });
-    const created = await postAs(ownerCookie, `/api/workspaces/${ws1}/direct-messages/group`, {
+    const created = await postAs(ownerToken, `/api/workspaces/${ws1}/direct-messages/group`, {
       participantIds: [mate.id, third.id],
       name: `Crew ${RUN}`,
     });
@@ -355,7 +364,7 @@ liveDescribe('creation lifecycle realtime sync (live database + sockets)', () =>
 
   describe('workspace deletion realtime push', () => {
     async function makeWorkspaceWithMate(name: string): Promise<string> {
-      const res = await postAs(ownerCookie, '/api/workspaces', { name });
+      const res = await postAs(ownerToken, '/api/workspaces', { name });
       expect(res.status).toBe(201);
       const workspaceId = res.body.workspace.id as string;
       createdWorkspaceIds.push(workspaceId);
@@ -368,11 +377,11 @@ liveDescribe('creation lifecycle realtime sync (live database + sockets)', () =>
 
     it('notifies pre-deletion members with a minimal payload, and nobody else', async () => {
       const doomedId = await makeWorkspaceWithMate(`Doomed ${RUN}`);
-      const { received: ownerEvents } = await connectSocket(ownerCookie);
-      const { received: mateEvents } = await connectSocket(mateCookie);
-      const { received: outsiderEvents } = await connectSocket(outsiderCookie);
+      const { received: ownerEvents } = await connectSocket(ownerToken);
+      const { received: mateEvents } = await connectSocket(mateToken);
+      const { received: outsiderEvents } = await connectSocket(outsiderToken);
 
-      const res = await deleteAs(ownerCookie, `/api/workspaces/${doomedId}`);
+      const res = await deleteAs(ownerToken, `/api/workspaces/${doomedId}`);
       expect(res.status).toBe(204);
 
       for (const [bucket, who] of [
@@ -393,17 +402,17 @@ liveDescribe('creation lifecycle realtime sync (live database + sockets)', () =>
 
     it('emits nothing when deletion is rejected', async () => {
       const doomedId = await makeWorkspaceWithMate(`Doomed Again ${RUN}`);
-      const { received: ownerEvents } = await connectSocket(ownerCookie);
-      const { received: mateEvents } = await connectSocket(mateCookie);
+      const { received: ownerEvents } = await connectSocket(ownerToken);
+      const { received: mateEvents } = await connectSocket(mateToken);
 
       // Non-owner member cannot delete.
-      const forbidden = await deleteAs(mateCookie, `/api/workspaces/${doomedId}`);
+      const forbidden = await deleteAs(mateToken, `/api/workspaces/${doomedId}`);
       expect(forbidden.status).toBe(403);
 
       // Deleting twice: second attempt 404s on the missing workspace.
-      const first = await deleteAs(ownerCookie, `/api/workspaces/${doomedId}`);
+      const first = await deleteAs(ownerToken, `/api/workspaces/${doomedId}`);
       expect(first.status).toBe(204);
-      const second = await deleteAs(ownerCookie, `/api/workspaces/${doomedId}`);
+      const second = await deleteAs(ownerToken, `/api/workspaces/${doomedId}`);
       expect(second.status).toBe(404);
 
       // Exactly one push per member (from the single successful deletion).
@@ -425,7 +434,7 @@ liveDescribe('creation lifecycle realtime sync (live database + sockets)', () =>
 
     describe('channel update/delete realtime push', () => {
       async function makePublicChannel(name: string): Promise<{ id: string; slug: string }> {
-        const res = await postAs(ownerCookie, `/api/workspaces/${ws1}/channels`, {
+        const res = await postAs(ownerToken, `/api/workspaces/${ws1}/channels`, {
           name,
           type: 'PUBLIC',
         });
@@ -435,11 +444,11 @@ liveDescribe('creation lifecycle realtime sync (live database + sockets)', () =>
 
       it('fans renames out to members and stays silent on rejection', async () => {
         const channel = await makePublicChannel(`Rename ${RUN}`);
-        const { received: ownerEvents } = await connectSocket(ownerCookie);
-        const { received: mateEvents } = await connectSocket(mateCookie);
+        const { received: ownerEvents } = await connectSocket(ownerToken);
+        const { received: mateEvents } = await connectSocket(mateToken);
 
         const renamed = await patchAs(
-          ownerCookie,
+          ownerToken,
           `/api/workspaces/${ws1}/channels/${channel.slug}`,
           {
             name: `Renamed ${RUN}`,
@@ -472,7 +481,7 @@ liveDescribe('creation lifecycle realtime sync (live database + sockets)', () =>
         const updatedBefore = mateEvents.filter((e) => e.type === 'channel:updated').length;
         const currentSlug = (renamed.body.channel as { slug: string }).slug;
         const rejected = await patchAs(
-          mateCookie,
+          mateToken,
           `/api/workspaces/${ws1}/channels/${currentSlug}`,
           {
             name: `Hijack ${RUN}`,
@@ -484,7 +493,7 @@ liveDescribe('creation lifecycle realtime sync (live database + sockets)', () =>
       });
 
       it('drops deleted channels everywhere and hides private deletes from non-members', async () => {
-        const priv = await postAs(ownerCookie, `/api/workspaces/${ws1}/channels`, {
+        const priv = await postAs(ownerToken, `/api/workspaces/${ws1}/channels`, {
           name: `Gone ${RUN}`,
           type: 'PRIVATE',
         });
@@ -492,10 +501,10 @@ liveDescribe('creation lifecycle realtime sync (live database + sockets)', () =>
         const channelId = (priv.body.channel as { id: string }).id;
         const slug = (priv.body.channel as { slug: string }).slug;
 
-        const { received: ownerEvents } = await connectSocket(ownerCookie);
-        const { received: mateEvents } = await connectSocket(mateCookie);
+        const { received: ownerEvents } = await connectSocket(ownerToken);
+        const { received: mateEvents } = await connectSocket(mateToken);
 
-        const deleted = await deleteAs(ownerCookie, `/api/workspaces/${ws1}/channels/${slug}`);
+        const deleted = await deleteAs(ownerToken, `/api/workspaces/${ws1}/channels/${slug}`);
         expect(deleted.status).toBe(204);
 
         const got = await waitFor(

@@ -3,6 +3,16 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NewLandingNavbar } from './NewLandingNavbar';
 
+const { clerkSignedIn } = vi.hoisted(() => ({ clerkSignedIn: { value: false } }));
+
+vi.mock('@clerk/nextjs', () => ({
+  Show: ({ children, when }: { children: React.ReactNode; when: string }) => {
+    if (when === 'signed-in') return clerkSignedIn.value ? <>{children}</> : null;
+    return clerkSignedIn.value ? null : <>{children}</>;
+  },
+  UserButton: () => <button type="button" aria-label="Account">AB</button>,
+}));
+
 function mockMatchMedia(matches = false) {
   Object.defineProperty(window, 'matchMedia', {
     writable: true,
@@ -23,10 +33,11 @@ function mockMatchMedia(matches = false) {
 beforeEach(() => {
   mockMatchMedia(false);
   Object.defineProperty(window, 'scrollY', { writable: true, value: 0 });
+  clerkSignedIn.value = false;
 });
 
 describe('NewLandingNavbar', () => {
-  it('renders logo, nav links, actions, and decorative avatar', () => {
+  it('renders logo, nav links, and actions with no profile avatar', () => {
     render(<NewLandingNavbar />);
     expect(screen.getByRole('banner')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /teamflow home/i })).toBeInTheDocument();
@@ -47,11 +58,17 @@ describe('NewLandingNavbar', () => {
       'aria-current',
       'page',
     );
-    // Avatar is decorative, not an interactive control
-    const avatar = screen.getByTestId('navbar-avatar');
-    expect(avatar).toHaveAttribute('aria-hidden', 'true');
-    expect(avatar.tagName).not.toBe('A');
-    expect(avatar.tagName).not.toBe('BUTTON');
+    // No profile avatar on the public landing navbar (not an account control)
+    expect(screen.queryByTestId('navbar-avatar')).toBeNull();
+  });
+
+  it('shows a user button instead of sign-in actions when signed in', () => {
+    clerkSignedIn.value = true;
+    render(<NewLandingNavbar />);
+
+    expect(screen.getByRole('button', { name: /account/i })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /^sign in$/i })).toBeNull();
+    expect(screen.queryByRole('link', { name: /start free/i })).toBeNull();
   });
 
   it('Start Free is the primary button and Sign In is text-only', () => {

@@ -8,6 +8,7 @@
  */
 
 import type { ApiResult } from './messages';
+import { authedFetch } from './session-token';
 
 export type SearchResultType = 'messages' | 'users' | 'channels';
 export type SearchThreadFilter = 'include' | 'only' | 'exclude';
@@ -408,7 +409,7 @@ export async function searchWorkspace(
   }
   let res: Response;
   try {
-    res = await fetch(
+    res = await authedFetch(
       `${apiBase}/api/workspaces/${encodeURIComponent(workspaceId)}/search?${params.toString()}`,
       {
         method: 'GET',

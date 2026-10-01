@@ -6,6 +6,7 @@
  */
 
 import type { ApiResult } from './messages';
+import { authedFetch } from './session-token';
 
 export type NotificationDelivery = 'ALL' | 'NONE';
 
@@ -51,7 +52,7 @@ export async function fetchNotificationPreferences(
   apiBase: string,
 ): Promise<ApiResult<NotificationPreferences>> {
   try {
-    const res = await fetch(`${apiBase}/api/users/me/notification-preferences`, {
+    const res = await authedFetch(`${apiBase}/api/users/me/notification-preferences`, {
       method: 'GET',
       headers: { Accept: 'application/json' },
       credentials: 'include',
@@ -104,7 +105,7 @@ export async function updateNotificationPreferences(
   patch: UpdateNotificationPreferencesInput,
 ): Promise<ApiResult<NotificationPreferences>> {
   try {
-    const res = await fetch(`${apiBase}/api/users/me/notification-preferences`, {
+    const res = await authedFetch(`${apiBase}/api/users/me/notification-preferences`, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',

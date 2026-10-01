@@ -12,11 +12,10 @@
  */
 
 import http from 'node:http';
-import { betterAuth } from 'better-auth';
-import { memoryAdapter } from 'better-auth/adapters/memory';
 import { io as ioc, type Socket as ClientSocket } from 'socket.io-client';
 import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createClerkFakes } from '../../test-utils/clerk-fakes';
 import { createApp } from '../../app';
 import { closeRealtime, initRealtime, presenceRegistry } from './index';
 
@@ -28,41 +27,37 @@ vi.mock('../auth/prisma', () => ({
   getPrisma: (...args: unknown[]) => mockGetPrisma(...args),
 }));
 
-const TEST_AUTH_URL = 'http://localhost:4000';
+const fakes = createClerkFakes('presence');
 
-function createTestAuth() {
-  return betterAuth({
-    secret: 'presence-test-secret-0123456789abcdef-0123456789abcdef',
-    baseURL: TEST_AUTH_URL,
-    database: memoryAdapter({ user: [], session: [], account: [], verification: [] }),
-    emailAndPassword: { enabled: true },
-    rateLimit: { enabled: false },
-  });
-}
+const PRESENCE_USERS: Record<string, { id: string; name: string; email: string; image: null; emailVerified: boolean }> = {
+  [fakes.clerkIdFor('user1')]: { id: 'u-pres-1', name: 'User One', email: fakes.emailFor('user1'), image: null, emailVerified: false },
+  [fakes.clerkIdFor('user2')]: { id: 'u-pres-2', name: 'User Two', email: fakes.emailFor('user2'), image: null, emailVerified: false },
+  [fakes.clerkIdFor('outsider')]: { id: 'u-pres-out', name: 'Outsider', email: fakes.emailFor('outsider'), image: null, emailVerified: false },
+};
 
 describe('Presence Backend Integration (Phase 4I.1)', () => {
   let server: http.Server;
   let serverPort: number;
-  let auth: ReturnType<typeof createTestAuth>;
   let app: ReturnType<typeof createApp>;
   let prismaMock: {
+    user: { findUnique: ReturnType<typeof vi.fn> };
     workspaceMembership: {
       findUnique: ReturnType<typeof vi.fn>;
       findMany: ReturnType<typeof vi.fn>;
     };
   };
 
-  let user1Cookie: string;
+  let user1Token: string;
   let user1Id: string;
-  let user2Cookie: string;
+  let user2Token: string;
   let user2Id: string;
-  let outsiderCookie: string;
+  let outsiderToken: string;
 
-  function createClient(cookie?: string): ClientSocket {
+  function createClient(token?: string): ClientSocket {
     return ioc(`http://localhost:${serverPort}`, {
       transports: ['websocket'],
       autoConnect: false,
-      extraHeaders: cookie ? { Cookie: cookie } : undefined,
+      auth: token ? { token } : undefined,
     });
   }
 
@@ -82,10 +77,9 @@ describe('Presence Backend Integration (Phase 4I.1)', () => {
   }
 
   beforeAll(async () => {
-    auth = createTestAuth();
-    app = createApp({ auth });
+    app = createApp(fakes.appDeps());
     server = http.createServer(app);
-    initRealtime(server, () => auth);
+    initRealtime(server, fakes.appDeps());
 
     await new Promise<void>((resolve) => {
       server.listen(0, () => {
@@ -97,36 +91,12 @@ describe('Presence Backend Integration (Phase 4I.1)', () => {
       });
     });
 
-    const agent = request.agent(app);
-
-    // Sign up User 1
-    const res1 = await agent
-      .post('/api/auth/sign-up/email')
-      .set('Origin', TEST_AUTH_URL)
-      .send({ name: 'User One', email: 'user1@example.com', password: 'password12345' });
-    user1Cookie = Array.isArray(res1.headers['set-cookie'])
-      ? res1.headers['set-cookie'][0]!
-      : (res1.headers['set-cookie'] as unknown as string);
-    user1Id = res1.body.user.id;
-
-    // Sign up User 2
-    const res2 = await agent
-      .post('/api/auth/sign-up/email')
-      .set('Origin', TEST_AUTH_URL)
-      .send({ name: 'User Two', email: 'user2@example.com', password: 'password12345' });
-    user2Cookie = Array.isArray(res2.headers['set-cookie'])
-      ? res2.headers['set-cookie'][0]!
-      : (res2.headers['set-cookie'] as unknown as string);
-    user2Id = res2.body.user.id;
-
-    // Sign up Outsider
-    const res3 = await agent
-      .post('/api/auth/sign-up/email')
-      .set('Origin', TEST_AUTH_URL)
-      .send({ name: 'Outsider', email: 'outsider@example.com', password: 'password12345' });
-    outsiderCookie = Array.isArray(res3.headers['set-cookie'])
-      ? res3.headers['set-cookie'][0]!
-      : (res3.headers['set-cookie'] as unknown as string);
+    // Provisioned identities resolve through the mocked user model below.
+    user1Token = fakes.tokenFor('user1');
+    user1Id = 'u-pres-1';
+    user2Token = fakes.tokenFor('user2');
+    user2Id = 'u-pres-2';
+    outsiderToken = fakes.tokenFor('outsider');
   });
 
   afterAll(async () => {
@@ -137,6 +107,11 @@ describe('Presence Backend Integration (Phase 4I.1)', () => {
   beforeEach(() => {
     presenceRegistry.clear();
     prismaMock = {
+      user: {
+        findUnique: vi.fn(async ({ where }: { where: { clerkId: string } }) =>
+          PRESENCE_USERS[where.clerkId] ? { ...PRESENCE_USERS[where.clerkId] } : null,
+        ),
+      },
       workspaceMembership: {
         findUnique: vi.fn(),
         findMany: vi.fn(),
@@ -172,10 +147,10 @@ describe('Presence Backend Integration (Phase 4I.1)', () => {
     );
 
     // User2 is listening for presence events
-    const clientUser2 = createClient(user2Cookie);
+    const clientUser2 = createClient(user2Token);
     await connectClient(clientUser2);
 
-    const clientOutsider = createClient(outsiderCookie);
+    const clientOutsider = createClient(outsiderToken);
     await connectClient(clientOutsider);
 
     const user2Events: unknown[] = [];
@@ -185,7 +160,7 @@ describe('Presence Backend Integration (Phase 4I.1)', () => {
     clientOutsider.on('presence:changed', (ev) => outsiderEvents.push(ev));
 
     // 1. User 1 connects tab 1 -> ONLINE
-    const clientUser1Tab1 = createClient(user1Cookie);
+    const clientUser1Tab1 = createClient(user1Token);
     await connectClient(clientUser1Tab1);
 
     await new Promise((resolve) => setTimeout(resolve, 50));
@@ -204,7 +179,7 @@ describe('Presence Backend Integration (Phase 4I.1)', () => {
     expect(outsiderEvents).toHaveLength(0);
 
     // 2. User 1 connects tab 2 -> remains ONLINE (no new transition event)
-    const clientUser1Tab2 = createClient(user1Cookie);
+    const clientUser1Tab2 = createClient(user1Token);
     await connectClient(clientUser1Tab2);
 
     await new Promise((resolve) => setTimeout(resolve, 50));
@@ -265,13 +240,13 @@ describe('Presence Backend Integration (Phase 4I.1)', () => {
       },
     );
 
-    const clientUser2 = createClient(user2Cookie);
+    const clientUser2 = createClient(user2Token);
     await connectClient(clientUser2);
 
     const user2Events: unknown[] = [];
     clientUser2.on('presence:changed', (ev) => user2Events.push(ev));
 
-    const clientUser1 = createClient(user1Cookie);
+    const clientUser1 = createClient(user1Token);
     await connectClient(clientUser1);
 
     await new Promise((resolve) => setTimeout(resolve, 50));
@@ -310,7 +285,7 @@ describe('Presence Backend Integration (Phase 4I.1)', () => {
 
       const res = await request(app)
         .get('/api/workspaces/ws-1/presence')
-        .set('Cookie', user1Cookie);
+        .set(fakes.headersFor('user1'));
 
       expect(res.status).toBe(404);
       expect(res.body.error.code).toBe('NOT_FOUND');
@@ -328,7 +303,7 @@ describe('Presence Backend Integration (Phase 4I.1)', () => {
 
       const res = await request(app)
         .get('/api/workspaces/ws-1/presence')
-        .set('Cookie', user1Cookie);
+        .set(fakes.headersFor('user1'));
 
       expect(res.status).toBe(200);
       expect(res.body.presence).toEqual([

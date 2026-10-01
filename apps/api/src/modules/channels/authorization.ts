@@ -1,7 +1,7 @@
 /**
  * Channel authorization (Phase 3A).
  *
- * Pattern: requireAuth → workspace membership → channel access → controller.
+ * Pattern: requireClerkAuth → workspace membership → channel access → controller.
  * - PUBLIC channels: any workspace member.
  * - PRIVATE channels: channel members only (creator is auto-added at
  *   creation; ChannelMembership has no roles by design).

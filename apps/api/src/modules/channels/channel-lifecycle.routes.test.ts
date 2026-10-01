@@ -1,22 +1,22 @@
 import { randomUUID } from 'node:crypto';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { createClerkFakes, requestAs } from '../../test-utils/clerk-fakes';
 import { createApp } from '../../app';
 import { getPrisma } from '../auth/prisma';
 
 vi.setConfig({ testTimeout: 45000, hookTimeout: 180000 });
 
-const LIVE =
-  !!process.env.DATABASE_URL && !!process.env.BETTER_AUTH_SECRET && !!process.env.BETTER_AUTH_URL;
+const LIVE = !!process.env.DATABASE_URL && !!process.env.CLERK_SECRET_KEY;
 const liveDescribe = LIVE ? describe : describe.skip;
 
-const ORIGIN = process.env.BETTER_AUTH_URL ?? 'http://localhost:4000';
+const ORIGIN = 'http://localhost:4000';
 const RUN = `${Date.now().toString(36)}${randomUUID().slice(0, 8)}`;
-const email = (who: string) => `chl-${RUN}-${who}@example.invalid`;
-const PASSWORD = 'channel-lifecycle-test-0123456789';
+const fakes = createClerkFakes('channel-lifecycle');
+const email = (who: string) => fakes.emailFor(who);
 
 liveDescribe('channel lifecycle (live database)', () => {
-  const app = createApp();
+  const app = createApp(fakes.appDeps());
   const createdWorkspaceIds: string[] = [];
   const createdEmails: string[] = [];
 
@@ -26,21 +26,19 @@ liveDescribe('channel lifecycle (live database)', () => {
   let privateSlug = '';
   let privateId = '';
 
-  let owner: ReturnType<typeof request.agent>;
-  let admin: ReturnType<typeof request.agent>;
-  let member: ReturnType<typeof request.agent>;
-  let outsider: ReturnType<typeof request.agent>;
-  let otherOwner: ReturnType<typeof request.agent>;
+  let owner: ReturnType<typeof requestAs>;
+  let admin: ReturnType<typeof requestAs>;
+  let member: ReturnType<typeof requestAs>;
+  let outsider: ReturnType<typeof requestAs>;
+  let otherOwner: ReturnType<typeof requestAs>;
 
-  async function signUp(who: string, name: string) {
-    const agent = request.agent(app);
-    const res = await agent
-      .post('/api/auth/sign-up/email')
-      .set('Origin', ORIGIN)
-      .send({ name, email: email(who), password: PASSWORD });
-    expect(res.status).toBeLessThan(300);
+  async function signUp(who: string, name: string): Promise<ReturnType<typeof requestAs>> {
+    fakes.setProfile(who, { name });
     createdEmails.push(email(who));
-    return agent;
+    // First sight provisions the local user row through the fake directory.
+    const me = await request(app).get('/api/me').set(fakes.headersFor(who));
+    expect(me.status).toBe(200);
+    return requestAs(app, fakes, who);
   }
   async function userIdFor(who: string) {
     const u = await getPrisma().user.findUniqueOrThrow({ where: { email: email(who) } });

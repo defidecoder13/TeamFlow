@@ -6,6 +6,7 @@
  * values with safe messages.
  */
 
+import { authedFetch } from './session-token';
 export interface SessionUser {
   id: string;
   name: string;
@@ -108,7 +109,7 @@ export async function updateProfile(
   if (input.image !== undefined) body.image = input.image;
   let response: Response;
   try {
-    response = await fetch(`${apiBaseUrl}/api/me`, {
+    response = await authedFetch(`${apiBaseUrl}/api/me`, {
       method: 'PATCH',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },

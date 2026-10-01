@@ -1,7 +1,7 @@
 /**
  * Search HTTP boundary (Phase 4G.3, backend only).
  *
- * GET /api/workspaces/:workspaceId/search behind `requireAuth` — identity
+ * GET /api/workspaces/:workspaceId/search behind `requireClerkAuth` — identity
  * comes exclusively from the session. Workspace membership gates everything;
  * container authorization resolves inside the service and its SQL predicates.
  * Missing/inaccessible workspaces and `in:` targets share 404 shapes so
@@ -9,9 +9,8 @@
  */
 
 import { Router, type NextFunction, type Request, type Response } from 'express';
-import type { AuthContext } from '../auth/index';
 import { getPrisma } from '../auth/prisma';
-import { requireAuth } from '../auth/session';
+import { requireClerkAuth, type ClerkRouteOptions } from '../auth/index';
 import { decodeSearchCursor, type SearchCursor } from './cursor';
 import {
   SearchNotFoundError,
@@ -47,11 +46,11 @@ function requireSessionUser(req: Request, res: Response): { id: string } | null 
   return authUser;
 }
 
-export function createSearchRouter(resolveAuth: () => AuthContext): Router {
+export function createSearchRouter(options: ClerkRouteOptions = {}): Router {
   // mergeParams: mounted at `/api/workspaces/:workspaceId/search` and must
   // see the parent mount's `workspaceId` (Express 4 drops it otherwise).
   const router = Router({ mergeParams: true });
-  router.use(requireAuth(resolveAuth));
+  router.use(requireClerkAuth(options));
 
   router.get(
     '/',

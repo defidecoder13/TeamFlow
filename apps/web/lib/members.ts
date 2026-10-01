@@ -7,6 +7,7 @@
  */
 
 import { WORKSPACE_ROLES, type WorkspaceRole } from './workspaces';
+import { authedFetch } from './session-token';
 
 /** Member record as returned by the API: identity + role only. */
 export interface WorkspaceMember {
@@ -77,7 +78,7 @@ export async function fetchWorkspaceMembers(
 ): Promise<FetchMembersResult> {
   let response: Response;
   try {
-    response = await fetch(
+    response = await authedFetch(
       `${apiBaseUrl}/api/workspaces/${encodeURIComponent(workspaceId)}/members`,
       { credentials: 'include', cache: 'no-store' },
     );
@@ -147,7 +148,7 @@ export async function updateWorkspaceMemberRole(
 ): Promise<UpdateMemberRoleResult> {
   let response: Response;
   try {
-    response = await fetch(memberUrl(apiBaseUrl, workspaceId, userId), {
+    response = await authedFetch(memberUrl(apiBaseUrl, workspaceId, userId), {
       method: 'PATCH',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
@@ -190,7 +191,7 @@ export async function removeWorkspaceMember(
 ): Promise<RemoveMemberResult> {
   let response: Response;
   try {
-    response = await fetch(memberUrl(apiBaseUrl, workspaceId, userId), {
+    response = await authedFetch(memberUrl(apiBaseUrl, workspaceId, userId), {
       method: 'DELETE',
       credentials: 'include',
     });

@@ -6,9 +6,8 @@
  */
 
 import { Router, type NextFunction, type Request, type Response } from 'express';
-import type { AuthContext } from '../auth/index';
 import { getPrisma } from '../auth/prisma';
-import { requireAuth } from '../auth/session';
+import { requireClerkAuth, type ClerkRouteOptions } from '../auth/index';
 import {
   addConversationParticipant,
   createDirectMessage,
@@ -84,9 +83,9 @@ function asyncRoute(handler: (req: Request, res: Response) => Promise<void>) {
   };
 }
 
-export function createWorkspaceDirectMessagesRouter(resolveAuth: () => AuthContext): Router {
+export function createWorkspaceDirectMessagesRouter(options: ClerkRouteOptions = {}): Router {
   const router = Router({ mergeParams: true });
-  router.use(requireAuth(resolveAuth));
+  router.use(requireClerkAuth(options));
 
   // POST /api/workspaces/:workspaceId/direct-messages - Create or get DM conversation
   router.post(
@@ -223,9 +222,9 @@ export function createWorkspaceDirectMessagesRouter(resolveAuth: () => AuthConte
   return router;
 }
 
-export function createDirectMessagesRouter(resolveAuth: () => AuthContext): Router {
+export function createDirectMessagesRouter(options: ClerkRouteOptions = {}): Router {
   const router = Router();
-  router.use(requireAuth(resolveAuth));
+  router.use(requireClerkAuth(options));
 
   // GET /api/direct-messages/:conversationId - Get single conversation
   router.get(

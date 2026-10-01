@@ -28,8 +28,8 @@ vi.mock('next/navigation', () => ({
   usePathname: () => '/app',
 }));
 
-vi.mock('./auth-client', () => ({
-  getAuthClient: () => ({ signOut: signOutMock }),
+vi.mock('@clerk/nextjs', () => ({
+  useClerk: () => ({ signOut: signOutMock }),
 }));
 
 vi.mock('./realtime-client', () => ({
@@ -144,8 +144,8 @@ beforeEach(() => {
 });
 
 describe('ShellProvider.signOut', () => {
-  it('calls Better Auth sign-out, tears down realtime/cache, and leaves to /sign-in', async () => {
-    signOutMock.mockResolvedValue({ data: { success: true }, error: null });
+  it('calls Clerk sign-out, tears down realtime/cache, and leaves to /sign-in', async () => {
+    signOutMock.mockResolvedValue(undefined);
     const { result } = renderShell();
 
     await act(async () => {
@@ -155,12 +155,12 @@ describe('ShellProvider.signOut', () => {
     expect(signOutMock).toHaveBeenCalledTimes(1);
     expect(disconnectMock).toHaveBeenCalledTimes(1);
     expect(clearCacheMock).toHaveBeenCalledTimes(1);
-    expect(replaceMock).toHaveBeenCalledWith('/sign-in');
+    expect(replaceMock).toHaveBeenCalledWith('/');
     expect(refreshMock).toHaveBeenCalled();
   });
 
-  it('still leaves when sign-out returns an error (middleware re-verifies)', async () => {
-    signOutMock.mockResolvedValue({ data: null, error: { code: 'FAILED' } });
+  it('still tears down and leaves when Clerk sign-out throws (middleware re-verifies)', async () => {
+    signOutMock.mockRejectedValue(new Error('clerk offline'));
     const { result } = renderShell();
 
     await act(async () => {
@@ -168,21 +168,10 @@ describe('ShellProvider.signOut', () => {
     });
 
     expect(signOutMock).toHaveBeenCalledTimes(1);
-    expect(replaceMock).toHaveBeenCalledWith('/sign-in');
-    expect(refreshMock).toHaveBeenCalled();
-  });
-
-  it('tears down and leaves when sign-out throws', async () => {
-    signOutMock.mockRejectedValue(new Error('network down'));
-    const { result } = renderShell();
-
-    await act(async () => {
-      await result.current.signOut();
-    });
-
     expect(disconnectMock).toHaveBeenCalledTimes(1);
     expect(clearCacheMock).toHaveBeenCalledTimes(1);
-    expect(replaceMock).toHaveBeenCalledWith('/sign-in');
+    expect(replaceMock).toHaveBeenCalledWith('/');
+    expect(refreshMock).toHaveBeenCalled();
   });
 });
 

@@ -1,7 +1,7 @@
 /**
  * User notification preference HTTP boundary (Phase 4H.8).
  *
- * All routes sit behind `requireAuth` — identity comes exclusively from the
+ * All routes sit behind `requireClerkAuth` — identity comes exclusively from the
  * session (`req.authUser`). No workspace membership is required because
  * these are user-level account delivery preferences.
  *
@@ -10,9 +10,8 @@
  */
 
 import { Router, type NextFunction, type Request, type Response } from 'express';
-import type { AuthContext } from '../auth/index';
 import { getPrisma } from '../auth/prisma';
-import { requireAuth } from '../auth/session';
+import { requireClerkAuth, type ClerkRouteOptions } from '../auth/index';
 import { firstValidationMessage } from './schemas';
 import { updateNotificationPreferencesSchema } from './preferences.schemas';
 import { getNotificationPreferences, updateNotificationPreferences } from './preferences.service';
@@ -27,9 +26,9 @@ function asyncRoute(handler: (req: Request, res: Response) => Promise<void>) {
   };
 }
 
-export function createNotificationPreferencesRouter(resolveAuth: () => AuthContext): Router {
+export function createNotificationPreferencesRouter(options: ClerkRouteOptions = {}): Router {
   const router = Router();
-  router.use(requireAuth(resolveAuth));
+  router.use(requireClerkAuth(options));
 
   // GET / - Read current user's preferences
   router.get(

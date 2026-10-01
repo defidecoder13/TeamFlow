@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { createClerkFakes, requestAs } from '../../test-utils/clerk-fakes';
 import { createApp } from '../../app';
 import { getPrisma } from '../auth/prisma';
 
@@ -17,14 +18,13 @@ vi.setConfig({ testTimeout: 45000, hookTimeout: 180000 });
  * `afterAll` (memberships + invitations cascade) and then the users.
  */
 
-const LIVE =
-  !!process.env.DATABASE_URL && !!process.env.BETTER_AUTH_SECRET && !!process.env.BETTER_AUTH_URL;
+const LIVE = !!process.env.DATABASE_URL && !!process.env.CLERK_SECRET_KEY;
 const liveDescribe = LIVE ? describe : describe.skip;
 
-const ORIGIN = process.env.BETTER_AUTH_URL ?? 'http://localhost:4000';
+const ORIGIN = 'http://localhost:4000';
 const RUN = `${Date.now().toString(36)}${Math.floor(Math.random() * 1e6).toString(36)}`;
-const email = (who: string) => `ws2f-${RUN}-${who}@example.invalid`;
-const PASSWORD = 'invitation-test-password-0123456789';
+const fakes = createClerkFakes('invitations');
+const email = (who: string) => fakes.emailFor(who);
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
 function randomUUID(): string {
@@ -32,7 +32,7 @@ function randomUUID(): string {
 }
 
 liveDescribe('invitation API (live database)', () => {
-  const app = createApp();
+  const app = createApp(fakes.appDeps());
   const api = () => request(app);
   const createdWorkspaceIds: string[] = [];
   const createdEmails: string[] = [];
@@ -40,24 +40,22 @@ liveDescribe('invitation API (live database)', () => {
   let ws1 = '';
   let ws2 = '';
 
-  async function signUp(who: string, name: string): Promise<ReturnType<typeof request.agent>> {
-    const agent = request.agent(app);
-    const res = await agent
-      .post('/api/auth/sign-up/email')
-      .set('Origin', ORIGIN)
-      .send({ name, email: email(who), password: PASSWORD });
-    expect(res.status).toBeLessThan(300);
+  async function signUp(who: string, name: string): Promise<ReturnType<typeof requestAs>> {
+    fakes.setProfile(who, { name });
     createdEmails.push(email(who));
-    return agent;
+    // First sight provisions the local user row through the fake directory.
+    const me = await request(app).get('/api/me').set(fakes.headersFor(who));
+    expect(me.status).toBe(200);
+    return requestAs(app, fakes, who);
   }
 
-  let owner: ReturnType<typeof request.agent>;
-  let admin: ReturnType<typeof request.agent>;
-  let member: ReturnType<typeof request.agent>;
-  let outsider: ReturnType<typeof request.agent>;
-  let invitee: ReturnType<typeof request.agent>;
-  let wronguser: ReturnType<typeof request.agent>;
-  let second: ReturnType<typeof request.agent>;
+  let owner: ReturnType<typeof requestAs>;
+  let admin: ReturnType<typeof requestAs>;
+  let member: ReturnType<typeof requestAs>;
+  let outsider: ReturnType<typeof requestAs>;
+  let invitee: ReturnType<typeof requestAs>;
+  let wronguser: ReturnType<typeof requestAs>;
+  let second: ReturnType<typeof requestAs>;
 
   async function userIdFor(who: string): Promise<string> {
     const user = await getPrisma().user.findUniqueOrThrow({ where: { email: email(who) } });
@@ -65,7 +63,7 @@ liveDescribe('invitation API (live database)', () => {
   }
 
   async function inviteAs(
-    agent: ReturnType<typeof request.agent>,
+    agent: ReturnType<typeof requestAs>,
     workspaceId: string,
     targetEmail: string,
   ) {
@@ -400,13 +398,13 @@ liveDescribe('invitation API (live database)', () => {
     const created = await inviteAs(owner, ws1, `race-${RUN}@example.invalid`);
     expect(created.status).toBe(201);
 
-    const racer = request.agent(app);
-    const signed = await racer
-      .post('/api/auth/sign-up/email')
-      .set('Origin', ORIGIN)
-      .send({ name: 'Race Racer', email: `race-${RUN}@example.invalid`, password: PASSWORD });
-    expect(signed.status).toBeLessThan(300);
-    createdEmails.push(`race-${RUN}@example.invalid`);
+    // The accepting identity must hold the invited email address.
+    fakes.setEmail('racer', `race-${RUN}@example.invalid`);
+    fakes.setProfile('racer', { name: 'Race Racer' });
+    createdEmails.push(fakes.emailFor('racer'));
+    const racer = requestAs(app, fakes, 'racer');
+    const provisioned = await racer.get('/api/me');
+    expect(provisioned.status).toBe(200);
 
     const token = created.body.invitation.token as string;
     const [first, second] = await Promise.all([
@@ -463,13 +461,12 @@ liveDescribe('invitation API (live database)', () => {
     });
     expect(row.role).toBe('ADMIN');
 
-    const acceptor = request.agent(app);
-    const signed = await acceptor
-      .post('/api/auth/sign-up/email')
-      .set('Origin', ORIGIN)
-      .send({ name: 'Role Admin', email: targetEmail, password: PASSWORD });
-    expect(signed.status).toBeLessThan(300);
+    const acceptor = requestAs(app, fakes, 'roleadmin');
+    fakes.setEmail('roleadmin', targetEmail);
+    fakes.setProfile('roleadmin', { name: 'Role Admin' });
     createdEmails.push(targetEmail);
+    const provisioned = await acceptor.get('/api/me');
+    expect(provisioned.status).toBe(200);
 
     const accepted = await acceptor
       .post('/api/invitations/accept')

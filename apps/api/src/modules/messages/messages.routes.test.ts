@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { createClerkFakes, requestAs } from '../../test-utils/clerk-fakes';
 import { createApp } from '../../app';
 import { getPrisma } from '../auth/prisma';
 
@@ -17,17 +18,16 @@ vi.setConfig({ testTimeout: 45000, hookTimeout: 240000 });
  * (workspace deletion cascades channels and messages).
  */
 
-const LIVE =
-  !!process.env.DATABASE_URL && !!process.env.BETTER_AUTH_SECRET && !!process.env.BETTER_AUTH_URL;
+const LIVE = !!process.env.DATABASE_URL && !!process.env.CLERK_SECRET_KEY;
 const liveDescribe = LIVE ? describe : describe.skip;
 
-const ORIGIN = process.env.BETTER_AUTH_URL ?? 'http://localhost:4000';
+const ORIGIN = 'http://localhost:4000';
 const RUN = `${Date.now().toString(36)}${randomUUID().slice(0, 8)}`;
-const email = (who: string) => `ws4a-${RUN}-${who}@example.invalid`;
-const PASSWORD = 'message-test-password-0123456789';
+const fakes = createClerkFakes('messages');
+const email = (who: string) => fakes.emailFor(who);
 
 liveDescribe('message API (live database)', () => {
-  const app = createApp();
+  const app = createApp(fakes.appDeps());
   const api = () => request(app);
   const createdWorkspaceIds: string[] = [];
   const createdEmails: string[] = [];
@@ -38,21 +38,19 @@ liveDescribe('message API (live database)', () => {
   let privId = '';
   let ws2PubId = '';
 
-  async function signUp(who: string, name: string): Promise<ReturnType<typeof request.agent>> {
-    const agent = request.agent(app);
-    const res = await agent
-      .post('/api/auth/sign-up/email')
-      .set('Origin', ORIGIN)
-      .send({ name, email: email(who), password: PASSWORD });
-    expect(res.status).toBeLessThan(300);
+  async function signUp(who: string, name: string): Promise<ReturnType<typeof requestAs>> {
+    fakes.setProfile(who, { name });
     createdEmails.push(email(who));
-    return agent;
+    // First sight provisions the local user row through the fake directory.
+    const me = await request(app).get('/api/me').set(fakes.headersFor(who));
+    expect(me.status).toBe(200);
+    return requestAs(app, fakes, who);
   }
 
-  let owner: ReturnType<typeof request.agent>;
-  let author: ReturnType<typeof request.agent>;
-  let other: ReturnType<typeof request.agent>;
-  let outsider: ReturnType<typeof request.agent>;
+  let owner: ReturnType<typeof requestAs>;
+  let author: ReturnType<typeof requestAs>;
+  let other: ReturnType<typeof requestAs>;
+  let outsider: ReturnType<typeof requestAs>;
 
   async function userIdFor(who: string): Promise<string> {
     const user = await getPrisma().user.findUniqueOrThrow({ where: { email: email(who) } });
@@ -60,7 +58,7 @@ liveDescribe('message API (live database)', () => {
   }
 
   async function postMessage(
-    agent: ReturnType<typeof request.agent>,
+    agent: ReturnType<typeof requestAs>,
     channelId: string,
     body: Record<string, unknown>,
   ) {

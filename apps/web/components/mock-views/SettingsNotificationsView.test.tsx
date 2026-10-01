@@ -8,6 +8,7 @@ const showToast = vi.fn();
 const clearSaveError = vi.fn();
 const savePreferences = vi.fn();
 const retry = vi.fn();
+const pushMock = vi.fn();
 
 const hookState = {
   value: {
@@ -25,6 +26,10 @@ const hookState = {
 
 vi.mock('../../lib/mock-context', () => ({
   useApp: () => ({ showToast }),
+}));
+
+vi.mock('../../lib/mock-hooks/useRouter', () => ({
+  useRouter: () => ({ push: pushMock }),
 }));
 
 vi.mock('../../lib/use-notification-preferences', () => ({
@@ -48,6 +53,7 @@ const allOn: NotificationPreferences = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  pushMock.mockReset();
   hookState.value = {
     state: { status: 'loading' },
     isSaving: false,
@@ -68,6 +74,19 @@ describe('SettingsNotificationsView', () => {
       screen.getByRole('status', { name: /loading notification preferences/i }),
     ).toBeInTheDocument();
     expect(screen.queryByRole('group', { name: /mentions/i })).not.toBeInTheDocument();
+  });
+
+  it('offers sign-in instead of a retry loop when the session expired', async () => {
+    const user = userEvent.setup();
+    hookState.value = {
+      ...hookState.value,
+      state: { status: 'unauthenticated' },
+    };
+    render(<SettingsNotificationsView />);
+
+    expect(screen.getByRole('status')).toHaveTextContent(/session has expired/i);
+    await user.click(screen.getByRole('button', { name: /go to sign in/i }));
+    expect(pushMock).toHaveBeenCalledWith('/sign-in');
   });
 
   it('reflects loaded preference values in the form', async () => {

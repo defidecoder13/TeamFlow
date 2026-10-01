@@ -1,42 +1,40 @@
 import { randomUUID } from 'node:crypto';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { createClerkFakes, requestAs } from '../../test-utils/clerk-fakes';
 import { createApp } from '../../app';
 import { getPrisma } from '../auth/prisma';
 
 vi.setConfig({ testTimeout: 45000, hookTimeout: 180000 });
 
-const LIVE =
-  !!process.env.DATABASE_URL && !!process.env.BETTER_AUTH_SECRET && !!process.env.BETTER_AUTH_URL;
+const LIVE = !!process.env.DATABASE_URL && !!process.env.CLERK_SECRET_KEY;
 const liveDescribe = LIVE ? describe : describe.skip;
 
-const ORIGIN = process.env.BETTER_AUTH_URL ?? 'http://localhost:4000';
+const ORIGIN = 'http://localhost:4000';
 const RUN = `${Date.now().toString(36)}${randomUUID().slice(0, 8)}`;
-const email = (who: string) => `wsm-${RUN}-${who}@example.invalid`;
-const PASSWORD = 'workspace-member-test-0123456789';
+const fakes = createClerkFakes('wsmembers');
+const email = (who: string) => fakes.emailFor(who);
 
 liveDescribe('workspace members (live database)', () => {
-  const app = createApp();
+  const app = createApp(fakes.appDeps());
   const createdWorkspaceIds: string[] = [];
   const createdEmails: string[] = [];
 
   let ws1 = '';
   let ws2 = '';
 
-  let owner: ReturnType<typeof request.agent>;
-  let admin: ReturnType<typeof request.agent>;
-  let member: ReturnType<typeof request.agent>;
-  let second: ReturnType<typeof request.agent>;
+  let owner: ReturnType<typeof requestAs>;
+  let admin: ReturnType<typeof requestAs>;
+  let member: ReturnType<typeof requestAs>;
+  let second: ReturnType<typeof requestAs>;
 
-  async function signUp(who: string, name: string) {
-    const agent = request.agent(app);
-    const res = await agent
-      .post('/api/auth/sign-up/email')
-      .set('Origin', ORIGIN)
-      .send({ name, email: email(who), password: PASSWORD });
-    expect(res.status).toBeLessThan(300);
+  async function signUp(who: string, name: string): Promise<ReturnType<typeof requestAs>> {
+    fakes.setProfile(who, { name });
     createdEmails.push(email(who));
-    return agent;
+    // First sight provisions the local user row through the fake directory.
+    const me = await request(app).get('/api/me').set(fakes.headersFor(who));
+    expect(me.status).toBe(200);
+    return requestAs(app, fakes, who);
   }
 
   async function userIdFor(who: string) {
@@ -93,12 +91,12 @@ liveDescribe('workspace members (live database)', () => {
   });
 
   const patchRole = (
-    agent: ReturnType<typeof request.agent>,
+    agent: ReturnType<typeof requestAs>,
     ws: string,
     userId: string,
     role: string,
   ) => agent.patch(`/api/workspaces/${ws}/members/${userId}`).set('Origin', ORIGIN).send({ role });
-  const deleteMember = (agent: ReturnType<typeof request.agent>, ws: string, userId: string) =>
+  const deleteMember = (agent: ReturnType<typeof requestAs>, ws: string, userId: string) =>
     agent.delete(`/api/workspaces/${ws}/members/${userId}`).set('Origin', ORIGIN);
 
   it('allows OWNER to change ADMIN→MEMBER and MEMBER→ADMIN', async () => {

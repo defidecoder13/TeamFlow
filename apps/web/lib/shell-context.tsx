@@ -19,8 +19,8 @@ import {
   type ReactNode,
 } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
+import { useClerk } from '@clerk/nextjs';
 import { getApiBaseUrl } from './config';
-import { getAuthClient } from './auth-client';
 import { useSessionUser, type SessionUser } from './use-session-user';
 import { useWorkspaces, type WorkspacesStore } from './use-workspaces';
 import { useWorkspaceChannels } from './use-workspace-channels';
@@ -107,6 +107,7 @@ export function useShell(): ShellContextValue {
 
 export function ShellProvider({ children }: { children: ReactNode }) {
   const session = useSessionUser();
+  const { signOut: clerkSignOut } = useClerk();
   const workspaces = useWorkspaces();
   const router = useRouter();
   const pathname = usePathname();
@@ -316,27 +317,18 @@ export function ShellProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(async () => {
     try {
-      const { error } = await getAuthClient().signOut();
-      if (error) {
-        // Leave anyway: middleware re-verifies the session on /sign-in and
-        // bounces back to /app if the cookie survived — never fake success.
-        router.replace('/sign-in');
-        router.refresh();
-        return;
-      }
-      // Session-scoped client state must not outlive the cookie (same
-      // teardown as UserMenu): Socket.IO would keep receiving otherwise.
-      disconnectRealtime();
-      clearAttachmentDownloadUrlCache();
-      router.replace('/sign-in');
-      router.refresh();
+      await clerkSignOut();
     } catch {
-      disconnectRealtime();
-      clearAttachmentDownloadUrlCache();
-      router.replace('/sign-in');
-      router.refresh();
+      // Leave anyway: the landing page is public, so a surviving session
+      // simply shows signed-in nav — never fake success, never strand.
     }
-  }, [router]);
+    // Session-scoped client state must not outlive the session (same
+    // teardown as UserMenu): Socket.IO would keep receiving otherwise.
+    disconnectRealtime();
+    clearAttachmentDownloadUrlCache();
+    router.replace('/');
+    router.refresh();
+  }, [router, clerkSignOut]);
 
   const value = useMemo<ShellContextValue>(
     () => ({

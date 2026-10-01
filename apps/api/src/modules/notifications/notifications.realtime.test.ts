@@ -13,20 +13,20 @@ import { randomUUID } from 'node:crypto';
 import { io as ioc, type Socket as ClientSocket } from 'socket.io-client';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { createClerkFakes, requestAs } from '../../test-utils/clerk-fakes';
 import { createApp } from '../../app';
 import { getPrisma } from '../auth/prisma';
 import { closeRealtime, initRealtime } from '../realtime/index';
 
 vi.setConfig({ testTimeout: 90000, hookTimeout: 300000 });
 
-const LIVE =
-  !!process.env.DATABASE_URL && !!process.env.BETTER_AUTH_SECRET && !!process.env.BETTER_AUTH_URL;
+const LIVE = !!process.env.DATABASE_URL && !!process.env.CLERK_SECRET_KEY;
 const liveDescribe = LIVE ? describe : describe.skip;
 
-const ORIGIN = process.env.BETTER_AUTH_URL ?? 'http://localhost:4000';
+const ORIGIN = 'http://localhost:4000';
 const RUN = `${Date.now().toString(36)}${randomUUID().slice(0, 8)}`;
-const email = (who: string) => `notifrtt-${RUN}-${who}@example.invalid`;
-const PASSWORD = 'notifrtt-test-password-0123456789';
+const fakes = createClerkFakes('notifrealtime');
+const email = (who: string) => fakes.emailFor(who);
 
 function waitForEvent<T>(socket: ClientSocket, event: string, timeoutMs = 20000): Promise<T> {
   return new Promise<T>((resolve, reject) => {
@@ -42,11 +42,11 @@ function waitForEvent<T>(socket: ClientSocket, event: string, timeoutMs = 20000)
   });
 }
 
-function connectSocket(port: number, cookie: string): Promise<ClientSocket> {
+function connectSocket(port: number, token: string): Promise<ClientSocket> {
   const socket = ioc(`http://localhost:${port}`, {
     transports: ['websocket'],
     autoConnect: false,
-    extraHeaders: { Cookie: cookie },
+    auth: { token },
   });
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error('connect timeout')), 15000);
@@ -63,39 +63,36 @@ function connectSocket(port: number, cookie: string): Promise<ClientSocket> {
 }
 
 liveDescribe('notification realtime (live database + sockets)', () => {
-  const app = createApp();
+  const app = createApp(fakes.appDeps());
   const createdWorkspaceIds: string[] = [];
   const createdEmails: string[] = [];
 
   let server: http.Server;
   let serverPort: number;
-  let actor: ReturnType<typeof request.agent>;
+  let actor: ReturnType<typeof requestAs>;
   let ws1 = '';
   let pubId = '';
   let ritaId = '';
-  let ritaCookie = '';
-  let ottoCookie = '';
+  let ritaToken = '';
+  let ottoToken = '';
 
   async function signUp(
     who: string,
     name: string,
-  ): Promise<{ agent: ReturnType<typeof request.agent>; cookie: string; userId: string }> {
-    const agent = request.agent(app);
-    const res = await agent
-      .post('/api/auth/sign-up/email')
-      .set('Origin', ORIGIN)
-      .send({ name, email: email(who), password: PASSWORD });
-    expect(res.status).toBeLessThan(300);
+  ): Promise<{ agent: ReturnType<typeof requestAs>; token: string; userId: string }> {
+    fakes.setProfile(who, { name });
     createdEmails.push(email(who));
-    const cookies = res.headers['set-cookie'];
-    const cookie = Array.isArray(cookies) ? cookies.join('; ') : (cookies ?? '');
+    // First sight provisions the local user row through the fake directory.
+    const agent = requestAs(app, fakes, who);
+    const me = await agent.get('/api/me');
+    expect(me.status).toBe(200);
     const user = await getPrisma().user.findUniqueOrThrow({ where: { email: email(who) } });
-    return { agent, cookie, userId: user.id };
+    return { agent, token: fakes.tokenFor(who), userId: user.id };
   }
 
   beforeAll(async () => {
     server = http.createServer(app);
-    initRealtime(server);
+    initRealtime(server, fakes.appDeps());
     await new Promise<void>((resolve) => {
       server.listen(0, () => {
         const addr = server.address();
@@ -109,9 +106,9 @@ liveDescribe('notification realtime (live database + sockets)', () => {
     actor = (await signUp('actor', 'Rita Announcer')).agent;
     const rita = await signUp('rita', 'Rita');
     ritaId = rita.userId;
-    ritaCookie = rita.cookie;
+    ritaToken = rita.token;
     const otto = await signUp('otto', 'Otto');
-    ottoCookie = otto.cookie;
+    ottoToken = otto.token;
 
     const ws = await actor
       .post('/api/workspaces')
@@ -152,9 +149,9 @@ liveDescribe('notification realtime (live database + sockets)', () => {
   });
 
   it('delivers notification:new only after the row persists, to the recipient only', async () => {
-    const recipientSocket = await connectSocket(serverPort, ritaCookie);
+    const recipientSocket = await connectSocket(serverPort, ritaToken);
     const bystanderEvents: unknown[] = [];
-    const bystanderSocket = await connectSocket(serverPort, ottoCookie);
+    const bystanderSocket = await connectSocket(serverPort, ottoToken);
     bystanderSocket.on('notification:new', (ev) => bystanderEvents.push(ev));
     try {
       const eventPromise = waitForEvent<{
@@ -195,7 +192,7 @@ liveDescribe('notification realtime (live database + sockets)', () => {
   });
 
   it('delivers notification:read after readAt persists', async () => {
-    const recipientSocket = await connectSocket(serverPort, ritaCookie);
+    const recipientSocket = await connectSocket(serverPort, ritaToken);
     try {
       const created = waitForEvent<{ notification: { id: string } }>(
         recipientSocket,
@@ -213,10 +210,10 @@ liveDescribe('notification realtime (live database + sockets)', () => {
         recipientSocket,
         'notification:read',
       );
-      // A fresh agent-less request with the recipient cookie marks read.
+      // A fresh stateless request with the recipient token marks read.
       const markRes = await request(app)
         .post(`/api/workspaces/${ws1}/notifications/${notificationId}/read`)
-        .set('Cookie', ritaCookie)
+        .set(fakes.headersFor('rita'))
         .set('Origin', ORIGIN);
       expect(markRes.status).toBe(200);
 
@@ -242,11 +239,11 @@ liveDescribe('notification realtime (live database + sockets)', () => {
     const messageId = posted.body.message.id as string;
 
     // Reconnect and resync through REST (the supported recovery path).
-    const recipientSocket = await connectSocket(serverPort, ritaCookie);
+    const recipientSocket = await connectSocket(serverPort, ritaToken);
     try {
       const res = await request(app)
         .get(`/api/workspaces/${ws1}/notifications`)
-        .set('Cookie', ritaCookie)
+        .set(fakes.headersFor('rita'))
         .query({ unreadOnly: 'true', limit: '50' });
       expect(res.status).toBe(200);
       const ids = (res.body.notifications as Array<{ id: string; messageId: string | null }>).map(

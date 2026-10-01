@@ -89,6 +89,21 @@ describe('useNotificationPreferences', () => {
     }
   });
 
+  it('surfaces expired sessions distinctly from load errors', async () => {
+    vi.mocked(api.fetchNotificationPreferences).mockResolvedValueOnce({
+      ok: false,
+      unauthenticated: true,
+      kind: 'UNAUTHENTICATED',
+      message: 'You must be signed in.',
+    });
+
+    const { result } = renderHook(() => useNotificationPreferences());
+
+    await waitFor(() => {
+      expect(result.current.state.status).toBe('unauthenticated');
+    });
+  });
+
   it('optimistically updates preference and persists', async () => {
     vi.mocked(api.fetchNotificationPreferences).mockResolvedValue({
       ok: true,

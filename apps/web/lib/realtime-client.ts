@@ -1,12 +1,15 @@
 /**
- * Realtime Socket.IO client manager (Phase 4C.4).
+ * Socket.IO client singleton (Phase 4C.4, Clerk migration).
  *
- * Manages a shared, credentialed Socket.IO connection to the TeamFlow API.
- * Uses Better Auth session cookies passed automatically via withCredentials: true.
+ * The Clerk session token travels in the handshake auth payload because
+ * cookies do not cross origins to the Express API. Re-evaluated on every
+ * (re)connect so rotated sessions keep working without recreating the
+ * socket. REST remains authoritative; the socket carries live delivery only.
  */
 
 import { io, type Socket } from 'socket.io-client';
 import { getApiBaseUrl } from './config';
+import { getSessionToken } from './session-token';
 
 export type RealtimeMessageNewEvent = {
   type: 'message:new';
@@ -220,6 +223,12 @@ export function getRealtimeSocket(): Socket {
       reconnectionAttempts: Infinity,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
+      // Clerk session token travels in the handshake (cookies do not cross
+      // origins to the API). Re-evaluated on every (re)connect, so rotated
+      // sessions keep working without recreating the socket.
+      auth: (cb) => {
+        void getSessionToken().then((token) => cb({ token }));
+      },
     });
   }
   return socketInstance;

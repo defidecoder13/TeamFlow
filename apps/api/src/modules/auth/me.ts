@@ -1,17 +1,17 @@
 /**
- * Application identity route (Phase 1B + 4K.5 profile).
+ * Application identity route (Clerk migration).
  *
- * GET /api/me returns the session-derived identity of the caller.
- * PATCH /api/me updates the caller's own display name / avatar.
- * Authentication operations (sign-up/in/out) stay with Better Auth under
- * `/api/auth/*`; no custom login/logout endpoints are created here.
+ * GET /api/me returns the Clerk-derived identity of the caller (local user
+ * provisioned on first sight). PATCH /api/me updates the caller's own
+ * display name / avatar. Sign-up/in/out live with Clerk; no custom
+ * login/logout endpoints are created here.
  */
 
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
-import type { AuthContext } from './auth';
+import { requireClerkAuth, type ClerkRouteOptions } from './clerk';
 import { getPrisma } from './prisma';
-import { requireAuth, toSafeUser } from './session';
+import { toSafeUser } from './session';
 
 const MAX_USER_NAME_LENGTH = 100;
 const MAX_IMAGE_URL_LENGTH = 2048;
@@ -70,13 +70,13 @@ function firstValidationMessage(error: z.ZodError, fallback = 'Invalid request.'
   return firstIssue?.message ?? fallback;
 }
 
-export function createMeRouter(resolveAuth: () => AuthContext): Router {
+export function createMeRouter(options: ClerkRouteOptions = {}): Router {
   const router = Router();
 
-  router.get('/me', requireAuth(resolveAuth), (req: Request, res: Response) => {
+  router.get('/me', requireClerkAuth(options), (req: Request, res: Response) => {
     const user = req.authUser;
     if (!user) {
-      // Unreachable when requireAuth is wired correctly; kept as a
+      // Unreachable when requireClerkAuth is wired correctly; kept as a
       // defense-in-depth guard so identity can never be undefined.
       res
         .status(401)
@@ -86,7 +86,7 @@ export function createMeRouter(resolveAuth: () => AuthContext): Router {
     res.status(200).json({ user });
   });
 
-  router.patch('/me', requireAuth(resolveAuth), async (req: Request, res: Response) => {
+  router.patch('/me', requireClerkAuth(options), async (req: Request, res: Response) => {
     const parsed = updateMeSchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({

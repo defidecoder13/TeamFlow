@@ -12,9 +12,8 @@
  */
 
 import { Router, type NextFunction, type Request, type Response } from 'express';
-import type { AuthContext } from '../auth/index';
 import { getPrisma } from '../auth/prisma';
-import { requireAuth } from '../auth/session';
+import { requireClerkAuth, type ClerkRouteOptions } from '../auth/index';
 import { getMembershipRole } from '../workspaces/authorization';
 import { canManageInvitations } from './authorization';
 import {
@@ -61,12 +60,12 @@ function asyncRoute(handler: (req: Request, res: Response) => Promise<void>) {
   };
 }
 
-export function createWorkspaceInvitationsRouter(resolveAuth: () => AuthContext): Router {
+export function createWorkspaceInvitationsRouter(options: ClerkRouteOptions = {}): Router {
   // mergeParams: the router is mounted at `/api/workspaces/:workspaceId/...`
   // and must see the parent mount's `workspaceId` param (Express 4 drops
   // parent params from `req.params` without this option).
   const router = Router({ mergeParams: true });
-  router.use(requireAuth(resolveAuth));
+  router.use(requireClerkAuth(options));
 
   router.post(
     '/',
@@ -168,9 +167,9 @@ export function createWorkspaceInvitationsRouter(resolveAuth: () => AuthContext)
   return router;
 }
 
-export function createInvitationAcceptRouter(resolveAuth: () => AuthContext): Router {
+export function createInvitationAcceptRouter(options: ClerkRouteOptions = {}): Router {
   const router = Router();
-  router.use(requireAuth(resolveAuth));
+  router.use(requireClerkAuth(options));
 
   router.post(
     '/accept',

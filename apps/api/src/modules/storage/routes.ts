@@ -9,9 +9,8 @@
  */
 
 import { Router, type NextFunction, type Request, type Response } from 'express';
-import type { AuthContext } from '../auth/index';
 import { getPrisma } from '../auth/prisma';
-import { requireAuth } from '../auth/session';
+import { requireClerkAuth, type ClerkRouteOptions } from '../auth/index';
 import {
   AttachmentConflictError,
   AttachmentForbiddenError,
@@ -80,9 +79,9 @@ function mapAttachmentError(res: Response, error: unknown): void {
 /**
  * Message attachments router mounted at `/api/messages/:messageId/attachments`.
  */
-export function createMessageAttachmentsRouter(resolveAuth: () => AuthContext): Router {
+export function createMessageAttachmentsRouter(options: ClerkRouteOptions = {}): Router {
   const router = Router({ mergeParams: true });
-  router.use(requireAuth(resolveAuth));
+  router.use(requireClerkAuth(options));
 
   // POST /api/messages/:messageId/attachments/upload-url
   router.post(
@@ -175,9 +174,9 @@ export function createMessageAttachmentsRouter(resolveAuth: () => AuthContext): 
 /**
  * Top-level attachments router mounted at `/api/attachments`.
  */
-export function createAttachmentsRouter(resolveAuth: () => AuthContext): Router {
+export function createAttachmentsRouter(options: ClerkRouteOptions = {}): Router {
   const router = Router();
-  router.use(requireAuth(resolveAuth));
+  router.use(requireClerkAuth(options));
 
   // GET /api/attachments/:attachmentId/download-url
   router.get(

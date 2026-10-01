@@ -7,6 +7,7 @@
  */
 
 import type { ApiResult } from './messages';
+import { authedFetch } from './session-token';
 
 export interface MentionAuthor {
   id: string;
@@ -122,7 +123,7 @@ export async function fetchWorkspaceMentions(
 
   let res: Response;
   try {
-    res = await fetch(`${apiBase}${url}`, {
+    res = await authedFetch(`${apiBase}${url}`, {
       method: 'GET',
       headers: { Accept: 'application/json' },
       credentials: 'include',

@@ -1,8 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import request from 'supertest';
-import { betterAuth } from 'better-auth';
-import { memoryAdapter } from 'better-auth/adapters/memory';
 import type { PrismaClient } from '@teamflow/db';
+import { createClerkFakes } from '../../test-utils/clerk-fakes';
 import { createApp } from '../../app';
 import {
   createThreadReply,
@@ -21,6 +20,20 @@ type TxCallback = (tx: {
 }) => Promise<unknown>;
 
 const mockPrisma = {
+  user: {
+    // Deterministic clerk id mirrors createClerkFakes('threads').
+    findUnique: vi.fn(async ({ where }: { where: { clerkId: string } }) =>
+      where.clerkId === 'clerk-test-threads-user'
+        ? {
+            id: 'u-threads-1',
+            name: 'Thread Tester',
+            email: 'threads@example.invalid',
+            image: null,
+            emailVerified: false,
+          }
+        : null,
+    ),
+  },
   message: {
     findUnique: vi.fn(),
     findMany: vi.fn(),
@@ -462,24 +475,12 @@ describe('Phase 4D.1 - Thread Domain & Service Logic', () => {
 });
 
 describe('Phase 4D.1 - Thread HTTP Endpoints (createMessagesRouter)', () => {
-  const TEST_AUTH_URL = 'http://localhost:4000';
-  let auth: ReturnType<typeof createTestAuth>;
+  const fakes = createClerkFakes('threads');
   let app: ReturnType<typeof createApp>;
-
-  function createTestAuth() {
-    return betterAuth({
-      secret: 'thread-test-secret-0123456789abcdef-0123456789abcdef',
-      baseURL: TEST_AUTH_URL,
-      database: memoryAdapter({ user: [], session: [], account: [], verification: [] }),
-      emailAndPassword: { enabled: true },
-      rateLimit: { enabled: false },
-    });
-  }
 
   beforeEach(() => {
     vi.clearAllMocks();
-    auth = createTestAuth();
-    app = createApp({ auth });
+    app = createApp(fakes.appDeps());
   });
 
   it('rejects unauthenticated requests to replies endpoints with 401', async () => {
@@ -491,40 +492,30 @@ describe('Phase 4D.1 - Thread HTTP Endpoints (createMessagesRouter)', () => {
   });
 
   describe('authenticated reply operations', () => {
-    let authCookie: string;
     let userId: string;
 
     beforeEach(async () => {
-      const res = await request(app)
-        .post('/api/auth/sign-up/email')
-        .set('Origin', TEST_AUTH_URL)
-        .send({
-          name: 'Thread Tester',
-          email: 'thread-tester@teamflow.local',
-          password: 'thread-test-pass-1234',
-        });
-      expect(res.status).toBe(200);
-      const cookies = res.headers['set-cookie'];
-      authCookie = Array.isArray(cookies) ? cookies.join('; ') : (cookies ?? '');
-      userId = (res.body as { user: { id: string } }).user.id;
+      const me = await request(app).get('/api/me').set(fakes.headersFor('user'));
+      expect(me.status).toBe(200);
+      userId = (me.body as { user: { id: string } }).user.id;
     });
 
     it('rejects invalid reply body with 400 validation error', async () => {
       const emptyRes = await request(app)
         .post('/api/messages/msg-1/replies')
-        .set('Cookie', authCookie)
+        .set(fakes.headersFor('user'))
         .send({ body: '' });
       expect(emptyRes.status).toBe(400);
 
       const whitespaceRes = await request(app)
         .post('/api/messages/msg-1/replies')
-        .set('Cookie', authCookie)
+        .set(fakes.headersFor('user'))
         .send({ body: '     ' });
       expect(whitespaceRes.status).toBe(400);
 
       const overlongRes = await request(app)
         .post('/api/messages/msg-1/replies')
-        .set('Cookie', authCookie)
+        .set(fakes.headersFor('user'))
         .send({ body: 'x'.repeat(10001) });
       expect(overlongRes.status).toBe(400);
     });
@@ -534,7 +525,7 @@ describe('Phase 4D.1 - Thread HTTP Endpoints (createMessagesRouter)', () => {
 
       const res = await request(app)
         .post('/api/messages/nonexistent/replies')
-        .set('Cookie', authCookie)
+        .set(fakes.headersFor('user'))
         .send({ body: 'Reply text' });
 
       expect(res.status).toBe(404);
@@ -552,7 +543,7 @@ describe('Phase 4D.1 - Thread HTTP Endpoints (createMessagesRouter)', () => {
 
       const res = await request(app)
         .post('/api/messages/msg-1/replies')
-        .set('Cookie', authCookie)
+        .set(fakes.headersFor('user'))
         .send({ body: 'Reply text' });
 
       expect(res.status).toBe(404);
@@ -611,7 +602,7 @@ describe('Phase 4D.1 - Thread HTTP Endpoints (createMessagesRouter)', () => {
 
       const res = await request(app)
         .post('/api/messages/root-msg/replies')
-        .set('Cookie', authCookie)
+        .set(fakes.headersFor('user'))
         .send({ body: 'Valid reply' });
 
       expect(res.status).toBe(201);
@@ -647,7 +638,7 @@ describe('Phase 4D.1 - Thread HTTP Endpoints (createMessagesRouter)', () => {
     it('does not emit realtime events if reply creation fails validation', async () => {
       await request(app)
         .post('/api/messages/root-msg/replies')
-        .set('Cookie', authCookie)
+        .set(fakes.headersFor('user'))
         .send({ body: '' });
 
       expect(mockEmitMessageCreated).not.toHaveBeenCalled();
@@ -659,7 +650,7 @@ describe('Phase 4D.1 - Thread HTTP Endpoints (createMessagesRouter)', () => {
 
       await request(app)
         .post('/api/messages/missing/replies')
-        .set('Cookie', authCookie)
+        .set(fakes.headersFor('user'))
         .send({ body: 'Reply' });
 
       expect(mockEmitMessageCreated).not.toHaveBeenCalled();
@@ -677,7 +668,7 @@ describe('Phase 4D.1 - Thread HTTP Endpoints (createMessagesRouter)', () => {
 
       await request(app)
         .post('/api/messages/root-msg/replies')
-        .set('Cookie', authCookie)
+        .set(fakes.headersFor('user'))
         .send({ body: 'Reply' });
 
       expect(mockEmitMessageCreated).not.toHaveBeenCalled();
@@ -713,7 +704,7 @@ describe('Phase 4D.1 - Thread HTTP Endpoints (createMessagesRouter)', () => {
 
       const res = await request(app)
         .get('/api/messages/root-msg/replies?limit=10')
-        .set('Cookie', authCookie);
+        .set(fakes.headersFor('user'));
 
       expect(res.status).toBe(200);
       const resBody = res.body as {
@@ -729,7 +720,7 @@ describe('Phase 4D.1 - Thread HTTP Endpoints (createMessagesRouter)', () => {
     it('rejects invalid cursor with 400 validation error', async () => {
       const res = await request(app)
         .get('/api/messages/root-msg/replies?cursor=invalid-cursor')
-        .set('Cookie', authCookie);
+        .set(fakes.headersFor('user'));
 
       expect(res.status).toBe(400);
       expect((res.body as { error: { code: string } }).error.code).toBe('VALIDATION_ERROR');

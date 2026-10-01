@@ -7,6 +7,7 @@
  * are sent.
  */
 
+import { authedFetch } from './session-token';
 export interface MessageAttachment {
   id: string;
   messageId: string;
@@ -217,7 +218,7 @@ export async function fetchMessages(
   const url = `/api/channels/${encodeURIComponent(channelId)}/messages${query ? `?${query}` : ''}`;
   let res: Response;
   try {
-    res = await fetch(`${apiBase}${url}`, {
+    res = await authedFetch(`${apiBase}${url}`, {
       method: 'GET',
       headers: { Accept: 'application/json' },
       credentials: 'include',
@@ -295,7 +296,7 @@ export async function fetchThreadReplies(
   const url = `/api/messages/${encodeURIComponent(messageId)}/replies${query ? `?${query}` : ''}`;
   let res: Response;
   try {
-    res = await fetch(`${apiBase}${url}`, {
+    res = await authedFetch(`${apiBase}${url}`, {
       method: 'GET',
       headers: { Accept: 'application/json' },
       credentials: 'include',
@@ -364,7 +365,7 @@ export async function sendThreadReply(
 ): Promise<ApiResult<Message>> {
   let res: Response;
   try {
-    res = await fetch(`${apiBase}/api/messages/${encodeURIComponent(messageId)}/replies`, {
+    res = await authedFetch(`${apiBase}/api/messages/${encodeURIComponent(messageId)}/replies`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -418,7 +419,7 @@ export async function sendMessage(
 ): Promise<ApiResult<Message>> {
   let res: Response;
   try {
-    res = await fetch(`${apiBase}/api/channels/${encodeURIComponent(channelId)}/messages`, {
+    res = await authedFetch(`${apiBase}/api/channels/${encodeURIComponent(channelId)}/messages`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -472,7 +473,7 @@ export async function editMessage(
 ): Promise<ApiResult<Message>> {
   let res: Response;
   try {
-    res = await fetch(`${apiBase}/api/messages/${encodeURIComponent(messageId)}`, {
+    res = await authedFetch(`${apiBase}/api/messages/${encodeURIComponent(messageId)}`, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
@@ -528,7 +529,7 @@ export async function deleteMessage(
 ): Promise<ApiResult<Message>> {
   let res: Response;
   try {
-    res = await fetch(`${apiBase}/api/messages/${encodeURIComponent(messageId)}`, {
+    res = await authedFetch(`${apiBase}/api/messages/${encodeURIComponent(messageId)}`, {
       method: 'DELETE',
       headers: { Accept: 'application/json' },
       credentials: 'include',
@@ -708,7 +709,7 @@ export async function fetchMessageReactions(
 ): Promise<ApiResult<MessageReactionSummary[]>> {
   let res: Response;
   try {
-    res = await fetch(`${apiBase}/api/messages/${encodeURIComponent(messageId)}/reactions`, {
+    res = await authedFetch(`${apiBase}/api/messages/${encodeURIComponent(messageId)}/reactions`, {
       method: 'GET',
       headers: { Accept: 'application/json' },
       credentials: 'include',
@@ -767,7 +768,7 @@ export async function addMessageReaction(
 ): Promise<ApiResult<{ id: string; messageId: string; userId: string; emoji: string }>> {
   let res: Response;
   try {
-    res = await fetch(`${apiBase}/api/messages/${encodeURIComponent(messageId)}/reactions`, {
+    res = await authedFetch(`${apiBase}/api/messages/${encodeURIComponent(messageId)}/reactions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -833,7 +834,7 @@ export async function removeMessageReaction(
 ): Promise<ApiResult<{ success: boolean }>> {
   let res: Response;
   try {
-    res = await fetch(
+    res = await authedFetch(
       `${apiBase}/api/messages/${encodeURIComponent(messageId)}/reactions/${encodeURIComponent(emoji)}`,
       {
         method: 'DELETE',
@@ -966,7 +967,7 @@ export async function createOrGetDirectConversation(
 ): Promise<ApiResult<DirectConversation>> {
   let res: Response;
   try {
-    res = await fetch(
+    res = await authedFetch(
       `${apiBase}/api/workspaces/${encodeURIComponent(workspaceId)}/direct-messages`,
       {
         method: 'POST',
@@ -1030,7 +1031,7 @@ export async function createGroupConversation(
 ): Promise<ApiResult<DirectConversation>> {
   let res: Response;
   try {
-    res = await fetch(
+    res = await authedFetch(
       `${apiBase}/api/workspaces/${encodeURIComponent(workspaceId)}/direct-messages/group`,
       {
         method: 'POST',
@@ -1094,7 +1095,7 @@ export async function renameGroupConversation(
 ): Promise<ApiResult<DirectConversation>> {
   let res: Response;
   try {
-    res = await fetch(`${apiBase}/api/direct-messages/${encodeURIComponent(conversationId)}`, {
+    res = await authedFetch(`${apiBase}/api/direct-messages/${encodeURIComponent(conversationId)}`, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
@@ -1155,7 +1156,7 @@ export async function addConversationParticipant(
 ): Promise<ApiResult<DirectConversation>> {
   let res: Response;
   try {
-    res = await fetch(
+    res = await authedFetch(
       `${apiBase}/api/direct-messages/${encodeURIComponent(conversationId)}/participants`,
       {
         method: 'POST',
@@ -1215,7 +1216,7 @@ export async function removeConversationParticipant(
 ): Promise<ApiResult<{ success: boolean }>> {
   let res: Response;
   try {
-    res = await fetch(
+    res = await authedFetch(
       `${apiBase}/api/direct-messages/${encodeURIComponent(conversationId)}/participants/${encodeURIComponent(userId)}`,
       {
         method: 'DELETE',
@@ -1261,7 +1262,7 @@ export async function leaveGroupConversation(
 ): Promise<ApiResult<{ success: boolean }>> {
   let res: Response;
   try {
-    res = await fetch(
+    res = await authedFetch(
       `${apiBase}/api/direct-messages/${encodeURIComponent(conversationId)}/leave`,
       {
         method: 'POST',
@@ -1320,7 +1321,7 @@ export async function fetchDirectConversations(
 
   let res: Response;
   try {
-    res = await fetch(url, {
+    res = await authedFetch(url, {
       method: 'GET',
       headers: { Accept: 'application/json' },
       credentials: 'include',
@@ -1383,7 +1384,7 @@ export async function fetchDirectConversation(
 ): Promise<ApiResult<DirectConversation>> {
   let res: Response;
   try {
-    res = await fetch(`${apiBase}/api/direct-messages/${encodeURIComponent(conversationId)}`, {
+    res = await authedFetch(`${apiBase}/api/direct-messages/${encodeURIComponent(conversationId)}`, {
       method: 'GET',
       headers: { Accept: 'application/json' },
       credentials: 'include',
@@ -1440,7 +1441,7 @@ export async function fetchDirectMessages(
 
   let res: Response;
   try {
-    res = await fetch(url, {
+    res = await authedFetch(url, {
       method: 'GET',
       headers: { Accept: 'application/json' },
       credentials: 'include',
@@ -1504,7 +1505,7 @@ export async function sendDirectMessage(
 ): Promise<ApiResult<Message>> {
   let res: Response;
   try {
-    res = await fetch(
+    res = await authedFetch(
       `${apiBase}/api/direct-messages/${encodeURIComponent(conversationId)}/messages`,
       {
         method: 'POST',
@@ -1575,7 +1576,7 @@ export async function markDirectConversationRead(
 ): Promise<ApiResult<DirectMessageReadState>> {
   let res: Response;
   try {
-    res = await fetch(`${apiBase}/api/direct-messages/${encodeURIComponent(conversationId)}/read`, {
+    res = await authedFetch(`${apiBase}/api/direct-messages/${encodeURIComponent(conversationId)}/read`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

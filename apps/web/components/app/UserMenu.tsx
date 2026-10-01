@@ -2,9 +2,8 @@
  * Authenticated user profile control (Phase 1D).
  *
  * Identity comes from the real session user. Profile/Settings link to the
- * real settings pages; Sign out calls Better Auth's real sign-out, then
- * returns to /sign-in where the middleware re-verifies the (now invalid)
- * session.
+ * real settings pages; Sign out calls Clerk's real sign-out, then
+ * returns to / where the landing page reflects the signed-out state.
  */
 
 'use client';
@@ -12,8 +11,8 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
+import { useClerk } from '@clerk/nextjs';
 import type { SessionUser } from '../../lib/auth-guard';
-import { getAuthClient } from '../../lib/auth-client';
 import { clearAttachmentDownloadUrlCache } from '../../lib/attachments';
 import { disconnectRealtime } from '../../lib/realtime-client';
 import { ChevronDownIcon, SettingsIcon, SignOutIcon, PersonIcon } from './icons';
@@ -22,6 +21,7 @@ import { useMenuKeyboard } from './dialog';
 
 export function UserMenu({ user }: { user: SessionUser }) {
   const router = useRouter();
+  const { signOut: clerkSignOut } = useClerk();
   const [open, setOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const [signOutError, setSignOutError] = useState<string | null>(null);
@@ -55,24 +55,21 @@ export function UserMenu({ user }: { user: SessionUser }) {
     setSigningOut(true);
     setSignOutError(null);
     try {
-      const { error } = await getAuthClient().signOut();
-      if (error) {
-        setSignOutError('Could not sign you out. Please try again.');
-        return;
-      }
+      await clerkSignOut();
+    } catch {
+      setSignOutError('Could not sign you out. Please try again.');
+      setSigningOut(false);
+      return;
+    }
       // Tear down session-scoped client state: the Socket.IO singleton would
       // otherwise stay connected (and keep receiving) after logout. The
       // instance is retained so the next login reconnects through the normal
       // `connectRealtime` path; cached signed download URLs are dropped.
       disconnectRealtime();
       clearAttachmentDownloadUrlCache();
-      router.replace('/sign-in');
+      router.replace('/');
       router.refresh();
-    } catch {
-      setSignOutError('Could not sign you out. Please try again.');
-    } finally {
       setSigningOut(false);
-    }
   }
 
   return (

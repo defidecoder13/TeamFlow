@@ -11,9 +11,8 @@
  */
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import request from 'supertest';
-import { betterAuth } from 'better-auth';
-import { memoryAdapter } from 'better-auth/adapters/memory';
 import type { PrismaClient } from '@teamflow/db';
+import { createClerkFakes } from '../../test-utils/clerk-fakes';
 import { createApp } from '../../app';
 import { getNotificationPreferences, updateNotificationPreferences } from './preferences.service';
 import {
@@ -29,8 +28,17 @@ vi.mock('../auth/prisma', () => ({
   getPrisma: (...args: unknown[]) => mockGetPrisma(...args),
 }));
 
+const CANNED_USER = {
+  id: 'u-clerk-1',
+  name: 'Clerk User',
+  email: 'clerk@example.invalid',
+  image: null,
+  emailVerified: false,
+};
+
 function makePrisma() {
   return {
+    user: { findUnique: vi.fn().mockResolvedValue({ ...CANNED_USER }) },
     userNotificationPreference: {
       findUnique: vi.fn(),
       upsert: vi.fn(),
@@ -158,24 +166,14 @@ describe('Notification Preferences Service', () => {
 });
 
 describe('Notification Preferences Router /api/users/me/notification-preferences', () => {
-  const TEST_AUTH_URL = 'http://localhost:4000';
+  const fakes = createClerkFakes('preferences');
   let prisma: MockPrisma;
   let app: ReturnType<typeof createApp>;
-
-  function createTestAuth() {
-    return betterAuth({
-      secret: 'notif-pref-test-secret-0123456789abcdef-0123456789abcdef',
-      baseURL: TEST_AUTH_URL,
-      database: memoryAdapter({ user: [], session: [], account: [], verification: [] }),
-      emailAndPassword: { enabled: true },
-      rateLimit: { enabled: false },
-    });
-  }
 
   beforeEach(() => {
     prisma = makePrisma();
     mockGetPrisma.mockReturnValue(prisma);
-    app = createApp({ auth: createTestAuth() });
+    app = createApp(fakes.appDeps());
   });
 
   it('requires authentication for GET and PATCH', async () => {
@@ -197,21 +195,9 @@ describe('Notification Preferences Router /api/users/me/notification-preferences
       threadReplyDelivery: 'ALL',
     });
 
-    const signUpRes = await request(app)
-      .post('/api/auth/sign-up/email')
-      .set('Origin', TEST_AUTH_URL)
-      .send({
-        name: 'Pref User',
-        email: 'prefuser@example.com',
-        password: 'password123456',
-      });
-    expect(signUpRes.status).toBe(200);
-    const cookies = signUpRes.headers['set-cookie'];
-    const authCookie = Array.isArray(cookies) ? cookies.join('; ') : (cookies ?? '');
-
     const res = await request(app)
       .get('/api/users/me/notification-preferences')
-      .set('Cookie', authCookie);
+      .set(fakes.headersFor('user'));
     expect(res.status).toBe(200);
     expect(res.body).toEqual({
       mentionDelivery: 'ALL',
@@ -227,21 +213,9 @@ describe('Notification Preferences Router /api/users/me/notification-preferences
       threadReplyDelivery: 'ALL',
     });
 
-    const signUpRes = await request(app)
-      .post('/api/auth/sign-up/email')
-      .set('Origin', TEST_AUTH_URL)
-      .send({
-        name: 'Pref User',
-        email: 'prefuser2@example.com',
-        password: 'password123456',
-      });
-    expect(signUpRes.status).toBe(200);
-    const cookies = signUpRes.headers['set-cookie'];
-    const authCookie = Array.isArray(cookies) ? cookies.join('; ') : (cookies ?? '');
-
     const res = await request(app)
       .patch('/api/users/me/notification-preferences')
-      .set('Cookie', authCookie)
+      .set(fakes.headersFor('user'))
       .send({
         mentionDelivery: 'NONE',
         dmDelivery: 'NONE',
@@ -254,21 +228,9 @@ describe('Notification Preferences Router /api/users/me/notification-preferences
   });
 
   it('rejects invalid fields with 400', async () => {
-    const signUpRes = await request(app)
-      .post('/api/auth/sign-up/email')
-      .set('Origin', TEST_AUTH_URL)
-      .send({
-        name: 'Pref User',
-        email: 'prefuser3@example.com',
-        password: 'password123456',
-      });
-    expect(signUpRes.status).toBe(200);
-    const cookies = signUpRes.headers['set-cookie'];
-    const authCookie = Array.isArray(cookies) ? cookies.join('; ') : (cookies ?? '');
-
     const res = await request(app)
       .patch('/api/users/me/notification-preferences')
-      .set('Cookie', authCookie)
+      .set(fakes.headersFor('user'))
       .send({
         mentionDelivery: 'INVALID_VALUE',
       });

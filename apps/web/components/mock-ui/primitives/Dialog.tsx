@@ -119,8 +119,12 @@ export const Dialog: React.FC<DialogProps> = ({
     xl: 'max-w-xl',
   }[maxWidth];
 
-  const titleId = `dialog-title-${title.replace(/\s+/g, '-').toLowerCase()}`;
-  const descId = description ? `dialog-desc-${title.replace(/\s+/g, '-').toLowerCase()}` : undefined;
+  const titleSlug = title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  const titleId = `dialog-title-${titleSlug}`;
+  const descId = description ? `dialog-desc-${titleSlug}` : undefined;
 
   const content = (
     <div
@@ -131,6 +135,8 @@ export const Dialog: React.FC<DialogProps> = ({
         }
       }}
       aria-modal="true"
+      aria-labelledby={titleId}
+      aria-describedby={descId}
       role={role}
     >
       <div

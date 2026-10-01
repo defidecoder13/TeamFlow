@@ -1145,5 +1145,90 @@ Order can be overridden per instruction. Landing `/`, sign-in, sign-up, invite/a
 - Cross-tab sign-out unsynced; landing static for authenticated users; avatar data URLs (not object storage); silent invalid-upload ignores; no onboarding DB flag; email delivery nonexistent (local invite links by design); `WorkspaceRail` micro-label without action; hung-join timeout is fail-safe, not self-healing.
 - Working tree uncommitted — checkpoint to a branch recommended.
 
-**Phase 4 COMPLETE. No further phases pending.**
+---
+
+## Clerk Migration — Better Auth → Clerk (2026-10-01)
+
+**Scope:** full replacement (per instruction). Better Auth removed from web, API, and dependencies. No approved-UI redesigns; auth chrome (AuthLayout/brand) preserved around Clerk components.
+
+### Web changes
+- `clerkMiddleware` in `middleware.ts`: `/app` protected (fail closed), authenticated auth-page visitors bounce to safe `?next=` or `/app` via existing `decideAuthPageDestination`; matcher adds `/__clerk/:path*`. The `?next=` convention (incl. invite `?next=/invite/accept?token=…`) is preserved end to end.
+- Route conflict resolved: retired `(auth)/sign-in|sign-up` Better Auth pages; Clerk catch-all routes render `<SignIn/>`/`<SignUp/>` inside the approved `AuthLayout` + brand panels (`forceRedirectUrl` = validated `next`, fallback `/app`).
+- Session plumbing: new `lib/session-token.ts` (`authedFetch` attaches `Authorization: Bearer`; R2 signed URLs stay bare) + `ClerkSessionBridge` in root layout; 13 lib clients migrated; `use-session-user` resolves Clerk state then `GET /api/me` (same public shape).
+- Sign-out (`UserMenu`, shell) via `useClerk().signOut()` with existing teardown; landing navbar shows Sign In/Start Free when signed out, `UserButton` when signed in (`<Show>`, Core 3).
+- Retired: `SignInForm`, `SignUpForm`, `ProfileSetupStep`, `PasswordField`, `AuthSwitchLink`, `AuthSuccessPanel`, `lib/auth-client.ts`, `lib/auth-errors.ts` (+ tests).
+
+### API changes
+- New `modules/auth/clerk.ts`: `verifyBearerToken` (Clerk JWT), `provisionClerkUser` (clerkId → local user, race-safe), `requireClerkAuth`, `ClerkRouteOptions` test overrides. All 17 routers + Socket.IO handshake migrated; `/api/auth/*` Better Auth handler removed; `GET/PATCH /api/me` contract unchanged (incl. avatar rules).
+- `server.ts` requires `CLERK_SECRET_KEY` at boot (server-only; never in client code).
+- Retired: `auth.ts`, `auth.cli.ts`, Better Auth `requireAuth`/`getSessionUser`; `session.ts` keeps the safe-user projection.
+
+### Database changes
+- Migration `20261001000000_add_clerk_id`: `User.clerkId TEXT UNIQUE NULL` (existing rows keep NULL; Better Auth session/account/verification tables left dormant, no data deleted).
+
+### Dependencies
+- Added `@clerk/nextjs` (web), `@clerk/backend` (api). Removed `better-auth`, `@better-auth/prisma-adapter`.
+
+### Tests
+- New shared `apps/api/src/test-utils/clerk-fakes.ts` (deterministic verifier/directory, `requestAs`, email overrides).
+- All 26 API auth-touching suites converted (cookie agents → Bearer, sockets → handshake tokens, mocked-prisma user models).
+- Web 739/739 (retired 32 form tests; kept/updated the rest). API 559/559. Typecheck 5/5, lint pass. `clerk doctor` clean (dev instance; production not configured).
+- Live: `/` 200, `/sign-in` + `/sign-up` 200 (Clerk components), `/app` → 307 `/sign-in?next=%2Fapp`.
+
+### Remaining issues
+- Clerk production instance not configured (dev only).
+- Better Auth DB tables dormant (future cleanup migration, data-safe).
+- Browser signup test is a human step (open `/sign-up`, create account, confirm `UserButton` appears).
+- Phase 4.1 carryovers unchanged (avatar data URLs, silent upload rejects, no onboarding DB flag); cross-tab sign-out unsynced.
+
+**Phase 4 COMPLETE (Better Auth era). Clerk era begins — pending your signup test.**
+
+---
+
+## Settings Audit — /app/settings/* (2026-10-01)
+
+**Scope:** all five settings routes, every feature, backend sync, production safety. Live routes render the `mock-views/Settings*View` components; `components/app/*Content` files are unreferenced dead code (left in place, not wired anywhere).
+
+### Verified per route
+- **Index** (`/app/settings`): four cards with live meta (profile name, member count, workspace role, notification summary). Fixed: cards were clickable `div`s with no keyboard/a11y support → real `<button>`s with focus rings; unauthenticated branch gained "Go to sign in".
+- **Profile** (`/app/settings/profile`): name + avatar → `PATCH /api/me` (http URL / downscaled data URL / clear), store sync, toasts, per-field errors. Backend schema + safe shape covered live.
+- **Members** (`/app/settings/members`): search filter, role select (OWNER-only UI; API enforces OWNER server-side), remove + revoke confirm dialogs with pending states, invite dialog entry (OWNER/ADMIN UI; API enforces), pending list with expiry, per-action errors with dismiss, post-invite list refresh. All error kinds mapped (401/403/404/validation/failed).
+- **Workspace** (`/app/settings/workspace`): rename (OWNER/ADMIN UI; API `canEditMetadata`), typed-confirm delete (OWNER-only UI + API), store removal + `/app` navigation + realtime fan-out on delete, toasts, focused field errors.
+- **Notifications** (`/app/settings/notifications`): draft/dirty tracking, optimistic save with rollback, success + save/load alerts with retry/dismiss. Fixed: expired sessions collapsed into a retry-loop error — the hook now surfaces `unauthenticated` distinctly and the view offers "Go to sign in".
+
+### Backend sync
+- Role changes/removals/deletes: OWNER-only server-side; rename: OWNER/ADMIN; invites: OWNER/ADMIN; all others 404 non-enumerating. UI gating matches server policy everywhere; 403s render safe messages (no internals leak).
+- Client status mapping verified against server codes (204 delete, 401/403/404, strict-body 400s).
+
+### Verification
+- Targeted web: settings views + members/workspaces/invitations/profile/preferences libs **123/123** across runs (34 + 89).
+- API settings suites live: workspaces, workspace-members, invitations, notification-preferences, auth me/profile — **70/70**.
+- Full web suite: **752/752** (75 files, sequential, single run). Typecheck 5/5, lint pass.
+- Live: `/app/settings` + `/app/settings/members` → 307 bounce unauthenticated (middleware gate intact).
+
+### Remaining issues
+- `components/app/*Content` files are dead (unreferenced); kept, not deleted.
+- Save-path 401 mid-edit on notifications reverts + messages honestly; navigation to sign-in is via shell, not inline.
+- Phase 4.1 carryovers unchanged (avatar data URLs, silent upload rejects, no onboarding DB flag).
+
+---
+
+## Pre-Deploy Audit (2026-10-01)
+
+**Verdict: code is deploy-ready; deployment is blocked only on production provisioning (below).**
+
+### Certification
+- Web **752/752** (75 files) · API **559/559** (49 files) · typecheck 5/5 · lint clean.
+- Production builds pass: Next.js (15 routes + middleware) and API `tsc` build.
+- Page-by-page: all 14 routes diagnosed — no stale Better Auth references, no TODOs, no console.logs, no server-side session access in web, coverage at view level for every route.
+- Live contracts: public routes 200; all `/app/*` → 307 with correct `?next=`; API returns standard 401/404 envelopes for missing/bad tokens; Socket.IO rejects tokenless handshakes.
+
+### Deploy blockers (all provisioning, no code)
+1. **Clerk production instance** — dev keys only. Create prod instance, set prod `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` + `CLERK_SECRET_KEY`, rebuild web (public keys bake at build time).
+2. **Production env matrix** — web: API URL, Clerk keys, redirect URLs. API: `CLERK_SECRET_KEY`, prod `DATABASE_URL`, `CORS_ORIGIN` = prod web origin, R2 set, `PORT`.
+3. **Database migrations** — run `prisma migrate deploy` against prod DB (includes `20261001000000_add_clerk_id`).
+4. **R2 bucket** — reachable in dev; provision + env for prod.
+5. **Human signup test** — create a real account in the deployed env, confirm workspace flow.
+6. **Housekeeping (non-blocking)** — ~30 `.disabled` test files, dormant Better Auth tables, dead `*Content` components.
+
 

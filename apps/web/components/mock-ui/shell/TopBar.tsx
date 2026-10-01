@@ -4,6 +4,7 @@ import { useShell } from '../../../lib/shell-context';
 import { useRouter } from '../../../lib/mock-hooks/useRouter';
 import { useMenuKeyboard } from '../../../lib/mock-hooks/useMenuKeyboard';
 import { Avatar } from '@/components/ui/Avatar';
+import { Dialog } from '../primitives/Dialog';
 import {
   Search,
   Bell,
@@ -52,6 +53,8 @@ export const TopBar: React.FC = () => {
   });
 
   const [isUserMenuOpen, setUserMenuOpen] = useState(false);
+  const [isSignOutOpen, setSignOutOpen] = useState(false);
+  const [isSigningOut, setSigningOut] = useState(false);
   const userTriggerRef = useRef<HTMLButtonElement>(null);
   const userMenu = useMenuKeyboard({
     isOpen: isUserMenuOpen,
@@ -84,8 +87,15 @@ export const TopBar: React.FC = () => {
   };
 
   const handleSignOut = async () => {
-    setUserMenuOpen(false);
-    await signOut();
+    if (isSigningOut) {
+      return;
+    }
+    setSigningOut(true);
+    try {
+      await signOut();
+    } finally {
+      setSigningOut(false);
+    }
   };
 
   const userName = currentUser?.name ?? '…';
@@ -308,7 +318,10 @@ export const TopBar: React.FC = () => {
               <button
                 role="menuitem"
                 tabIndex={userMenu.activeIndex === 2 ? 0 : -1}
-                onClick={() => void handleSignOut()}
+                onClick={() => {
+                  setUserMenuOpen(false);
+                  setSignOutOpen(true);
+                }}
                 className="w-full text-left px-2.5 py-1.5 text-[13px] text-[#C94A45] hover:bg-red-50 rounded-[6px] flex items-center gap-2 transition-colors"
               >
                 <LogOut className="w-4 h-4 text-[#C94A45]" />
@@ -318,6 +331,40 @@ export const TopBar: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* Sign-out confirmation */}
+      <Dialog
+        isOpen={isSignOutOpen}
+        onClose={() => {
+          if (!isSigningOut) {
+            setSignOutOpen(false);
+          }
+        }}
+        title="Sign out of TeamFlow?"
+        description="You'll be signed out on this device and returned to the home page."
+        role="alertdialog"
+        maxWidth="sm"
+      >
+        <div className="flex items-center justify-end gap-2">
+          <button
+            type="button"
+            disabled={isSigningOut}
+            onClick={() => setSignOutOpen(false)}
+            className="rounded-[8px] px-4 py-2 text-[13px] font-medium text-[#171A21] transition-colors hover:bg-[#F1F0EE] disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-[#3157D5]"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={isSigningOut}
+            aria-busy={isSigningOut}
+            onClick={() => void handleSignOut()}
+            className="rounded-[8px] bg-[#C94A45] px-4 py-2 text-[13px] font-medium text-white transition-colors hover:bg-[#A93A35] disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#C94A45] active:scale-[0.98]"
+          >
+            {isSigningOut ? 'Signing out…' : 'Sign out'}
+          </button>
+        </div>
+      </Dialog>
     </header>
   );
 };

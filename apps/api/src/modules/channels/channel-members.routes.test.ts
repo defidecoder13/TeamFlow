@@ -1,22 +1,22 @@
 import { randomUUID } from 'node:crypto';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { createClerkFakes, requestAs } from '../../test-utils/clerk-fakes';
 import { createApp } from '../../app';
 import { getPrisma } from '../auth/prisma';
 
 vi.setConfig({ testTimeout: 45000, hookTimeout: 180000 });
 
-const LIVE =
-  !!process.env.DATABASE_URL && !!process.env.BETTER_AUTH_SECRET && !!process.env.BETTER_AUTH_URL;
+const LIVE = !!process.env.DATABASE_URL && !!process.env.CLERK_SECRET_KEY;
 const liveDescribe = LIVE ? describe : describe.skip;
 
-const ORIGIN = process.env.BETTER_AUTH_URL ?? 'http://localhost:4000';
+const ORIGIN = 'http://localhost:4000';
 const RUN = `${Date.now().toString(36)}${randomUUID().slice(0, 8)}`;
-const email = (who: string) => `chm-${RUN}-${who}@example.invalid`;
-const PASSWORD = 'channel-member-test-0123456789';
+const fakes = createClerkFakes('channel-members');
+const email = (who: string) => fakes.emailFor(who);
 
 liveDescribe('private channel members (live database)', () => {
-  const app = createApp();
+  const app = createApp(fakes.appDeps());
   const createdWorkspaceIds: string[] = [];
   const createdEmails: string[] = [];
 
@@ -26,22 +26,20 @@ liveDescribe('private channel members (live database)', () => {
   let privateId = '';
   let publicSlug = '';
 
-  let owner: ReturnType<typeof request.agent>;
-  let admin: ReturnType<typeof request.agent>;
-  let member: ReturnType<typeof request.agent>;
-  let outsider: ReturnType<typeof request.agent>;
-  let second: ReturnType<typeof request.agent>;
-  let target: ReturnType<typeof request.agent>;
+  let owner: ReturnType<typeof requestAs>;
+  let admin: ReturnType<typeof requestAs>;
+  let member: ReturnType<typeof requestAs>;
+  let outsider: ReturnType<typeof requestAs>;
+  let second: ReturnType<typeof requestAs>;
+  let target: ReturnType<typeof requestAs>;
 
-  async function signUp(who: string, name: string) {
-    const agent = request.agent(app);
-    const res = await agent
-      .post('/api/auth/sign-up/email')
-      .set('Origin', ORIGIN)
-      .send({ name, email: email(who), password: PASSWORD });
-    expect(res.status).toBeLessThan(300);
+  async function signUp(who: string, name: string): Promise<ReturnType<typeof requestAs>> {
+    fakes.setProfile(who, { name });
     createdEmails.push(email(who));
-    return agent;
+    // First sight provisions the local user row through the fake directory.
+    const me = await request(app).get('/api/me').set(fakes.headersFor(who));
+    expect(me.status).toBe(200);
+    return requestAs(app, fakes, who);
   }
 
   async function userIdFor(who: string) {
@@ -122,10 +120,10 @@ liveDescribe('private channel members (live database)', () => {
   });
 
   // Helper to get members
-  const listMembers = (agent: ReturnType<typeof request.agent>, ws: string, slug: string) =>
+  const listMembers = (agent: ReturnType<typeof requestAs>, ws: string, slug: string) =>
     agent.get(`/api/workspaces/${ws}/channels/${slug}/members`);
   const addMember = (
-    agent: ReturnType<typeof request.agent>,
+    agent: ReturnType<typeof requestAs>,
     ws: string,
     slug: string,
     userId: string,
@@ -135,7 +133,7 @@ liveDescribe('private channel members (live database)', () => {
       .set('Origin', ORIGIN)
       .send({ userId });
   const removeMember = (
-    agent: ReturnType<typeof request.agent>,
+    agent: ReturnType<typeof requestAs>,
     ws: string,
     slug: string,
     userId: string,
@@ -210,13 +208,8 @@ liveDescribe('private channel members (live database)', () => {
     await getPrisma().workspaceMembership.create({
       data: { id: randomUUID(), workspaceId: ws1, userId: anotherId, role: 'MEMBER' },
     });
-    // Need an agent for newMember; sign in again to get session
-    const newMemberAgent = request.agent(app);
-    const signInRes = await newMemberAgent
-      .post('/api/auth/sign-in/email')
-      .set('Origin', ORIGIN)
-      .send({ email: email('newmember'), password: PASSWORD });
-    expect(signInRes.status).toBeLessThan(300);
+    // Stateless Bearer auth needs no second session: reuse the identity.
+    const newMemberAgent = requestAs(app, fakes, 'newmember');
     expect((await addMember(newMemberAgent, ws1, privateSlug, anotherId)).status).toBe(403);
 
     // Unauthenticated
@@ -277,12 +270,7 @@ liveDescribe('private channel members (live database)', () => {
     const targetId = await userIdFor('target');
     await addMember(owner, ws1, privateSlug, targetId);
     // newMember is MEMBER and private member but not OWNER/ADMIN/creator → should be 403 when trying to remove
-    const newMemberAgent = request.agent(app);
-    const signInRes = await newMemberAgent
-      .post('/api/auth/sign-in/email')
-      .set('Origin', ORIGIN)
-      .send({ email: email('newmember'), password: PASSWORD });
-    expect(signInRes.status).toBeLessThan(300);
+    const newMemberAgent = requestAs(app, fakes, 'newmember');
     expect((await removeMember(newMemberAgent, ws1, privateSlug, targetId)).status).toBe(403);
     expect(
       (

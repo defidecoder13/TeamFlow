@@ -9,9 +9,8 @@
  */
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import request from 'supertest';
-import { betterAuth } from 'better-auth';
-import { memoryAdapter } from 'better-auth/adapters/memory';
 import type { PrismaClient } from '@teamflow/db';
+import { createClerkFakes } from '../../test-utils/clerk-fakes';
 import { createApp } from '../../app';
 import { decodeNotificationCursor, encodeNotificationCursor } from './cursor';
 import {
@@ -37,8 +36,17 @@ vi.mock('../realtime/index', () => ({
   emitNotificationReadAll: mockEmitNotificationReadAll,
 }));
 
+const CANNED_USER = {
+  id: 'u-clerk-1',
+  name: 'Clerk User',
+  email: 'clerk@example.invalid',
+  image: null,
+  emailVerified: false,
+};
+
 function makePrisma() {
   return {
+    user: { findUnique: vi.fn().mockResolvedValue({ ...CANNED_USER }) },
     workspaceMembership: { findUnique: vi.fn() },
     notification: {
       findMany: vi.fn().mockResolvedValue([]),
@@ -276,22 +284,12 @@ describe('markAllNotificationsRead service', () => {
 });
 
 describe('notification HTTP endpoints (mocked database)', () => {
-  const TEST_AUTH_URL = 'http://localhost:4000';
+  const fakes = createClerkFakes('notifications');
   let app: ReturnType<typeof createApp>;
-
-  function createTestAuth() {
-    return betterAuth({
-      secret: 'notif-test-secret-0123456789abcdef-0123456789abcdef',
-      baseURL: TEST_AUTH_URL,
-      database: memoryAdapter({ user: [], session: [], account: [], verification: [] }),
-      emailAndPassword: { enabled: true },
-      rateLimit: { enabled: false },
-    });
-  }
 
   beforeEach(() => {
     vi.resetAllMocks();
-    app = createApp({ auth: createTestAuth() });
+    app = createApp(fakes.appDeps());
   });
 
   it('rejects unauthenticated access with 401', async () => {
@@ -306,7 +304,6 @@ describe('notification HTTP endpoints (mocked database)', () => {
   });
 
   describe('realtime emission on read transitions (Phase 4H.6)', () => {
-    let authCookie: string;
     let userId: string;
     let mockPrisma: MockPrisma;
 
@@ -314,18 +311,8 @@ describe('notification HTTP endpoints (mocked database)', () => {
       mockPrisma = makePrisma();
       mockGetPrisma.mockReturnValue(mockPrisma);
       mockPrisma.workspaceMembership.findUnique.mockResolvedValue({ role: 'MEMBER' });
-      const res = await request(app)
-        .post('/api/auth/sign-up/email')
-        .set('Origin', TEST_AUTH_URL)
-        .send({
-          name: 'Notif Reader',
-          email: `notif-reader-${Date.now()}-${Math.random().toString(36).slice(2)}@teamflow.local`,
-          password: 'notif-test-password-1234',
-        });
-      expect(res.status).toBe(200);
-      const cookies = res.headers['set-cookie'];
-      authCookie = Array.isArray(cookies) ? cookies.join('; ') : (cookies ?? '');
-      userId = (res.body as { user: { id: string } }).user.id;
+      // Provisioned identity comes from the canned mock user.
+      userId = CANNED_USER.id;
     });
 
     it('emits notification:read only on an actual unread → read transition', async () => {
@@ -335,7 +322,7 @@ describe('notification HTTP endpoints (mocked database)', () => {
       );
       const res = await request(app)
         .post('/api/workspaces/ws-1/notifications/n-1/read')
-        .set('Cookie', authCookie);
+        .set(fakes.headersFor('reader'));
       expect(res.status).toBe(200);
       expect(mockEmitNotificationRead).toHaveBeenCalledTimes(1);
       expect(mockEmitNotificationRead).toHaveBeenCalledWith(
@@ -350,7 +337,7 @@ describe('notification HTTP endpoints (mocked database)', () => {
       mockPrisma.notification.updateMany.mockResolvedValue({ count: 0 });
       const retry = await request(app)
         .post('/api/workspaces/ws-1/notifications/n-1/read')
-        .set('Cookie', authCookie);
+        .set(fakes.headersFor('reader'));
       expect(retry.status).toBe(200);
       expect(mockEmitNotificationRead).not.toHaveBeenCalled();
     });
@@ -360,7 +347,7 @@ describe('notification HTTP endpoints (mocked database)', () => {
       mockPrisma.notification.findUnique.mockResolvedValue(null);
       const res = await request(app)
         .post('/api/workspaces/ws-1/notifications/n-missing/read')
-        .set('Cookie', authCookie);
+        .set(fakes.headersFor('reader'));
       expect(res.status).toBe(404);
       expect(mockEmitNotificationRead).not.toHaveBeenCalled();
       expect(mockEmitNotificationReadAll).not.toHaveBeenCalled();
@@ -370,7 +357,7 @@ describe('notification HTTP endpoints (mocked database)', () => {
       mockPrisma.notification.updateMany.mockResolvedValue({ count: 2 });
       const res = await request(app)
         .post('/api/workspaces/ws-1/notifications/read-all')
-        .set('Cookie', authCookie);
+        .set(fakes.headersFor('reader'));
       expect(res.status).toBe(200);
       expect(res.body).toEqual({ updatedCount: 2 });
       expect(mockEmitNotificationReadAll).toHaveBeenCalledTimes(1);
@@ -384,7 +371,7 @@ describe('notification HTTP endpoints (mocked database)', () => {
       mockPrisma.notification.updateMany.mockResolvedValue({ count: 0 });
       const noop = await request(app)
         .post('/api/workspaces/ws-1/notifications/read-all')
-        .set('Cookie', authCookie);
+        .set(fakes.headersFor('reader'));
       expect(noop.status).toBe(200);
       expect(noop.body).toEqual({ updatedCount: 0 });
       expect(mockEmitNotificationReadAll).not.toHaveBeenCalled();

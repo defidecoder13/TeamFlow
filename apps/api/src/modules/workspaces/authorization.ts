@@ -3,7 +3,7 @@
  *
  * Reusable membership checks so routes never duplicate session/role logic:
  *
- *   requireAuth → getMembershipRole → can* check → controller/service
+ *   requireClerkAuth → getMembershipRole → can* check → controller/service
  *
  * The user ID always comes from the session (`req.authUser`). Role semantics:
  * OWNER = full workspace control, ADMIN = metadata administration (no delete),

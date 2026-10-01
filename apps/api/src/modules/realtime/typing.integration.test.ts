@@ -12,11 +12,9 @@
  */
 
 import http from 'node:http';
-import { betterAuth } from 'better-auth';
-import { memoryAdapter } from 'better-auth/adapters/memory';
 import { io as ioc, type Socket as ClientSocket } from 'socket.io-client';
-import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createClerkFakes } from '../../test-utils/clerk-fakes';
 import { createApp } from '../../app';
 import { closeRealtime, initRealtime, typingRegistry } from './index';
 
@@ -28,24 +26,20 @@ vi.mock('../auth/prisma', () => ({
   getPrisma: (...args: unknown[]) => mockGetPrisma(...args),
 }));
 
-const TEST_AUTH_URL = 'http://localhost:4000';
+const fakes = createClerkFakes('typing');
 
-function createTestAuth() {
-  return betterAuth({
-    secret: 'typing-test-secret-0123456789abcdef-0123456789abcdef',
-    baseURL: TEST_AUTH_URL,
-    database: memoryAdapter({ user: [], session: [], account: [], verification: [] }),
-    emailAndPassword: { enabled: true },
-    rateLimit: { enabled: false },
-  });
-}
+const TYPING_USERS: Record<string, { id: string; name: string; email: string; image: null; emailVerified: boolean }> = {
+  [fakes.clerkIdFor('user1')]: { id: 'u-typ-1', name: 'User One', email: fakes.emailFor('user1'), image: null, emailVerified: false },
+  [fakes.clerkIdFor('user2')]: { id: 'u-typ-2', name: 'User Two', email: fakes.emailFor('user2'), image: null, emailVerified: false },
+  [fakes.clerkIdFor('user3')]: { id: 'u-typ-3', name: 'Outsider', email: fakes.emailFor('user3'), image: null, emailVerified: false },
+};
 
 describe('Typing Indicator Backend Integration (Phase 4I.4)', () => {
   let server: http.Server;
   let serverPort: number;
-  let auth: ReturnType<typeof createTestAuth>;
   let app: ReturnType<typeof createApp>;
   let prismaMock: {
+    user: { findUnique: ReturnType<typeof vi.fn> };
     workspaceMembership: {
       findUnique: ReturnType<typeof vi.fn>;
       findMany: ReturnType<typeof vi.fn>;
@@ -64,20 +58,20 @@ describe('Typing Indicator Backend Integration (Phase 4I.4)', () => {
     };
   };
 
-  let user1Cookie: string;
+  let user1Token: string;
   let user1Id: string;
-  let user2Cookie: string;
+  let user2Token: string;
   let user2Id: string;
-  let user3Cookie: string;
+  let user3Token: string;
 
   const workspaceId = 'ws-test-typing-123';
   const channelId = 'ch-test-typing-123';
   const conversationId = 'conv-test-typing-123';
 
-  function createClient(cookie?: string): ClientSocket {
+  function createClient(token?: string): ClientSocket {
     return ioc(`http://localhost:${serverPort}`, {
       autoConnect: false,
-      extraHeaders: cookie ? { cookie } : {},
+      auth: token ? { token } : undefined,
       transports: ['websocket'],
       reconnection: false,
     });
@@ -99,10 +93,9 @@ describe('Typing Indicator Backend Integration (Phase 4I.4)', () => {
   }
 
   beforeAll(async () => {
-    auth = createTestAuth();
-    app = createApp({ auth });
+    app = createApp(fakes.appDeps());
     server = http.createServer(app);
-    initRealtime(server, () => auth);
+    initRealtime(server, fakes.appDeps());
 
     await new Promise<void>((resolve) => {
       server.listen(0, () => {
@@ -114,36 +107,11 @@ describe('Typing Indicator Backend Integration (Phase 4I.4)', () => {
       });
     });
 
-    const agent = request.agent(app);
-
-    // Sign up User 1
-    const res1 = await agent
-      .post('/api/auth/sign-up/email')
-      .set('Origin', TEST_AUTH_URL)
-      .send({ name: 'User One', email: 'user1@example.com', password: 'password12345' });
-    user1Cookie = Array.isArray(res1.headers['set-cookie'])
-      ? res1.headers['set-cookie'][0]!
-      : (res1.headers['set-cookie'] as unknown as string);
-    user1Id = res1.body.user.id;
-
-    // Sign up User 2
-    const res2 = await agent
-      .post('/api/auth/sign-up/email')
-      .set('Origin', TEST_AUTH_URL)
-      .send({ name: 'User Two', email: 'user2@example.com', password: 'password12345' });
-    user2Cookie = Array.isArray(res2.headers['set-cookie'])
-      ? res2.headers['set-cookie'][0]!
-      : (res2.headers['set-cookie'] as unknown as string);
-    user2Id = res2.body.user.id;
-
-    // Sign up User 3 (outsider)
-    const res3 = await agent
-      .post('/api/auth/sign-up/email')
-      .set('Origin', TEST_AUTH_URL)
-      .send({ name: 'Outsider', email: 'outsider@example.com', password: 'password12345' });
-    user3Cookie = Array.isArray(res3.headers['set-cookie'])
-      ? res3.headers['set-cookie'][0]!
-      : (res3.headers['set-cookie'] as unknown as string);
+    user1Token = fakes.tokenFor('user1');
+    user1Id = 'u-typ-1';
+    user2Token = fakes.tokenFor('user2');
+    user2Id = 'u-typ-2';
+    user3Token = fakes.tokenFor('user3');
   });
 
   afterAll(async () => {
@@ -157,6 +125,11 @@ describe('Typing Indicator Backend Integration (Phase 4I.4)', () => {
     typingRegistry.clear();
 
     prismaMock = {
+      user: {
+        findUnique: vi.fn(async ({ where }: { where: { clerkId: string } }) =>
+          TYPING_USERS[where.clerkId] ? { ...TYPING_USERS[where.clerkId] } : null,
+        ),
+      },
       workspaceMembership: {
         findUnique: vi.fn(
           async ({
@@ -251,15 +224,15 @@ describe('Typing Indicator Backend Integration (Phase 4I.4)', () => {
     mockGetPrisma.mockReturnValue(prismaMock);
   });
 
-  async function createConnectedClient(cookie?: string): Promise<ClientSocket> {
-    const client = createClient(cookie);
+  async function createConnectedClient(token?: string): Promise<ClientSocket> {
+    const client = createClient(token);
     await connectClient(client);
     return client;
   }
 
   it('delivers typing:started and typing:stopped to channel peers while excluding sender', async () => {
-    const client1 = await createConnectedClient(user1Cookie);
-    const client2 = await createConnectedClient(user2Cookie);
+    const client1 = await createConnectedClient(user1Token);
+    const client2 = await createConnectedClient(user2Token);
 
     // Both join channel room
     await new Promise((res) => client1.emit('channel:join', { channelId }, res));
@@ -312,8 +285,8 @@ describe('Typing Indicator Backend Integration (Phase 4I.4)', () => {
   });
 
   it('delivers typing:started and typing:stopped to direct conversation peers while excluding sender', async () => {
-    const client1 = await createConnectedClient(user1Cookie);
-    const client2 = await createConnectedClient(user2Cookie);
+    const client1 = await createConnectedClient(user1Token);
+    const client2 = await createConnectedClient(user2Token);
 
     await new Promise((res) => client1.emit('direct:join', { conversationId }, res));
     await new Promise((res) => client2.emit('direct:join', { conversationId }, res));
@@ -353,8 +326,8 @@ describe('Typing Indicator Backend Integration (Phase 4I.4)', () => {
   });
 
   it('enforces authorization for private channels and unauthorized users', async () => {
-    const client1 = await createConnectedClient(user1Cookie); // Member of private channel
-    const client3 = await createConnectedClient(user3Cookie); // Outsider
+    const client1 = await createConnectedClient(user1Token); // Member of private channel
+    const client3 = await createConnectedClient(user3Token); // Outsider
 
     // Outsider trying to start typing in public channel where not member of workspace
     const resOutsider = await new Promise<{ ok: boolean; error?: string }>((res) => {
@@ -381,7 +354,7 @@ describe('Typing Indicator Backend Integration (Phase 4I.4)', () => {
   });
 
   it('enforces authorization for direct conversations', async () => {
-    const client3 = await createConnectedClient(user3Cookie); // Non-participant
+    const client3 = await createConnectedClient(user3Token); // Non-participant
 
     const res = await new Promise<{ ok: boolean; error?: string }>((res) => {
       client3.emit('typing:start', { conversationId }, res);
@@ -393,7 +366,7 @@ describe('Typing Indicator Backend Integration (Phase 4I.4)', () => {
   });
 
   it('rejects invalid payloads and unauthenticated sockets', async () => {
-    const client1 = await createConnectedClient(user1Cookie);
+    const client1 = await createConnectedClient(user1Token);
 
     // Both channelId and conversationId provided
     const resBoth = await new Promise<{ ok: boolean; error?: string }>((res) => {
@@ -417,8 +390,8 @@ describe('Typing Indicator Backend Integration (Phase 4I.4)', () => {
   });
 
   it('cleans up typing state and emits typing:stopped upon socket disconnect', async () => {
-    const client1 = await createConnectedClient(user1Cookie);
-    const client2 = await createConnectedClient(user2Cookie);
+    const client1 = await createConnectedClient(user1Token);
+    const client2 = await createConnectedClient(user2Token);
 
     await new Promise((res) => client1.emit('channel:join', { channelId }, res));
     await new Promise((res) => client2.emit('channel:join', { channelId }, res));
@@ -449,9 +422,9 @@ describe('Typing Indicator Backend Integration (Phase 4I.4)', () => {
   });
 
   it('keeps typing active across multiple sockets/tabs until all stop or disconnect', async () => {
-    const client1Tab1 = await createConnectedClient(user1Cookie);
-    const client1Tab2 = await createConnectedClient(user1Cookie);
-    const client2 = await createConnectedClient(user2Cookie);
+    const client1Tab1 = await createConnectedClient(user1Token);
+    const client1Tab2 = await createConnectedClient(user1Token);
+    const client2 = await createConnectedClient(user2Token);
 
     await new Promise((res) => client2.emit('channel:join', { channelId }, res));
 

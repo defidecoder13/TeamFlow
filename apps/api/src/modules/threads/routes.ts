@@ -2,14 +2,13 @@
  * Workspace threads HTTP boundary (Audit 11).
  *
  * GET `/api/workspaces/:workspaceId/threads` — list roots the caller
- * participates in, newest activity first. Behind `requireAuth`; membership
+ * participates in, newest activity first. Behind `requireClerkAuth`; membership
  * resolves inside the service (shared 404 for missing/inaccessible).
  */
 
 import { Router, type NextFunction, type Request, type Response } from 'express';
-import type { AuthContext } from '../auth/index';
 import { getPrisma } from '../auth/prisma';
-import { requireAuth } from '../auth/session';
+import { requireClerkAuth, type ClerkRouteOptions } from '../auth/index';
 import {
   listWorkspaceThreads,
   ThreadNotFoundError,
@@ -43,11 +42,11 @@ function asyncRoute(handler: (req: Request, res: Response) => Promise<void>) {
   };
 }
 
-export function createWorkspaceThreadsRouter(resolveAuth: () => AuthContext): Router {
+export function createWorkspaceThreadsRouter(options: ClerkRouteOptions = {}): Router {
   // mergeParams: mounted at `/api/workspaces/:workspaceId/threads` and must
   // see the parent mount's `workspaceId`.
   const router = Router({ mergeParams: true });
-  router.use(requireAuth(resolveAuth));
+  router.use(requireClerkAuth(options));
 
   router.get(
     '/',

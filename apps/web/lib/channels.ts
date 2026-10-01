@@ -6,6 +6,7 @@
  * are runtime-validated before use; failures are values with safe messages.
  */
 
+import { authedFetch } from './session-token';
 export const CHANNEL_TYPES = ['PUBLIC', 'PRIVATE'] as const;
 
 export type ChannelType = (typeof CHANNEL_TYPES)[number];
@@ -118,7 +119,7 @@ export async function fetchChannels(
 ): Promise<FetchChannelsResult> {
   let response: Response;
   try {
-    response = await fetch(channelsUrl(apiBaseUrl, workspaceId), {
+    response = await authedFetch(channelsUrl(apiBaseUrl, workspaceId), {
       credentials: 'include',
       cache: 'no-store',
     });
@@ -149,7 +150,7 @@ export async function fetchChannel(
 ): Promise<FetchChannelResult> {
   let response: Response;
   try {
-    response = await fetch(channelsUrl(apiBaseUrl, workspaceId, slug), {
+    response = await authedFetch(channelsUrl(apiBaseUrl, workspaceId, slug), {
       credentials: 'include',
       cache: 'no-store',
     });
@@ -203,7 +204,7 @@ export async function createChannel(
 ): Promise<CreateChannelResult> {
   let response: Response;
   try {
-    response = await fetch(channelsUrl(apiBaseUrl, workspaceId), {
+    response = await authedFetch(channelsUrl(apiBaseUrl, workspaceId), {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
@@ -288,7 +289,7 @@ export async function fetchChannelMembers(
 ): Promise<FetchChannelMembersResult> {
   let response: Response;
   try {
-    response = await fetch(`${channelsUrl(apiBaseUrl, workspaceId, channelSlug)}/members`, {
+    response = await authedFetch(`${channelsUrl(apiBaseUrl, workspaceId, channelSlug)}/members`, {
       credentials: 'include',
       cache: 'no-store',
     });
@@ -321,7 +322,7 @@ export async function addChannelMember(
 ): Promise<AddChannelMemberResult> {
   let response: Response;
   try {
-    response = await fetch(`${channelsUrl(apiBaseUrl, workspaceId, channelSlug)}/members`, {
+    response = await authedFetch(`${channelsUrl(apiBaseUrl, workspaceId, channelSlug)}/members`, {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
@@ -362,7 +363,7 @@ export async function removeChannelMember(
 ): Promise<RemoveChannelMemberResult> {
   let response: Response;
   try {
-    response = await fetch(
+    response = await authedFetch(
       `${channelsUrl(apiBaseUrl, workspaceId, channelSlug)}/members/${encodeURIComponent(userId)}`,
       { method: 'DELETE', credentials: 'include' },
     );
@@ -418,7 +419,7 @@ export async function updateChannel(
   }
   let response: Response;
   try {
-    response = await fetch(channelsUrl(apiBaseUrl, workspaceId, slug), {
+    response = await authedFetch(channelsUrl(apiBaseUrl, workspaceId, slug), {
       method: 'PATCH',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
@@ -476,7 +477,7 @@ export async function deleteChannel(
 ): Promise<DeleteChannelResult> {
   let response: Response;
   try {
-    response = await fetch(channelsUrl(apiBaseUrl, workspaceId, slug), {
+    response = await authedFetch(channelsUrl(apiBaseUrl, workspaceId, slug), {
       method: 'DELETE',
       credentials: 'include',
       cache: 'no-store',
@@ -511,7 +512,7 @@ export async function leaveChannel(
 ): Promise<LeaveChannelResult> {
   let response: Response;
   try {
-    response = await fetch(`${channelsUrl(apiBaseUrl, workspaceId, slug)}/members/me`, {
+    response = await authedFetch(`${channelsUrl(apiBaseUrl, workspaceId, slug)}/members/me`, {
       method: 'DELETE',
       credentials: 'include',
       cache: 'no-store',
@@ -544,7 +545,7 @@ export async function updateChannelUserState(
 ): Promise<UpdateChannelUserStateResult> {
   let response: Response;
   try {
-    response = await fetch(`${channelsUrl(apiBaseUrl, workspaceId, slug)}/user-state`, {
+    response = await authedFetch(`${channelsUrl(apiBaseUrl, workspaceId, slug)}/user-state`, {
       method: 'PATCH',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
@@ -580,7 +581,7 @@ export async function markChannelRead(
 ): Promise<MarkChannelReadResult> {
   let response: Response;
   try {
-    response = await fetch(`${channelsUrl(apiBaseUrl, workspaceId, slug)}/read`, {
+    response = await authedFetch(`${channelsUrl(apiBaseUrl, workspaceId, slug)}/read`, {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },

@@ -14,8 +14,8 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: replaceMock, refresh: vi.fn() }),
 }));
 
-vi.mock('../../lib/auth-client', () => ({
-  getAuthClient: () => ({ signOut: signOutMock }),
+vi.mock('@clerk/nextjs', () => ({
+  useClerk: () => ({ signOut: signOutMock }),
 }));
 
 vi.mock('../../lib/realtime-client', () => ({
@@ -63,21 +63,21 @@ describe('UserMenu', () => {
     );
   });
 
-  it('signs out through Better Auth and returns to sign-in', async () => {
+  it('signs out through Clerk and returns to sign-in', async () => {
     const user = userEvent.setup();
-    signOutMock.mockResolvedValue({ data: { success: true }, error: null });
+    signOutMock.mockResolvedValue(undefined);
     render(<UserMenu user={USER} />);
 
     await user.click(screen.getByRole('button', { name: /account: ada lovelace/i }));
     await user.click(screen.getByRole('menuitem', { name: /sign out/i }));
 
     expect(signOutMock).toHaveBeenCalledTimes(1);
-    expect(replaceMock).toHaveBeenCalledWith('/sign-in');
+    expect(replaceMock).toHaveBeenCalledWith('/');
   });
 
   it('disconnects realtime and clears cached download URLs on sign-out', async () => {
     const user = userEvent.setup();
-    signOutMock.mockResolvedValue({ data: { success: true }, error: null });
+    signOutMock.mockResolvedValue(undefined);
     render(<UserMenu user={USER} />);
 
     await user.click(screen.getByRole('button', { name: /account: ada lovelace/i }));
@@ -89,7 +89,7 @@ describe('UserMenu', () => {
 
   it('keeps the socket connected when sign-out fails', async () => {
     const user = userEvent.setup();
-    signOutMock.mockResolvedValue({ data: null, error: { code: 'FAILED' } });
+    signOutMock.mockRejectedValue(new Error('clerk offline'));
     render(<UserMenu user={USER} />);
 
     await user.click(screen.getByRole('button', { name: /account: ada lovelace/i }));
@@ -101,13 +101,14 @@ describe('UserMenu', () => {
 
   it('reports sign-out failures safely', async () => {
     const user = userEvent.setup();
-    signOutMock.mockResolvedValue({ data: null, error: { code: 'FAILED_TO_UPDATE_USER' } });
+    signOutMock.mockRejectedValue(new Error('CLERK_INTERNAL details'));
     render(<UserMenu user={USER} />);
 
     await user.click(screen.getByRole('button', { name: /account: ada lovelace/i }));
     await user.click(screen.getByRole('menuitem', { name: /sign out/i }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/could not sign you out/i);
+    expect(screen.getByRole('alert')).not.toHaveTextContent(/CLERK_INTERNAL/);
     expect(replaceMock).not.toHaveBeenCalled();
   });
 });

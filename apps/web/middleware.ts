@@ -1,28 +1,25 @@
+import { clerkMiddleware } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { decideAuthPageDestination, fetchSessionUser } from './lib/auth-guard';
-import { getServerApiBaseUrl } from './lib/config';
+import { decideAuthPageDestination } from './lib/auth-guard';
 
 /**
- * Primary route protection (Phase 1D).
+ * Primary route protection (Clerk).
  *
- * For gated routes, the middleware forwards the request cookies to the
- * authoritative Express session (`GET /api/me`) and redirects before any
- * page renders. Missing configuration or an unreachable API fails closed
- * (treated as unauthenticated).
+ * Identity comes from the Clerk session (`auth()` validates server-side).
+ * Redirect policy stays in `decideAuthPageDestination`, preserving the
+ * product's `?next=` convention end to end:
+ *
+ * - `/app` requires a session (fail closed → `/sign-in?next=<path+query>`).
+ * - Authenticated visitors to `/sign-in` / `/sign-up` bounce to the safe
+ *   `?next=` destination or `/app`.
+ * - `/` and `/invite/accept` stay public (invite handles sessions client-side).
  */
-export async function middleware(request: NextRequest) {
-  let authenticated = false;
-  try {
-    const user = await fetchSessionUser(getServerApiBaseUrl(), request.headers.get('cookie') ?? '');
-    authenticated = user !== null;
-  } catch {
-    authenticated = false;
-  }
-
+export default clerkMiddleware(async (auth, request: NextRequest) => {
+  const { userId } = await auth();
   const decision = decideAuthPageDestination(
     request.nextUrl.pathname,
-    authenticated,
+    userId !== null,
     request.nextUrl.searchParams.get('next'),
     request.nextUrl.search,
   );
@@ -30,8 +27,8 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL(decision.to, request.url));
   }
   return NextResponse.next();
-}
+});
 
 export const config = {
-  matcher: ['/app/:path*', '/sign-in', '/sign-up'],
+  matcher: ['/app/:path*', '/sign-in/:path*', '/sign-up/:path*', '/__clerk/:path*'],
 };

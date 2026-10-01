@@ -21,6 +21,7 @@ export type NotificationPreferencesState =
   | { status: 'idle' }
   | { status: 'loading' }
   | { status: 'ready'; preferences: NotificationPreferences }
+  | { status: 'unauthenticated' }
   | { status: 'error'; message: string };
 
 const LOAD_ERROR_MESSAGE = 'Failed to load notification preferences.';
@@ -67,6 +68,10 @@ export function useNotificationPreferences(): {
       if (cancelled) return;
       if (res.ok) {
         setState({ status: 'ready', preferences: res.data });
+      } else if ('unauthenticated' in res && res.unauthenticated) {
+        // Expired session: surface distinctly so views can offer sign-in
+        // instead of a retry loop (retrying a 401 never succeeds).
+        setState({ status: 'unauthenticated' });
       } else {
         setState({ status: 'error', message: res.message || LOAD_ERROR_MESSAGE });
       }

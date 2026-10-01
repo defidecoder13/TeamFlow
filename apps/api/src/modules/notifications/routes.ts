@@ -1,16 +1,15 @@
 /**
  * Notification HTTP boundary (Phase 4H.5, read/update only).
  *
- * All routes sit behind `requireAuth` — identity comes exclusively from the
+ * All routes sit behind `requireClerkAuth` — identity comes exclusively from the
  * session (`req.authUser`). Workspace membership gates every operation and
  * recipients always resolve to the caller; missing/inaccessible resources
  * share one 404 shape so no other user's notifications ever leak.
  */
 
 import { Router, type NextFunction, type Request, type Response } from 'express';
-import type { AuthContext } from '../auth/index';
 import { getPrisma } from '../auth/prisma';
-import { requireAuth } from '../auth/session';
+import { requireClerkAuth, type ClerkRouteOptions } from '../auth/index';
 import { emitNotificationRead, emitNotificationReadAll } from '../realtime/index';
 import {
   listNotifications,
@@ -47,11 +46,11 @@ function asyncRoute(handler: (req: Request, res: Response) => Promise<void>) {
   };
 }
 
-export function createNotificationsRouter(resolveAuth: () => AuthContext): Router {
+export function createNotificationsRouter(options: ClerkRouteOptions = {}): Router {
   // mergeParams: mounted at `/api/workspaces/:workspaceId/notifications` and
   // must see the parent mount's `workspaceId` (Express 4 drops it otherwise).
   const router = Router({ mergeParams: true });
-  router.use(requireAuth(resolveAuth));
+  router.use(requireClerkAuth(options));
 
   // GET /api/workspaces/:workspaceId/notifications - List own notifications
   router.get(

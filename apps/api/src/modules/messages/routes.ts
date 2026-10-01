@@ -10,9 +10,8 @@
  */
 
 import { Router, type NextFunction, type Request, type Response } from 'express';
-import type { AuthContext } from '../auth/index';
 import { getPrisma } from '../auth/prisma';
-import { requireAuth } from '../auth/session';
+import { requireClerkAuth, type ClerkRouteOptions } from '../auth/index';
 import { authorizeChannelAccess } from './authorization';
 import {
   emitDirectMessageCreated,
@@ -94,10 +93,10 @@ function mapMessageError(res: Response, error: unknown): void {
   throw error;
 }
 
-export function createChannelMessagesRouter(resolveAuth: () => AuthContext): Router {
+export function createChannelMessagesRouter(options: ClerkRouteOptions = {}): Router {
   // mergeParams: mounted at `/api/channels/:channelId/messages`.
   const router = Router({ mergeParams: true });
-  router.use(requireAuth(resolveAuth));
+  router.use(requireClerkAuth(options));
 
   router.post(
     '/',
@@ -167,9 +166,9 @@ export function createChannelMessagesRouter(resolveAuth: () => AuthContext): Rou
   return router;
 }
 
-export function createMessagesRouter(resolveAuth: () => AuthContext): Router {
+export function createMessagesRouter(options: ClerkRouteOptions = {}): Router {
   const router = Router();
-  router.use(requireAuth(resolveAuth));
+  router.use(requireClerkAuth(options));
 
   router.get(
     '/:messageId/replies',
