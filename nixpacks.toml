@@ -1,0 +1,4 @@
+# Bypass corepack (its pnpm shim crashes on modern Node).
+# Installs the standalone pnpm bundle, then installs the workspace.
+[phases.install]
+cmds = ["npm install -g pnpm@11.8.0", "pnpm i --frozen-lockfile"]
